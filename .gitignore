@@ -1,0 +1,24 @@
+# Environment — nikdy nesmí na GitHub
+.env
+*.env.local
+
+# Zkompilovaná binárka
+tipovacka
+tipovacka.exe
+*.exe
+
+# Go build cache
+/vendor/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logy
+*.log

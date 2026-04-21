@@ -1,0 +1,43 @@
+<div class="page-header">
+    <h1>📦 Archiv</h1>
+</div>
+
+{{if .Active}}
+<h2 style="font-size:1rem;color:var(--muted-d);margin-bottom:.5rem">Aktivní soutěže</h2>
+<div class="card-list" style="margin-bottom:1.5rem">
+{{range .Active}}
+    <a class="card" href="/competition/{{.ID}}">
+        <div class="card-title">{{.Name}}</div>
+        <div class="card-sub">{{.Season}}</div>
+    </a>
+{{end}}
+</div>
+{{end}}
+
+{{if .Football}}
+<h2 style="font-size:1rem;color:var(--muted-d);margin-bottom:.5rem">⚽ Fotbal — archiv</h2>
+<div class="card-list" style="margin-bottom:1.5rem">
+{{range .Football}}
+    <a class="card" href="/archive/competition/{{.ID}}">
+        <div class="card-title">{{.Name}}</div>
+        <div class="card-sub">{{.Season}}</div>
+    </a>
+{{end}}
+</div>
+{{end}}
+
+{{if .Hockey}}
+<h2 style="font-size:1rem;color:var(--muted-d);margin-bottom:.5rem">🏒 Hokej — archiv</h2>
+<div class="card-list" style="margin-bottom:1.5rem">
+{{range .Hockey}}
+    <a class="card" href="/archive/competition/{{.ID}}">
+        <div class="card-title">{{.Name}}</div>
+        <div class="card-sub">{{.Season}}</div>
+    </a>
+{{end}}
+</div>
+{{end}}
+
+{{if and (not .Active) (not .Football) (not .Hockey)}}
+<p class="empty">Archiv je prázdný.</p>
+{{end}}

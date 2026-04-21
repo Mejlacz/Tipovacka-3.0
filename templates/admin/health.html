@@ -1,0 +1,145 @@
+<style>
+.hd-card { background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem 1.15rem;margin-bottom:1rem; }
+.hd-card h2 { margin:0 0 .75rem;font-size:.95rem;color:var(--muted-d);text-transform:uppercase;letter-spacing:.05em; }
+.hd-table { width:100%;border-collapse:collapse;font-size:.82rem; }
+.hd-table th { text-align:left;padding:.3rem .6rem;color:var(--muted-d);font-weight:600;border-bottom:1px solid var(--border-d); }
+.hd-table td { padding:.3rem .6rem;border-bottom:1px solid rgba(255,255,255,.04); }
+.hd-table tr:last-child td { border-bottom:none; }
+.badge-ok  { color:#34d399; }
+.badge-err { color:#f87171; }
+.badge-warn { color:#fbbf24; }
+.hd-counts { display:flex;flex-wrap:wrap;gap:.6rem; }
+.hd-count-chip { background:var(--bg3);border:1px solid var(--border-d);border-radius:8px;padding:.4rem .8rem;text-align:center;min-width:80px; }
+.hd-count-chip span { display:block; }
+.hd-count-chip .num { font-size:1.3rem;font-weight:700;color:#e2e8f0; }
+.hd-count-chip .lbl { font-size:.72rem;color:var(--muted-d);margin-top:.1rem; }
+</style>
+
+<div class="page-header">
+    <h1>🩺 Health Dashboard</h1>
+    <div style="display:flex;gap:.5rem">
+        <a href="/admin" class="btn btn-secondary">← Admin</a>
+        <button onclick="location.reload()" class="btn btn-secondary">🔄 Obnovit</button>
+    </div>
+</div>
+<p style="color:var(--muted-d);font-size:.82rem;margin-bottom:1rem">
+    Aktuální čas: <strong>{{.Now}}</strong> &nbsp;|&nbsp;
+    Uptime: <strong>{{.UptimeStr}}</strong> &nbsp;|&nbsp;
+    Go: <strong>{{.GoVersion}}</strong> &nbsp;|&nbsp;
+    Goroutines: <strong>{{.NumGoroutine}}</strong> &nbsp;|&nbsp;
+    Heap: <strong>{{printf "%.1f" .HeapAllocMB}} MB</strong>
+</p>
+
+{{/* ── 1. Stav systému ── */}}
+<div class="hd-card">
+    <h2>1. Stav systému</h2>
+    <table class="hd-table">
+        <tr>
+            <th>Komponenta</th><th>Stav</th>
+        </tr>
+        <tr>
+            <td>Databáze (PostgreSQL)</td>
+            <td>
+                {{if .DBOk}}
+                <span class="badge-ok">✅ {{.DBMsg}}</span>
+                {{else}}
+                <span class="badge-err">❌ {{.DBMsg}}</span>
+                {{end}}
+            </td>
+        </tr>
+        <tr>
+            <td>Nevyhodnocené zápasy</td>
+            <td>
+                {{if gt .UnscoredCount 0}}
+                <span class="badge-warn">⚠️ {{.UnscoredCount}} zápasů bez výsledku</span>
+                <a href="/admin/unscored" style="margin-left:.5rem;font-size:.8rem">→ Zobrazit</a>
+                {{else}}
+                <span class="badge-ok">✅ Vše vyhodnoceno</span>
+                {{end}}
+            </td>
+        </tr>
+    </table>
+</div>
+
+{{/* ── 2. Počty řádků ── */}}
+<div class="hd-card">
+    <h2>2. Databáze — počty řádků</h2>
+    <div class="hd-counts">
+        {{range $table, $count := .Counts}}
+        <div class="hd-count-chip">
+            <span class="num">{{$count}}</span>
+            <span class="lbl">{{$table}}</span>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+{{/* ── 3. Aktivní soutěže ── */}}
+<div class="hd-card">
+    <h2>3. Aktivní soutěže</h2>
+    {{if .ActiveComps}}
+    <table class="hd-table">
+        <tr><th>ID</th><th>Název</th><th>Kola</th><th>Zápasy</th><th>Nevyhodnocené</th></tr>
+        {{range .ActiveComps}}
+        <tr>
+            <td style="color:var(--muted-d)">{{.ID}}</td>
+            <td><a href="/admin/competitions/{{.ID}}/rounds">{{.Name}}</a></td>
+            <td>{{.Rounds}}</td>
+            <td>{{.Matches}}</td>
+            <td>
+                {{if gt .Unscored 0}}
+                <span class="badge-warn">⚠️ {{.Unscored}}</span>
+                {{else}}
+                <span class="badge-ok">✅ 0</span>
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
+    </table>
+    {{else}}
+    <p class="empty">Žádné aktivní soutěže.</p>
+    {{end}}
+</div>
+
+{{/* ── 4. Nadcházející zápasy ── */}}
+<div class="hd-card">
+    <h2>4. Nadcházející zápasy</h2>
+    {{if .Upcoming}}
+    <table class="hd-table">
+        <tr><th>ID</th><th>Zápas</th><th>Datum</th><th>Kolo</th><th>Soutěž</th></tr>
+        {{range .Upcoming}}
+        <tr>
+            <td style="color:var(--muted-d);font-size:.75em">{{.ID}}</td>
+            <td>{{.Home}} – {{.Away}}</td>
+            <td>{{.Date}}</td>
+            <td>{{.RoundName}}</td>
+            <td>{{.CompName}}</td>
+        </tr>
+        {{end}}
+    </table>
+    {{else}}
+    <p class="empty">Žádné nadcházející zápasy.</p>
+    {{end}}
+</div>
+
+{{/* ── 5. Poslední audit log ── */}}
+<div class="hd-card">
+    <h2>5. Poslední akce (audit log)</h2>
+    {{if .RecentLog}}
+    <table class="hd-table">
+        <tr><th>Čas</th><th>Admin</th><th>Akce</th><th>Entita</th><th>Popis</th></tr>
+        {{range .RecentLog}}
+        <tr>
+            <td style="white-space:nowrap;color:var(--muted-d)">{{.Ts}}</td>
+            <td>{{.Admin}}</td>
+            <td>{{.Action}}</td>
+            <td>{{.Entity}}</td>
+            <td style="font-size:.78em">{{if gt (len .Desc) 80}}{{slice .Desc 0 80}}…{{else}}{{.Desc}}{{end}}</td>
+        </tr>
+        {{end}}
+    </table>
+    <a href="/admin/audit" style="font-size:.82rem;display:block;margin-top:.5rem">→ Kompletní audit log</a>
+    {{else}}
+    <p class="empty">Audit log je prázdný.</p>
+    {{end}}
+</div>

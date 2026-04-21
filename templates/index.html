@@ -1,0 +1,13 @@
+<h1>Tipy</h1>
+{{if .Competitions}}
+<div class="card-list">
+{{range .Competitions}}
+    <a class="card" href="/competition/{{.ID}}">
+        <div class="card-title">{{.Name}}</div>
+        <div class="card-sub">{{.Season}}</div>
+    </a>
+{{end}}
+</div>
+{{else}}
+<p class="empty">Žádné aktivní soutěže.</p>
+{{end}}

@@ -1,0 +1,11 @@
+<div class="page-header">
+    <h1>📖 Manuál</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+<div style="max-width:720px;line-height:1.7">
+    {{if .Content}}
+    {{.Content}}
+    {{else}}
+    <p>Manuál není nastaven. <a href="/admin/pravidla/edit">Upravit pravidla</a></p>
+    {{end}}
+</div>

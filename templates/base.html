@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="cs" id="html-root">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>(function(){var t=localStorage.getItem('tipovacka-theme');if(t==='classic')document.getElementById('html-root').setAttribute('data-theme','classic');})()</script>
+    <title>{{if .Title}}{{.Title}} — {{end}}Tipovačka 2.0</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20260408b" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#131f2e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Tipovačka" />
+    <link rel="icon" type="image/png" href="/static/icon.png?size=32" />
+    <link rel="apple-touch-icon" href="/static/icon.png?size=192" />
+    {{if .User}}{{with .User.BackgroundURL}}<style>
+        body { background-image: url('{{.}}'); background-size: cover; background-attachment: fixed; background-position: center; }
+    </style>{{end}}{{end}}
+</head>
+<body>
+
+<nav class="navbar">
+    <a class="navbar-brand" href="/">Tipovačka 2.0 <span id="navbar-clock" style="font-size:0.72rem;font-weight:400;opacity:0.65;margin-left:0.5rem"></span></a>
+    <button class="theme-toggle" id="theme-toggle" title="Přepnout téma" aria-label="Přepnout téma">🌙</button>
+    <button class="navbar-burger" id="navbar-burger" aria-label="Menu" aria-expanded="false">☰</button>
+    <div class="navbar-links" id="navbar-links">
+        {{if .User}}
+            {{$u := .User}}
+            {{if $u.IsApproved}}
+            <a href="/leaderboard">Žebříček</a>
+            {{end}}
+            <a href="/">Zápasy</a>
+            {{if $u.IsAdmin}}
+            <a href="/admin/unscored" class="nav-quick-btn">Výsledky</a>
+            <a href="/admin/io" class="nav-quick-btn">IO</a>
+            <a href="/admin/competitions" class="nav-quick-btn">Soutěže</a>
+            {{end}}
+            <a href="/extra">Extra</a>
+            {{if $u.IsApproved}}<a href="/achievements">🏅 Achievementy</a>{{end}}
+            {{if $u.IsApproved}}<a href="/stats">Statistiky</a>{{end}}
+            {{if $u.IsApproved}}<a href="/archive">Archiv</a>{{end}}
+            <a href="/pravidla">Pravidla</a>
+            {{if $u.IsAdmin}}
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-toggle">Admin</span>
+                <div class="nav-dropdown-menu">
+                    <a href="/admin">Dashboard</a>
+                    <a href="/admin/competitions">🏆 Soutěže</a>
+                    <a href="/admin/competitions/new">Nová soutěž</a>
+                    <div class="nav-dropdown-divider"></div>
+                    <a href="/admin/unscored">Bez výsledku <span id="unscored-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;font-size:.7rem;font-weight:700;padding:.05rem .4rem;margin-left:.2rem;vertical-align:middle"></span></a>
+                    <a href="/admin/teams">Týmy</a>
+                    <a href="/admin/users">Uživatelé</a>
+                    <div class="nav-dropdown-divider"></div>
+                    <a href="/admin/history">Historie</a>
+                    <a href="/admin/audit">Audit log</a>
+                    {{if $u.IsOwner}}
+                    <div class="nav-dropdown-divider"></div>
+                    <a href="/admin/groups">👥 Skupiny</a>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-toggle navbar-username">👤 {{$u.Username}}</span>
+                <div class="nav-dropdown-menu">
+                    {{if $u.Email}}<span style="display:block;padding:.4rem .9rem;font-size:.78rem;color:var(--muted-d);border-bottom:1px solid var(--border-d);word-break:break-all">{{$u.Email}}</span>{{end}}
+                    <a href="/profile">Profil</a>
+                    <div class="nav-dropdown-divider"></div>
+                    <a href="/set-lang/en" style="display:flex;align-items:center;gap:.4rem;text-decoration:none">🌐 English</a>
+                    <div class="nav-dropdown-divider"></div>
+                    <form method="post" action="/logout">
+                        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+                        <button type="submit" class="nav-dropdown-btn">Odhlásit se</button>
+                    </form>
+                </div>
+            </div>
+        {{else}}
+            <a href="/login">Přihlásit se</a>
+            <a href="/register">Registrace</a>
+        {{end}}
+    </div>
+</nav>
+
+<main class="container">
+    {{if .Flash}}
+    <div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+        {{index .Flash "msg"}}
+    </div>
+    {{end}}
+    {{.Content}}
+</main>
+
+<footer class="footer">
+    <small>Tipovačka 2.0</small>
+</footer>
+
+<meta name="csrf-token" content="{{.CSRFToken}}">
+<script>
+(function () {
+    var _tok = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+    if (!_tok) return;
+    document.addEventListener('submit', function (e) {
+        var f = e.target;
+        if (f.method && f.method.toLowerCase() === 'post') {
+            var enc = (f.getAttribute('enctype') || '').toLowerCase();
+            if (enc.indexOf('multipart') === -1 && !f.querySelector('[name="_csrf"]')) {
+                var inp = document.createElement('input');
+                inp.type = 'hidden'; inp.name = '_csrf'; inp.value = _tok;
+                f.appendChild(inp);
+            }
+        }
+    }, true);
+    var _origFetch = window.fetch;
+    window.fetch = function (url, opts) {
+        opts = Object.assign({}, opts || {});
+        opts.headers = Object.assign({'X-CSRF-Token': _tok}, opts.headers || {});
+        return _origFetch(url, opts);
+    };
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch(function() {});
+}
+(function() {
+    var el = document.getElementById('navbar-clock');
+    if (!el) return;
+    function tick() {
+        var now = new Date();
+        el.textContent = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    }
+    tick(); setInterval(tick, 1000);
+})();
+(function() {
+    var html = document.getElementById('html-root');
+    var btn  = document.getElementById('theme-toggle');
+    if (!btn || !html) return;
+    function applyTheme(t) {
+        if (t === 'classic') { html.setAttribute('data-theme','classic'); btn.textContent='☀️'; }
+        else { html.removeAttribute('data-theme'); btn.textContent='🌙'; }
+    }
+    applyTheme(localStorage.getItem('tipovacka-theme') || 'dark');
+    btn.addEventListener('click', function() {
+        var next = html.getAttribute('data-theme') === 'classic' ? 'dark' : 'classic';
+        localStorage.setItem('tipovacka-theme', next);
+        applyTheme(next);
+    });
+})();
+(function() {
+    var badge = document.getElementById('unscored-badge');
+    if (!badge) return;
+    fetch('/admin/unscored-count').then(function(r){return r.ok?r.json():null;}).then(function(d){
+        if(d && d.count){badge.textContent=d.count;badge.style.display='inline';}
+    }).catch(function(){});
+})();
+(function() {
+    var burger = document.getElementById('navbar-burger');
+    var links  = document.getElementById('navbar-links');
+    if (!burger || !links) return;
+    burger.addEventListener('click', function() {
+        var open = links.classList.toggle('open');
+        burger.classList.toggle('open', open);
+        burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        burger.textContent = open ? '✕' : '☰';
+    });
+    links.querySelectorAll('.nav-dropdown-toggle').forEach(function(toggle) {
+        toggle.addEventListener('click', function() {
+            if (window.innerWidth >= 768) return;
+            toggle.closest('.nav-dropdown').classList.toggle('open');
+        });
+    });
+    links.querySelectorAll('a, .nav-dropdown-btn').forEach(function(el) {
+        el.addEventListener('click', function() {
+            links.classList.remove('open'); burger.classList.remove('open');
+            burger.setAttribute('aria-expanded','false'); burger.textContent='☰';
+        });
+    });
+})();
+</script>
+</body>
+</html>

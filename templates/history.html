@@ -1,0 +1,31 @@
+<div class="page-header">
+    <h1>📜 Historie tipů</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+    <thead>
+        <tr style="background:var(--bg2)">
+            <th style="padding:.4rem .5rem;text-align:left">Čas</th>
+            <th style="padding:.4rem .5rem;text-align:left">Uživatel</th>
+            <th style="padding:.4rem .5rem;text-align:left">Akce</th>
+            <th style="padding:.4rem .5rem;text-align:left">Detail</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Events}}
+    <tr>
+        <td style="padding:.3rem .5rem;white-space:nowrap;color:var(--muted-d);font-size:.75rem">
+            {{if .TS}}{{.TS.Format "02.01. 15:04"}}{{else}}—{{end}}
+        </td>
+        <td style="padding:.3rem .5rem;font-weight:600">{{.User}}</td>
+        <td style="padding:.3rem .5rem">
+            <span style="font-size:.78rem">{{.Icon}} {{.Kind}}</span>
+        </td>
+        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">{{.Text}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>

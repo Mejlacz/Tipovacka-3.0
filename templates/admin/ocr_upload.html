@@ -1,0 +1,65 @@
+<div class="page-header">
+    <h1>📋 Import výsledků — vložení textu</h1>
+    <a href="/admin" class="btn btn-secondary">← Admin</a>
+</div>
+
+{{if .Error}}
+<div class="alert alert-error" style="margin-bottom:1rem">{{.Error}}</div>
+{{end}}
+
+<div style="max-width:700px">
+    <p style="color:var(--muted-d);font-size:.88rem;margin-bottom:1.25rem">
+        Zkopíruj výsledky z Flashscore nebo jiného zdroje a vlož je sem.
+        Každý řádek ve tvaru <code>Tým A - Tým B&nbsp;&nbsp;2:1</code> bude rozpoznán jako zápas.
+    </p>
+
+    <form method="post" action="/admin/ocr/parse" style="display:flex;flex-direction:column;gap:1rem">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+
+        <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
+            <div style="flex:2;min-width:220px">
+                <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Kolo</label>
+                <select name="round_id" required style="width:100%">
+                    <option value="">— Vyber kolo —</option>
+                    {{$last := ""}}
+                    {{range .Rounds}}
+                        {{$label := print .CompName " — " .CompSeason}}
+                        {{if ne $label $last}}
+                            {{if $last}}</optgroup>{{end}}
+                            <optgroup label="{{$label}}">
+                            {{$last = $label}}
+                        {{end}}
+                        <option value="{{.ID}}">{{.Name}}</option>
+                    {{end}}
+                    {{if .Rounds}}</optgroup>{{end}}
+                </select>
+            </div>
+            <div style="flex:1;min-width:130px">
+                <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Sport</label>
+                <select name="sport" style="width:100%">
+                    <option value="football">⚽ Fotbal</option>
+                    <option value="hockey">🏒 Hokej</option>
+                </select>
+            </div>
+        </div>
+
+        <div>
+            <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">
+                Text s výsledky
+            </label>
+            <textarea name="text" rows="12" required
+                placeholder="Arsenal - Chelsea  2:1&#10;Manchester City - Liverpool  3:2&#10;Bayern München - Borussia Dortmund  4:0"
+                style="width:100%;font-family:monospace;font-size:.85rem;resize:vertical;
+                       background:var(--bg2);border:1px solid var(--border-d);border-radius:6px;
+                       color:var(--text);padding:.6rem .75rem;box-sizing:border-box"></textarea>
+            <p style="font-size:.78rem;color:var(--muted-d);margin:.35rem 0 0">
+                Formát: <code>Domácí - Hosté&nbsp;&nbsp;goly:goly</code> — každý zápas na samostatném řádku.
+                Funguje i s pomlčkou (–) nebo různým počtem mezer.
+            </p>
+        </div>
+
+        <div>
+            <button type="submit" class="btn btn-primary">🔍 Parsovat a zobrazit náhled</button>
+        </div>
+    </form>
+</div>

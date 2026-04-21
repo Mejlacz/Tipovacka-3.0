@@ -1,0 +1,186 @@
+<div style="max-width:720px;margin:0 auto">
+
+{{/* ── Hlavička ── */}}
+<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;margin-bottom:1.5rem">
+    <div>
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+            <h1 style="margin:0;font-size:1.8rem">🎯 Extra</h1>
+            {{if .Competitions}}
+            <form method="get" action="/extra" style="margin:0">
+                <select name="competition_id" onchange="this.form.submit()"
+                        style="padding:0.3rem 0.6rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem">
+                    {{range .Competitions}}
+                    <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
+                        {{.Name}}{{if .Season}} {{.Season}}{{end}}
+                    </option>
+                    {{end}}
+                </select>
+            </form>
+            {{end}}
+        </div>
+        {{if .Comp}}
+        <div style="color:var(--muted-d);margin-top:0.25rem;font-size:0.88rem">Soutěž: <strong>{{.Comp.Name}}</strong></div>
+        {{end}}
+    </div>
+
+    {{if and .User.IsAdmin .Comp}}
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+        <a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary" style="font-size:0.85rem">
+            + Přidat otázku
+        </a>
+        <a href="/admin/extra/{{.Comp.ID}}/answers" class="btn btn-secondary" style="font-size:0.85rem">
+            📋 Spravovat odpovědi
+        </a>
+        <a href="/admin/extra/{{.Comp.ID}}/export" class="btn btn-secondary"
+           style="font-size:0.85rem;background:#1a3a5c;color:#fff;border-color:#1a3a5c">
+            📥 Export CSV
+        </a>
+    </div>
+    {{end}}
+</div>
+
+{{/* ── Obsah ── */}}
+{{if not .Comp}}
+    <p class="empty">Žádná soutěž nenalezena.</p>
+
+{{else if not .Questions}}
+    <div style="padding:2rem;text-align:center;background:var(--bg2);border-radius:12px;color:var(--muted-d)">
+        <div style="font-size:2rem;margin-bottom:0.5rem">🎯</div>
+        Pro tuto soutěž zatím nejsou žádné extra otázky.
+        {{if .User.IsAdmin}}
+        <div style="margin-top:0.75rem">
+            <a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary btn-sm">+ Přidat první otázku</a>
+        </div>
+        {{end}}
+    </div>
+
+{{else}}
+    <div id="extra-flash" style="display:none;margin-bottom:1rem"></div>
+
+    {{range $i, $q := .Questions}}
+    {{$ans := index $.AnswersMap $q.ID}}
+    <div class="card mb-3" style="border-radius:10px;overflow:hidden;margin-bottom:1rem;background:var(--bg2);border:1px solid var(--border-d)">
+        <div class="card-body" style="padding:1.1rem 1.25rem">
+
+            {{/* Číslo + text otázky */}}
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem;margin-bottom:0.75rem">
+                <div>
+                    <span style="font-size:0.8rem;color:var(--muted-d);margin-right:0.4rem">{{add $i 1}}.</span>
+                    <strong style="font-size:1.05rem">{{$q.Text}}</strong>
+                    {{if $q.IsClosed}}
+                    <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#f87171;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">Uzavřeno</span>
+                    {{end}}
+                    {{if ne $q.MaxPoints 3}}
+                    <span style="font-size:0.75rem;color:var(--muted-d);margin-left:0.4rem">(max. {{$q.MaxPoints}} b)</span>
+                    {{end}}
+                </div>
+                {{if $ans}}{{if $ans.Points}}
+                <span style="background:rgba(16,185,129,0.15);color:#34d399;padding:0.2rem 0.7rem;border-radius:20px;font-weight:700;font-size:0.88rem;white-space:nowrap">
+                    {{$ans.Points}} b
+                </span>
+                {{end}}{{end}}
+            </div>
+
+            {{/* Správná odpověď */}}
+            {{if $q.CorrectAnswer}}
+            <div style="font-size:0.82rem;color:#fbbf24;background:rgba(245,158,11,0.12);padding:0.3rem 0.7rem;border-radius:6px;margin-bottom:0.6rem">
+                Správná odpověď: <strong>{{$q.CorrectAnswer}}</strong>
+            </div>
+            {{end}}
+
+            {{/* Input + tlačítko — locked when closed or already scored */}}
+            {{$locked := or $q.IsClosed (and $ans $ans.Points)}}
+            <div style="display:flex;gap:0.5rem;align-items:center" class="extra-row" data-qid="{{$q.ID}}">
+                <input type="text"
+                       class="extra-input"
+                       value="{{if $ans}}{{$ans.Answer}}{{end}}"
+                       placeholder="Váš tip…"
+                       {{if $locked}}disabled{{end}}
+                       style="flex:1;padding:0.45rem 0.7rem;border-radius:7px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem;{{if $locked}}opacity:0.7;{{end}}"
+                       maxlength="200">
+                {{if not $locked}}
+                <button class="btn btn-secondary extra-save"
+                        style="white-space:nowrap;min-width:80px"
+                        type="button">
+                    Uložit
+                </button>
+                {{else}}
+                <span style="font-size:0.8rem;color:var(--muted-d);min-width:80px;text-align:center">
+                    {{if and $ans $ans.Points}}Ohodnoceno{{else}}Uzavřeno{{end}}
+                </span>
+                {{end}}
+            </div>
+
+            {{/* Admin: smazat otázku */}}
+            {{if $.User.IsAdmin}}
+            <div style="margin-top:0.6rem;text-align:right">
+                <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete"
+                      onsubmit="return confirm('Opravdu smazat otázku „{{$q.Text}}"?')" style="display:inline">
+                    <button type="submit" style="font-size:0.75rem;color:#dc3545;background:none;border:none;cursor:pointer;text-decoration:underline">
+                        Smazat otázku
+                    </button>
+                </form>
+            </div>
+            {{end}}
+
+        </div>
+    </div>
+    {{end}}
+
+{{end}}
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var flash = document.getElementById('extra-flash');
+
+    function showMsg(msg, type) {
+        if (!flash) return;
+        flash.style.display = 'block';
+        flash.className = 'alert alert-' + (type === 'ok' ? 'success' : 'error');
+        flash.textContent = msg;
+        setTimeout(function () { flash.style.display = 'none'; }, 3000);
+    }
+
+    document.querySelectorAll('.extra-row').forEach(function (row) {
+        var qid = row.dataset.qid;
+        var input = row.querySelector('.extra-input');
+        var btn = row.querySelector('.extra-save');
+        if (!btn || !input) return;
+
+        function save() {
+            var val = input.value.trim();
+            var fd = new FormData();
+            fd.append('question_id', qid);
+            fd.append('answer', val);
+            btn.disabled = true;
+            btn.textContent = '…';
+            fetch('/extra/save-ajax', { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.ok) {
+                        btn.textContent = '✓';
+                        showMsg('✅ Uloženo', 'ok');
+                        setTimeout(function () { btn.textContent = 'Uložit'; btn.disabled = false; }, 1200);
+                    } else {
+                        btn.textContent = 'Uložit';
+                        btn.disabled = false;
+                        if (data.error === 'closed') showMsg('❌ Otázka je uzavřena', 'err');
+                        else showMsg('❌ Chyba při ukládání', 'err');
+                    }
+                })
+                .catch(function () {
+                    btn.textContent = 'Uložit';
+                    btn.disabled = false;
+                    showMsg('❌ Chyba spojení', 'err');
+                });
+        }
+
+        btn.addEventListener('click', save);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') save();
+        });
+    });
+});
+</script>

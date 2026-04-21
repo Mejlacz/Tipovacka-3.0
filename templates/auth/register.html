@@ -1,0 +1,29 @@
+<div class="auth-card">
+    <h1>Registrace</h1>
+
+    {{if .Error}}
+    <div class="alert alert-error">{{.Error}}</div>
+    {{end}}
+
+    <form method="post" action="/register">
+        <div class="form-group">
+            <label for="username">Přezdívka</label>
+            <input type="text" id="username" name="username" required autocomplete="username"
+                   placeholder="vaše přezdívka" minlength="3" maxlength="80" />
+        </div>
+        <div class="form-group">
+            <label for="email">E-mail</label>
+            <input type="email" id="email" name="email" required autocomplete="email" placeholder="vas@email.cz" />
+        </div>
+        <div class="form-group">
+            <label for="password">Heslo</label>
+            <input type="password" id="password" name="password" required autocomplete="new-password"
+                   placeholder="min. 8 znaků" minlength="8" />
+        </div>
+        <button type="submit" class="btn btn-primary">Registrovat se</button>
+    </form>
+
+    <p class="auth-switch">
+        Již máte účet? <a href="/login">Přihlásit se</a>
+    </p>
+</div>

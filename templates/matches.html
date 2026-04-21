@@ -1,0 +1,107 @@
+<div class="page-header">
+    <h1>⚽ Zápasy — {{.Round.Name}}</h1>
+    <div style="display:flex;gap:.5rem">
+        <a href="/admin/competitions/{{.Round.CompetitionID}}/rounds" class="btn btn-secondary btn-sm">← Kola</a>
+        <a href="/admin/results" class="btn btn-primary btn-sm">📊 Výsledky</a>
+    </div>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+<form method="post" action="/admin/rounds/{{.Round.ID}}/matches/new"
+      style="display:flex;gap:.5rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap">
+    <select name="home_team_id" required style="flex:1;min-width:140px">
+        <option value="">Domácí</option>
+        {{range .Teams}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    <select name="away_team_id" required style="flex:1;min-width:140px">
+        <option value="">Hosté</option>
+        {{range .Teams}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    <input type="datetime-local" name="match_date" />
+    <button type="submit" class="btn btn-primary btn-sm">+ Přidat</button>
+</form>
+
+{{if .Matches}}
+<table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+    <thead>
+        <tr style="background:var(--bg2)">
+            <th style="text-align:left;padding:.4rem .5rem">Zápas</th>
+            <th style="text-align:left;padding:.4rem .5rem">Datum</th>
+            <th style="text-align:left;padding:.4rem .5rem">Výsledek</th>
+            <th style="padding:.4rem .5rem">Akce</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Matches}}
+    <tr id="match-row-{{.ID}}">
+        <td style="padding:.4rem .5rem;font-weight:600">
+            {{if .HomeTeam}}{{coalesce .HomeTeam.DisplayName .HomeTeam.Name}}{{else}}tým {{.HomeTeamID}}{{end}}
+            vs
+            {{if .AwayTeam}}{{coalesce .AwayTeam.DisplayName .AwayTeam.Name}}{{else}}tým {{.AwayTeamID}}{{end}}
+        </td>
+        <td style="padding:.4rem .5rem;color:var(--muted-d);font-size:.8rem">
+            {{if .MatchDate}}{{.MatchDate.Format "02.01. 15:04"}}{{else}}—{{end}}
+        </td>
+        <td style="padding:.4rem .5rem">
+            {{if .HomeScore}}
+                <span style="margin-right:.3rem">{{intVal .HomeScore}}:{{intVal .AwayScore}} ✅</span>
+                <form style="display:inline" method="post" action="/admin/matches/{{.ID}}/clear-result"
+                      onsubmit="return confirm('Smazat skóre {{intVal .HomeScore}}:{{intVal .AwayScore}}?')">
+                    <button type="submit" class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem">🗑 skóre</button>
+                </form>
+            {{else}}
+                <form style="display:inline-flex;align-items:center;gap:.3rem" method="post" action="/admin/matches/{{.ID}}/set-result">
+                    <input type="number" name="home_score" min="0" max="99" placeholder="D" required style="width:3rem" />
+                    <span>:</span>
+                    <input type="number" name="away_score" min="0" max="99" placeholder="H" required style="width:3rem" />
+                    <button type="submit" class="btn btn-sm btn-primary">✓</button>
+                </form>
+            {{end}}
+        </td>
+        <td style="padding:.4rem .5rem;white-space:nowrap">
+            <button type="button" class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.1rem .35rem"
+                    onclick="toggleMatchEdit({{.ID}})">✏️</button>
+            <form style="display:inline" method="post" action="/admin/matches/{{.ID}}/delete"
+                  onsubmit="return confirm('Smazat zápas?')">
+                <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem">✕</button>
+            </form>
+        </td>
+    </tr>
+    {{$homeID := .HomeTeamID}}{{$awayID := .AwayTeamID}}
+    <tr id="match-edit-{{.ID}}" style="display:none;background:var(--bg3)">
+        <td colspan="4" style="padding:.5rem">
+            <form method="post" action="/admin/matches/{{.ID}}/edit"
+                  style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                <select name="home_team_id" style="flex:1;min-width:120px">
+                    {{range $.Teams}}<option value="{{.ID}}" {{if eq .ID $homeID}}selected{{end}}>{{.Name}}</option>{{end}}
+                </select>
+                <span>vs</span>
+                <select name="away_team_id" style="flex:1;min-width:120px">
+                    {{range $.Teams}}<option value="{{.ID}}" {{if eq .ID $awayID}}selected{{end}}>{{.Name}}</option>{{end}}
+                </select>
+                <input type="datetime-local" name="match_date"
+                       value="{{if .MatchDate}}{{.MatchDate.Format "2006-01-02T15:04"}}{{end}}" />
+                <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">Uložit</button>
+                <button type="button" class="btn btn-sm btn-secondary" style="font-size:.78rem"
+                        onclick="toggleMatchEdit({{.ID}})">Zrušit</button>
+            </form>
+        </td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+{{else}}
+<p class="empty">Žádné zápasy v tomto kole.</p>
+{{end}}
+
+<script>
+function toggleMatchEdit(id) {
+    var row = document.getElementById('match-edit-' + id);
+    row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+</script>

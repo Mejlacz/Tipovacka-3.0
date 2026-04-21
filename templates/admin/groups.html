@@ -1,0 +1,118 @@
+<div class="page-header">
+    <h1>👥 Skupiny uživatelů</h1>
+    <p style="color:var(--muted-d);font-size:0.9rem;margin-top:0.25rem">
+        Skupiny umožňují přidělit vybraným členům speciální oprávnění.<br>
+        Tuto sekci vidíte jen vy jako Owner.
+    </p>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-info{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg"}}
+</div>
+{{end}}
+
+{{/* ── Vytvořit skupinu ── */}}
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;max-width:480px">
+    <h3 style="margin:0 0 1rem">Nová skupina</h3>
+    <form method="post" action="/admin/groups/new">
+        <div style="display:flex;gap:0.6rem;align-items:flex-end;flex-wrap:wrap">
+            <div style="flex:1;min-width:180px">
+                <label style="font-size:0.82rem;color:var(--muted-d);display:block;margin-bottom:0.3rem">Název skupiny</label>
+                <input type="text" name="name" required placeholder="např. Rodina"
+                       style="width:100%;padding:0.45rem 0.7rem;border-radius:7px;border:1px solid var(--border-d);
+                              background:var(--bg3);color:var(--text-d);font-size:0.9rem;box-sizing:border-box">
+            </div>
+            <div style="align-self:flex-end;padding-bottom:0.1rem">
+                <label style="font-size:0.82rem;color:var(--muted-d);display:flex;align-items:center;gap:0.35rem;cursor:pointer">
+                    <input type="checkbox" name="can_see_hidden" value="on">
+                    Vidí skryté uživatele
+                </label>
+            </div>
+            <button type="submit" class="btn btn-primary" style="white-space:nowrap">Vytvořit</button>
+        </div>
+    </form>
+</div>
+
+{{/* ── Seznam skupin ── */}}
+{{if not .Groups}}
+<p class="empty">Zatím žádné skupiny.</p>
+{{else}}
+
+{{range .Groups}}
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem">
+    {{/* Hlavička skupiny */}}
+    <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem">
+        <h3 style="margin:0;flex:1">👥 {{.Name}}</h3>
+
+        {{/* Badge oprávnění */}}
+        {{if .CanSeeHidden}}
+        <span style="font-size:0.78rem;padding:0.2rem 0.6rem;border-radius:20px;
+                     background:#14532d;color:#86efac;border:1px solid #166534">
+            👁 Vidí skryté
+        </span>
+        {{else}}
+        <span style="font-size:0.78rem;padding:0.2rem 0.6rem;border-radius:20px;
+                     background:var(--bg3);color:var(--muted-d);border:1px solid var(--border-d)">
+            👁‍🗨 Nevidí skryté
+        </span>
+        {{end}}
+
+        {{/* Přepnout oprávnění */}}
+        <form method="post" action="/admin/groups/{{.ID}}/toggle-hidden" style="margin:0">
+            <button type="submit" class="btn" style="font-size:0.8rem;padding:0.25rem 0.6rem">
+                {{if .CanSeeHidden}}🔒 Odebrat{{else}}🔓 Přidat{{end}}
+            </button>
+        </form>
+
+        {{/* Smazat skupinu */}}
+        <form method="post" action="/admin/groups/{{.ID}}/delete" style="margin:0"
+              onsubmit="return confirm('Opravdu smazat skupinu „{{.Name}}"?')">
+            <button type="submit" class="btn" style="font-size:0.8rem;padding:0.25rem 0.6rem;color:var(--red,#ef4444)">🗑 Smazat</button>
+        </form>
+    </div>
+
+    {{/* Stávající členové */}}
+    {{$gid := .ID}}
+    {{$members := index $.GroupMembers $gid}}
+    {{if $members}}
+    <div style="margin-bottom:0.75rem">
+        <div style="font-size:0.82rem;color:var(--muted-d);margin-bottom:0.4rem">Členové ({{len $members}}):</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.4rem">
+            {{range $members}}
+            <span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;
+                         background:var(--bg3);border:1px solid var(--border-d);border-radius:20px;font-size:0.83rem">
+                {{.Username}}
+                {{if .IsHidden}}<span title="Skrytý uživatel">👻</span>{{end}}
+                <form method="post" action="/admin/groups/{{$gid}}/remove-member/{{.UserID}}" style="margin:0;display:inline">
+                    <button type="submit" style="background:none;border:none;cursor:pointer;color:var(--red,#ef4444);font-size:0.8rem;padding:0;line-height:1"
+                            title="Odebrat ze skupiny">✕</button>
+                </form>
+            </span>
+            {{end}}
+        </div>
+    </div>
+    {{else}}
+    <p style="font-size:0.85rem;color:var(--muted-d);margin-bottom:0.75rem">Skupina je zatím prázdná.</p>
+    {{end}}
+
+    {{/* Přidat člena */}}
+    {{$memberSet := index $.MemberIDs $gid}}
+    <form method="post" action="/admin/groups/{{$gid}}/add-member"
+          style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+        <select name="user_id"
+                style="padding:0.35rem 0.6rem;border-radius:7px;border:1px solid var(--border-d);
+                       background:var(--bg3);color:var(--text-d);font-size:0.85rem">
+            <option value="" disabled selected>— vybrat uživatele —</option>
+            {{range $.AllUsers}}
+            {{if not (index $memberSet .ID)}}
+            <option value="{{.ID}}">{{.Username}}{{if .IsHidden}} 👻{{end}}</option>
+            {{end}}
+            {{end}}
+        </select>
+        <button type="submit" class="btn btn-primary" style="font-size:0.85rem;padding:0.35rem 0.8rem">+ Přidat</button>
+    </form>
+</div>
+{{end}}
+
+{{end}}

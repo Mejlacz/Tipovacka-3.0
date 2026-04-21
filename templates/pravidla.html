@@ -1,0 +1,14 @@
+<div class="page-header">
+    <h1>📋 Pravidla</h1>
+    {{if .User}}{{if .User.IsAdmin}}
+    <a href="/admin/pravidla/edit" class="btn btn-secondary btn-sm">✏️ Upravit</a>
+    {{end}}{{end}}
+</div>
+
+<div style="max-width:720px;line-height:1.7">
+{{if .Content}}
+{{.Content}}
+{{else}}
+<p class="empty">Pravidla zatím nejsou nastavena.</p>
+{{end}}
+</div>

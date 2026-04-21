@@ -1,0 +1,39 @@
+<div class="page-header">
+    <h1>🏆 Soutěže</h1>
+    <a href="/admin/competitions/new" class="btn btn-primary btn-sm">+ Nová soutěž</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+{{if .CompData}}
+<div class="card-list">
+{{range .CompData}}
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <div>
+            <div class="card-title">
+                {{.Comp.Name}}{{if .Comp.Season}} <span style="font-weight:400;color:var(--muted-d);font-size:.9rem">{{.Comp.Season}}</span>{{end}}
+            </div>
+            <div class="card-sub">
+                {{.SportLabel}} ·
+                {{if .Comp.IsActive}}<span style="color:#34d399">aktivní</span>{{else}}<span style="color:var(--muted-d)">neaktivní</span>{{end}}
+                · {{.RoundsCount}} kol · {{.MatchesCount}} zápasů · {{.TeamsCount}} týmů
+            </div>
+        </div>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-sm btn-secondary">Kola</a>
+            <a href="/admin/competitions/{{.Comp.ID}}/teams" class="btn btn-sm btn-secondary">Týmy</a>
+            <a href="/admin/competitions/{{.Comp.ID}}/edit" class="btn btn-sm btn-secondary">✏️</a>
+            <form style="display:inline" method="post" action="/admin/competitions/{{.Comp.ID}}/toggle">
+                <button class="btn btn-sm btn-secondary">{{if .Comp.IsActive}}Deaktivovat{{else}}Aktivovat{{end}}</button>
+            </form>
+        </div>
+    </div>
+{{end}}
+</div>
+{{else}}
+<p class="empty">Žádné soutěže.</p>
+{{end}}

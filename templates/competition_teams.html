@@ -1,0 +1,19 @@
+<div class="page-header">
+    <h1>👥 Týmy soutěže: {{.Comp.Name}}</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+{{if .Msg}}<div class="alert alert-success" style="margin-bottom:1rem">{{.Msg}}</div>{{end}}
+
+<form method="post" action="/admin/competitions/{{.Comp.ID}}/teams">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.4rem;margin-bottom:1rem">
+    {{range .Teams}}
+    <label style="display:flex;align-items:center;gap:.4rem;padding:.3rem .5rem;background:var(--bg2);border-radius:6px">
+        <input type="checkbox" name="team_ids" value="{{.ID}}"
+               {{if index $.SelectedIDs .ID}}checked{{end}} />
+        {{.Name}} <span style="font-size:.75rem;color:var(--muted-d)">({{.Sport}})</span>
+    </label>
+    {{end}}
+    </div>
+    <button type="submit" class="btn btn-primary">Uložit</button>
+</form>

@@ -1,0 +1,122 @@
+<div style="max-width:960px;margin:0 auto;padding:0 1rem">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;margin-bottom:1.5rem">
+    <div>
+      <h1 style="margin:0;font-size:1.8rem">🎯 Extra otázky — bodování</h1>
+      <div style="color:var(--muted-d);margin-top:0.25rem;font-size:0.88rem">Soutěž: <strong>{{.Comp.Name}}</strong></div>
+    </div>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+      {{if .Questions}}
+      <form method="post" action="/admin/extra/{{.Comp.ID}}/auto-evaluate" style="display:inline">
+        <button type="submit" class="btn btn-primary" style="font-size:0.85rem">🎯 Vyhodnotit vše</button>
+      </form>
+      {{end}}
+      <a href="/admin/extra/{{.Comp.ID}}/export" class="btn btn-secondary"
+         style="background:#1a3a5c;color:#fff;border-color:#1a3a5c;font-size:0.85rem">
+        📥 Export CSV
+      </a>
+      <a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary" style="font-size:0.85rem">➕ Nová otázka</a>
+      <a href="/extra?competition_id={{.Comp.ID}}" class="btn btn-secondary" style="font-size:0.85rem">← Extra</a>
+      <a href="/admin" class="btn btn-secondary" style="font-size:0.85rem">← Admin</a>
+    </div>
+  </div>
+
+  {{if .Flash}}
+  <div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-info{{end}}"
+       style="margin-bottom:1rem">{{index .Flash "msg" | safeHTML}}</div>
+  {{end}}
+
+  {{if not .Questions}}
+    <p class="empty">Žádné extra otázky pro tuto soutěž.</p>
+    <p><a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary">➕ Přidat první otázku</a></p>
+  {{else}}
+  <form method="post" action="/admin/extra/{{.Comp.ID}}/answers">
+
+    {{range $idx, $q := .Questions}}
+    {{$answers := index $.AnswersByQuestion $q.ID}}
+    <div class="card mb-3">
+      <div class="card-body">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem">
+          <div>
+            <span style="font-size:0.8rem;color:var(--muted-d);margin-right:0.3rem">{{add $idx 1}}.</span>
+            <strong style="font-size:1.05rem">{{$q.Text}}</strong>
+            <span style="font-size:0.78rem;color:var(--muted-d);margin-left:0.4rem">(max {{$q.MaxPoints}} b.)</span>
+            {{if $q.IsClosed}}
+              <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#f87171;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">zavřeno</span>
+            {{else}}
+              <span style="font-size:0.75rem;background:rgba(16,185,129,0.15);color:#34d399;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">otevřeno</span>
+            {{end}}
+          </div>
+          <div style="display:flex;gap:0.35rem;flex-wrap:wrap">
+            {{if $q.CorrectAnswer}}
+            <form method="post" action="/admin/extra/{{$.Comp.ID}}/auto-evaluate?q={{$q.ID}}" style="margin:0">
+              <button type="submit" class="btn btn-sm btn-primary" style="font-size:0.78rem"
+                      title="Správná odpověď: {{$q.CorrectAnswer}}">
+                🎯 Vyhodnotit
+              </button>
+            </form>
+            {{end}}
+            <form method="post" action="/admin/extra/questions/{{$q.ID}}/toggle-close" style="margin:0">
+              <button type="submit" class="btn btn-sm btn-secondary" style="font-size:0.78rem">
+                {{if $q.IsClosed}}🔓 Otevřít{{else}}🔒 Uzavřít{{end}}
+              </button>
+            </form>
+            <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete" style="margin:0"
+                  onsubmit="return confirm('Smazat otázku a všechny její odpovědi?')">
+              <button type="submit" class="btn btn-sm" style="font-size:0.78rem;color:var(--red,#ef4444)">🗑 Smazat</button>
+            </form>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap">
+          <label style="font-size:0.85rem;font-weight:600;white-space:nowrap">Správná odpověď:</label>
+          <input type="text" name="correct_{{$q.ID}}"
+                 value="{{if $q.CorrectAnswer}}{{$q.CorrectAnswer}}{{end}}"
+                 placeholder="např. McDavid (více možností oddělit |)"
+                 class="form-control" style="max-width:300px;font-size:0.85rem">
+        </div>
+
+        {{if not $answers}}
+          <p style="color:var(--muted-d);font-style:italic;font-size:0.85rem">Zatím žádné odpovědi.</p>
+        {{else}}
+        <div style="overflow-x:auto">
+        <table class="table" style="font-size:0.88rem;margin-bottom:0">
+          <thead>
+            <tr>
+              <th style="width:160px">Tipér</th>
+              <th>Odpověď</th>
+              <th style="width:130px;text-align:center">Body (0–{{$q.MaxPoints}})</th>
+            </tr>
+          </thead>
+          <tbody>
+          {{range $answers}}
+          <tr>
+            <td>{{.User.Username}}</td>
+            <td>{{.Answer.Answer}}</td>
+            <td style="text-align:center">
+              <input type="number" name="pts_{{.Answer.ID}}"
+                     value="{{if .Answer.Points}}{{.Answer.Points}}{{end}}"
+                     min="0" max="{{$q.MaxPoints}}"
+                     style="width:70px;text-align:center;padding:0.25rem 0.4rem;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);border-radius:4px;font-size:0.88rem"
+                     placeholder="–">
+            </td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+        </div>
+        {{end}}
+
+      </div>
+    </div>
+    {{end}}
+
+    <div style="padding:0.5rem 0 1.5rem">
+      <button type="submit" class="btn btn-primary">💾 Uložit bodování</button>
+    </div>
+
+  </form>
+  {{end}}
+
+</div>

@@ -1,0 +1,159 @@
+<div class="page-header">
+    <h1>{{.Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
+    {{if and .User .User.IsAdmin}}
+    <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-primary btn-sm">+ Přidat zápas</a>
+    {{end}}
+</div>
+
+{{if not .MatchContext}}
+    {{if .AllLocked}}
+    <div class="alert alert-success" style="max-width:480px">Všechny zápasy jsou utipovány!</div>
+    {{else}}
+    <p class="empty">Žádné aktivní zápasy.</p>
+    {{end}}
+{{else}}
+
+<div id="bulk-save-bar" style="display:none;position:sticky;top:3.4rem;z-index:100;
+     background:var(--bg1,#0f1923);padding:0.45rem 0;margin-bottom:0.5rem;
+     border-bottom:1px solid var(--border-d,rgba(255,255,255,.08));text-align:right">
+    <button id="bulk-save-btn" class="btn btn-primary" style="padding:0.35rem 1.1rem;font-size:0.92rem">
+        💾 Uložit vše
+    </button>
+    <span id="bulk-save-status" style="margin-left:0.7rem;font-size:0.82rem;display:none"></span>
+</div>
+
+<div class="match-list">
+{{$currentRound := ""}}
+{{range .MatchContext}}
+    {{if ne .RoundName $currentRound}}
+        {{if $currentRound}}</div>{{end}}
+        {{$currentRound = .RoundName}}
+        <div class="round-section-header">{{.RoundName}}</div>
+        <div class="round-section">
+    {{end}}
+
+    {{$htName := coalesce .Match.HomeTeam.DisplayName .Match.HomeTeam.Name}}
+    {{$atName := coalesce .Match.AwayTeam.DisplayName .Match.AwayTeam.Name}}
+    <div class="match-card{{if not .CanTip}} match-locked{{end}}">
+        <div class="match-teams">
+            <span class="team">{{$htName}}</span>
+            <span class="match-vs">vs</span>
+            <span class="team">{{$atName}}</span>
+        </div>
+        {{if .Match.MatchDate}}
+        <div class="match-date">
+            {{.Match.MatchDate.Format "02.01.2006 15:04"}}
+            {{if .CanTip}}
+            <span class="match-countdown" data-countdown="{{.Match.MatchDate.Format "2006-01-02T15:04:05"}}"></span>
+            {{end}}
+        </div>
+        {{end}}
+        {{if .Match.IsFinished}}
+            <div class="match-result">Výsledek: <strong>{{intVal .Match.HomeScore}}:{{intVal .Match.AwayScore}}</strong></div>
+            {{if .Tip}}
+            <div class="match-tip">
+                Váš tip: {{.Tip.HomeScore}}:{{.Tip.AwayScore}}
+                <span class="points points-{{intVal .Tip.Points}}">
+                    {{if eq (intVal .Tip.Points) 3}}🎯 3b{{else if eq (intVal .Tip.Points) 1}}✅ 1b{{else}}❌ 0b{{end}}
+                </span>
+            </div>
+            {{else}}
+            <div class="match-tip muted">Netipoval(a) jste.</div>
+            {{end}}
+        {{else if .CanTip}}
+            <form method="post" action="/tip/submit" class="tip-form" data-match-id="{{.Match.ID}}">
+                <input type="hidden" name="match_id" value="{{.Match.ID}}" />
+                <input type="number" name="home_score" min="0" max="99"
+                       value="{{if .Tip}}{{.Tip.HomeScore}}{{end}}"
+                       placeholder="0" required class="score-input" />
+                <span class="colon">:</span>
+                <input type="number" name="away_score" min="0" max="99"
+                       value="{{if .Tip}}{{.Tip.AwayScore}}{{end}}"
+                       placeholder="0" required class="score-input" />
+                <button type="submit" class="btn btn-primary btn-sm">
+                    {{if .Tip}}Upravit{{else}}Tipovat{{end}}
+                </button>
+            </form>
+        {{else}}
+            {{if .Tip}}
+            <div class="match-tip muted">Váš tip: {{.Tip.HomeScore}}:{{.Tip.AwayScore}} (uzavřeno)</div>
+            {{else}}
+            <div class="match-tip muted">Tipování uzavřeno.</div>
+            {{end}}
+        {{end}}
+    </div>
+
+{{end}}
+    </div>
+</div>
+
+<script>
+var LANG_STARTING = 'Právě začíná!';
+(function () {
+    var els = document.querySelectorAll('.match-countdown[data-countdown]');
+    if (!els.length) return;
+    function format(ms) {
+        var s = Math.floor(ms / 1000);
+        if (s <= 0) return { text: LANG_STARTING, cls: 'countdown-now' };
+        var m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
+        var text, cls;
+        if (d > 0) { text = d + 'd ' + (h % 24) + 'h'; cls = 'countdown-ok'; }
+        else if (h >= 2) { text = h + 'h ' + (m % 60) + 'm'; cls = 'countdown-ok'; }
+        else if (h >= 1) { text = h + 'h ' + (m % 60) + 'm'; cls = 'countdown-warn'; }
+        else if (m > 0) { text = m + 'm ' + (s % 60) + 's'; cls = m >= 10 ? 'countdown-warn' : 'countdown-urgent'; }
+        else { text = s + 's'; cls = 'countdown-urgent'; }
+        return { text: text, cls: cls };
+    }
+    function tick() {
+        var now = Date.now();
+        els.forEach(function (el) {
+            var dl = new Date(el.dataset.countdown).getTime();
+            var f = format(dl - now);
+            el.textContent = f.text;
+            el.className = 'match-countdown ' + f.cls;
+            var card = el.closest('.match-card');
+            if (card) {
+                card.classList.remove('cd-warn', 'cd-urgent');
+                if (f.cls === 'countdown-urgent') card.classList.add('cd-urgent');
+                else if (f.cls === 'countdown-warn') card.classList.add('cd-warn');
+            }
+        });
+    }
+    tick(); setInterval(tick, 1000);
+}());
+(function () {
+    var bar = document.getElementById('bulk-save-bar');
+    var btn = document.getElementById('bulk-save-btn');
+    var status = document.getElementById('bulk-save-status');
+    if (!bar || !btn) return;
+    function getOpenForms() { return Array.from(document.querySelectorAll('.tip-form[data-match-id]')); }
+    function isFilled(f) {
+        var h = f.querySelector('[name="home_score"]'), a = f.querySelector('[name="away_score"]');
+        return h && a && h.value !== '' && a.value !== '';
+    }
+    function updateBar() { bar.style.display = getOpenForms().length > 0 ? 'block' : 'none'; }
+    updateBar();
+    document.addEventListener('input', function(e) { if (e.target.classList.contains('score-input')) updateBar(); });
+    btn.addEventListener('click', function () {
+        var forms = getOpenForms().filter(isFilled);
+        if (!forms.length) { status.textContent = 'Nic k uložení.'; status.style.display='block'; setTimeout(function(){status.style.display='none';},2000); return; }
+        btn.disabled = true; btn.textContent = '⏳ Ukládám…'; status.style.display='none';
+        var total = forms.length, done = 0, failed = 0;
+        function finish() {
+            done++;
+            if (done + failed < total) return;
+            if (failed === 0) { btn.textContent = '✅ Uloženo'; setTimeout(function(){window.location.reload();}, 800); }
+            else { btn.disabled=false; btn.textContent='💾 Uložit vše'; status.textContent='⚠️ '+failed+' chyb'; status.style.display='block'; }
+        }
+        forms.forEach(function (form) {
+            var body = new URLSearchParams();
+            body.append('match_id', form.dataset.matchId);
+            body.append('home_score', form.querySelector('[name="home_score"]').value);
+            body.append('away_score', form.querySelector('[name="away_score"]').value);
+            fetch('/tip/submit-ajax', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body.toString() })
+                .then(function(r){return r.json();}).then(function(j){if(j.ok){finish();}else{failed++;finish();}}).catch(function(){failed++;finish();});
+        });
+    });
+}());
+</script>
+{{end}}

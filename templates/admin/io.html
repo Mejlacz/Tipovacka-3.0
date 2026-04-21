@@ -1,0 +1,330 @@
+<style>
+.io-card {
+    background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;
+    padding:1.1rem 1.25rem;display:flex;flex-direction:column;gap:.55rem;
+    transition:border-color .15s;
+}
+.io-card:hover { border-color:var(--accent-soft,#e74c3c66); }
+.io-card h3 { margin:0;font-size:1rem; }
+.io-card p  { margin:0;font-size:.82rem;color:var(--muted-d);line-height:1.4; }
+.io-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-top:1rem; }
+.io-actions { display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.3rem; }
+</style>
+
+<div class="page-header">
+    <h1>📦 Import / Export</h1>
+    <a href="/admin" class="btn btn-secondary">← Admin</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-info{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+<h2 style="margin-bottom:.5rem">Export dat (CSV)</h2>
+<p style="color:var(--muted-d);font-size:.85rem;margin-bottom:.75rem">CSV soubory lze otevřít v Excelu (UTF-8 s BOM). Filtry jsou nepovinné.</p>
+<div class="io-grid">
+
+    <div class="io-card">
+        <h3>🎯 Tipy soutěže</h3>
+        <p>Export tipů (záloha/obnova) pro vybranou soutěž.</p>
+        <div class="io-actions">
+            {{range .Competitions}}
+            <a href="/admin/tips/{{.ID}}/export" class="btn btn-sm btn-primary">{{.Name}}</a>
+            {{end}}
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>🏆 Tipy — všechny soutěže (CSV)</h3>
+        <p>Kompletní export tipů, volitelně filtrováno po soutěži a pouze odehrané zápasy.</p>
+        <div class="io-actions">
+            <a href="/admin/export/csv?type=tips" class="btn btn-sm btn-primary">Všechny tipy</a>
+            {{if .Competitions}}
+            <select id="exp-tips-comp" style="font-size:.8rem">
+                <option value="">Bez filtru</option>
+                {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+            </select>
+            <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-tips-comp').value;location.href='/admin/export/csv?type=tips'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
+            {{end}}
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>⚽ Zápasy (CSV)</h3>
+        <p>Export všech zápasů se skóre, datumem a výsledky.</p>
+        <div class="io-actions">
+            <a href="/admin/export/csv?type=matches" class="btn btn-sm btn-primary">Export</a>
+            <a href="/admin/export/csv?type=matches&only_finished=1" class="btn btn-sm btn-secondary">Jen odehrané</a>
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>👥 Týmy (CSV)</h3>
+        <p>Export všech týmů s aliasy a přiřazenými soutěžemi.</p>
+        <div class="io-actions">
+            <a href="/admin/export/csv?type=teams" class="btn btn-sm btn-primary">Export</a>
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>👤 Uživatelé (CSV)</h3>
+        <p>Export uživatelů se jmény, emaily a rolemi.</p>
+        <div class="io-actions">
+            <a href="/admin/export/csv?type=users" class="btn btn-sm btn-primary">Export</a>
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>📊 Žebříček (CSV)</h3>
+        <p>Export žebříčku s body, přesnými tipy a výhrou správného výsledku.</p>
+        <div class="io-actions">
+            <a href="/admin/export/csv?type=leaderboard" class="btn btn-sm btn-primary">Celkový</a>
+            {{if .Competitions}}
+            <select id="exp-lb-comp" style="font-size:.8rem">
+                <option value="">Bez filtru</option>
+                {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+            </select>
+            <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-lb-comp').value;location.href='/admin/export/csv?type=leaderboard'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
+            {{end}}
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>🎯 Extra otázky (CSV)</h3>
+        <p>Export otázek a odpovědí pro vybranou soutěž.</p>
+        <div class="io-actions">
+            {{range .Competitions}}
+            <a href="/admin/extra/{{.ID}}/export" class="btn btn-sm btn-primary">{{.Name}}</a>
+            {{end}}
+        </div>
+    </div>
+
+</div>
+
+<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Import dat</h2>
+<div class="io-grid">
+
+    <div class="io-card">
+        <h3>📋 Import výsledků — vložení textu</h3>
+        <p>Zkopíruj výsledky z Flashscore nebo jiného zdroje a vlož je do textareu. Funguje bez jakékoliv instalace.</p>
+        <div class="io-actions">
+            <a href="/admin/ocr" class="btn btn-sm btn-primary">Otevřít</a>
+        </div>
+    </div>
+
+    {{/* ── API import zápasů ── */}}
+    <div class="io-card" style="grid-column:1/-1">
+        <h3>⚽ Import zápasů z football-data.org API</h3>
+        <p>Stáhne zápasy přímo z API do zvoleného kola. Potřebuje nastavenou env proměnnou <code>FOOTBALL_API_KEY</code>.</p>
+
+        <form id="api-import-form" method="post" action="/admin/api/import" style="display:flex;flex-direction:column;gap:.65rem;margin-top:.3rem">
+
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                {{/* Výběr soutěže */}}
+                <div style="flex:1;min-width:180px">
+                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Soutěž</label>
+                    <select name="competition_id" id="api-comp" required style="width:100%">
+                        <option value="">— vyber soutěž —</option>
+                        {{range .Competitions}}
+                        <option value="{{.ID}}">{{.Name}}{{if .Season}} — {{.Season}}{{end}}</option>
+                        {{end}}
+                    </select>
+                </div>
+                {{/* Výběr kola */}}
+                <div style="flex:1;min-width:180px">
+                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo (nebo nové)</label>
+                    <select name="round_id" id="api-round" style="width:100%">
+                        <option value="0">➕ Vytvořit nové kolo</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="api-new-round-row" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                <div style="flex:1;min-width:200px">
+                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Název nového kola</label>
+                    <input type="text" name="new_round_name" id="api-round-name" placeholder="např. Skupina A - kolo 3" style="width:100%" />
+                </div>
+            </div>
+
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                {{/* Kód soutěže v API */}}
+                <div style="flex:1;min-width:120px">
+                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kód API soutěže</label>
+                    <input type="text" name="fd_code" id="api-fd-code" placeholder="CL, PL, BL1…" style="width:100%;text-transform:uppercase" maxlength="10" />
+                </div>
+                {{/* Číslo kola v API */}}
+                <div style="min-width:80px">
+                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo v API (nepovinné)</label>
+                    <input type="number" name="matchday" id="api-matchday" min="1" max="99" placeholder="—" style="width:100%" />
+                </div>
+                {{/* Sport */}}
+                <div style="min-width:110px">
+                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Sport</label>
+                    <select name="sport" style="width:100%">
+                        <option value="football">⚽ Fotbal</option>
+                        <option value="hockey">🏒 Hokej</option>
+                    </select>
+                </div>
+                {{/* Skip finished */}}
+                <label style="font-size:.82rem;display:flex;align-items:center;gap:.35rem;cursor:pointer;white-space:nowrap;padding-bottom:.15rem">
+                    <input type="checkbox" name="skip_finished" value="1" />
+                    Přeskočit odehrané
+                </label>
+            </div>
+
+            <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="apiPreview()">🔍 Náhled</button>
+                <button type="submit" class="btn btn-sm btn-primary">📥 Importovat</button>
+                <span id="api-preview-status" style="font-size:.8rem;color:var(--muted-d)"></span>
+            </div>
+        </form>
+
+        {{/* Preview tabulka */}}
+        <div id="api-preview-box" style="display:none;margin-top:.75rem;overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+                <thead>
+                    <tr style="background:var(--bg3)">
+                        <th style="padding:.3rem .5rem;text-align:left">Domácí</th>
+                        <th style="padding:.3rem .5rem;text-align:left">Hosté</th>
+                        <th style="padding:.3rem .5rem;text-align:left">Datum</th>
+                        <th style="padding:.3rem .5rem;text-align:left">Stav</th>
+                        <th style="padding:.3rem .5rem;text-align:center">Skóre</th>
+                    </tr>
+                </thead>
+                <tbody id="api-preview-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>👥 Import týmů (CSV)</h3>
+        <p>CSV sloupce: name, sport, display_name, alias, category. Existující týmy (stejný name+sport) se aktualizují.</p>
+        <form method="post" action="/admin/teams/import-csv" enctype="multipart/form-data">
+            <div class="io-actions">
+                <input type="file" name="csv_file" accept=".csv" required style="font-size:.82rem" />
+                <button type="submit" class="btn btn-sm btn-primary">📥 Importovat</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Správa skupin</h2>
+<div class="io-grid">
+    <div class="io-card">
+        <h3>👥 Skupiny uživatelů</h3>
+        <p>Přiřazovat speciální oprávnění vybraným uživatelům (pouze Owner).</p>
+        <div class="io-actions">
+            <a href="/admin/groups" class="btn btn-primary btn-sm">Otevřít</a>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function qs(sel){ return document.querySelector(sel); }
+
+var compSel  = qs('#api-comp');
+var roundSel = qs('#api-round');
+var newRow   = qs('#api-new-round-row');
+
+// Zobrazit/skrýt řádek pro název nového kola
+function syncNewRow(){
+    if(!roundSel || !newRow) return;
+    newRow.style.display = roundSel.value === '0' ? 'flex' : 'none';
+}
+
+// Načíst kola pro vybranou soutěž
+function loadRounds(compID){
+    if(!roundSel) return;
+    // Reset
+    roundSel.innerHTML = '<option value="0">➕ Vytvořit nové kolo</option>';
+    syncNewRow();
+    if(!compID) return;
+
+    fetch('/admin/api/rounds?competition_id=' + compID)
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(!data.ok || !data.rounds) return;
+            data.rounds.forEach(function(rd){
+                var opt = document.createElement('option');
+                opt.value = rd.id;
+                opt.textContent = rd.name;
+                roundSel.appendChild(opt);
+            });
+        })
+        .catch(function(){});
+}
+
+// Náhled zápasů z API
+window.apiPreview = function(){
+    var fdCode    = (qs('#api-fd-code') || {}).value || '';
+    var matchday  = (qs('#api-matchday') || {}).value || '';
+    var statusEl  = qs('#api-preview-status');
+    var box       = qs('#api-preview-box');
+    var tbody     = qs('#api-preview-tbody');
+
+    fdCode = fdCode.trim().toUpperCase();
+    if(!fdCode){
+        if(statusEl) statusEl.textContent = '⚠ Zadejte kód API soutěže.';
+        return;
+    }
+
+    if(statusEl) statusEl.textContent = '⏳ Načítám…';
+    if(box)      box.style.display = 'none';
+
+    var url = '/admin/api/preview?fd_code=' + encodeURIComponent(fdCode);
+    if(matchday) url += '&matchday=' + encodeURIComponent(matchday);
+
+    fetch(url)
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(!data.ok){
+                if(statusEl) statusEl.textContent = '❌ ' + (data.error || 'Chyba');
+                return;
+            }
+            var matches = data.matches || [];
+            if(statusEl) statusEl.textContent = '✅ Nalezeno ' + matches.length + ' zápasů.';
+            if(!tbody){ return; }
+            tbody.innerHTML = '';
+            matches.forEach(function(m){
+                var score = (m.score_h !== null && m.score_a !== null)
+                    ? m.score_h + ' : ' + m.score_a : '—';
+                var tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td style="padding:.25rem .5rem">' + esc(m.home) + '</td>' +
+                    '<td style="padding:.25rem .5rem">' + esc(m.away) + '</td>' +
+                    '<td style="padding:.25rem .5rem">' + esc(m.date) + '</td>' +
+                    '<td style="padding:.25rem .5rem">' + esc(m.status) + '</td>' +
+                    '<td style="padding:.25rem .5rem;text-align:center">' + esc(score) + '</td>';
+                tbody.appendChild(tr);
+            });
+            if(box) box.style.display = '';
+        })
+        .catch(function(e){
+            if(statusEl) statusEl.textContent = '❌ Síťová chyba: ' + e.message;
+        });
+};
+
+function esc(s){
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Inicializace ──────────────────────────────────────────────────────────────
+
+if(compSel){
+    compSel.addEventListener('change', function(){ loadRounds(this.value); });
+    // Pokud je soutěž už vybraná (reload po chybě), načíst kola ihned
+    if(compSel.value) loadRounds(compSel.value);
+}
+if(roundSel){
+    roundSel.addEventListener('change', syncNewRow);
+}
+syncNewRow();
+
+})();
+</script>

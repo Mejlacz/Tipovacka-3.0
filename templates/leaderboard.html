@@ -1,0 +1,581 @@
+<div class="page-header">
+    <h1>Žebříček</h1>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+        <form method="get" action="/leaderboard" class="filter-form" style="margin:0">
+            <select name="competition_id" onchange="this.form.submit()">
+                <option value="">Všechny soutěže</option>
+                {{range .Competitions}}
+                <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
+                    {{.Name}} {{.Season}}
+                </option>
+                {{end}}
+            </select>
+        </form>
+        {{if and .User.IsAdmin .SelectedCompetitionID .CompRounds}}
+        <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('add-match-modal').style.display='flex'"
+                style="font-size:0.82rem">➕ Zápas</button>
+        {{end}}
+        {{if and .User.IsAdmin .SelectedCompetitionID}}
+        <a href="/admin/tips/{{.SelectedCompetitionID}}/export" class="btn btn-secondary btn-sm"
+           style="font-size:0.82rem" title="Stáhnout CSV se tipy soutěže">⬇ Tipy CSV</a>
+        {{end}}
+    </div>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else if eq (index .Flash "type") "err"}}alert-error{{else}}alert-info{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg"}}
+</div>
+{{end}}
+
+{{/* ── Add Match Modal (admin only) ── */}}
+{{if and .User.IsAdmin .SelectedCompetitionID .CompRounds}}
+<div id="add-match-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:12px;padding:1.5rem;width:min(420px,95vw);max-height:90vh;overflow-y:auto">
+        <h3 style="margin:0 0 1rem">➕ Přidat zápas</h3>
+        <form method="post" id="add-match-form">
+            <div class="form-group" style="margin-bottom:.75rem">
+                <label style="font-size:.82rem;color:var(--muted-d)">Kolo</label>
+                <select name="round_id" id="am-round" required style="width:100%">
+                    <option value="new">➕ Nové kolo</option>
+                    {{range .CompRounds}}
+                    <option value="{{.ID}}">{{.Name}}</option>
+                    {{end}}
+                </select>
+            </div>
+            <div class="form-group" id="am-new-round-row" style="margin-bottom:.75rem">
+                <label style="font-size:.82rem;color:var(--muted-d)">Název nového kola</label>
+                <input type="text" name="new_round_name" id="am-new-round-name" value="{{.NextRoundName}}" style="width:100%" />
+            </div>
+            <div class="form-group" style="margin-bottom:.75rem">
+                <label style="font-size:.82rem;color:var(--muted-d)">Domácí</label>
+                <select name="home_team_id" required style="width:100%">
+                    {{range .CompTeams}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:.75rem">
+                <label style="font-size:.82rem;color:var(--muted-d)">Hosté</label>
+                <select name="away_team_id" required style="width:100%">
+                    {{range .CompTeams}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:1rem">
+                <label style="font-size:.82rem;color:var(--muted-d)">Datum a čas</label>
+                <input type="datetime-local" name="match_date" style="width:100%" />
+            </div>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('add-match-modal').style.display='none'">Zrušit</button>
+                <button type="submit" class="btn btn-primary btn-sm">Přidat zápas</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+(function() {
+    var modal = document.getElementById('add-match-modal');
+    var form  = document.getElementById('add-match-form');
+    var roundSel = document.getElementById('am-round');
+    var newRoundRow = document.getElementById('am-new-round-row');
+    function toggleNewRound() {
+        newRoundRow.style.display = roundSel.value === 'new' ? '' : 'none';
+    }
+    roundSel.addEventListener('change', toggleNewRound);
+    toggleNewRound();
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var fd = new FormData(form);
+        fetch('/admin/competitions/{{.SelectedCompetitionID}}/add-match', { method: 'POST', body: fd })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) { location.reload(); }
+            else { alert('Chyba: ' + (data.error || 'neznámá chyba')); }
+        }).catch(function() { location.reload(); });
+    });
+})();
+</script>
+{{end}}
+
+{{if not .UserRows}}
+    <p class="empty">Žádné tipy zatím.</p>
+{{else if not .Matches}}
+    <p class="empty">Žádné zápasy.</p>
+{{else}}
+
+{{/* ── Barevná legenda ── */}}
+<div class="lb-legend" style="margin-bottom:.75rem;font-size:.82rem;display:flex;gap:1rem;flex-wrap:wrap">
+    <span class="lb-legend-item"><span class="lb-legend-dot tip-exact" style="display:inline-block;width:12px;height:12px;background:#16a34a;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Přesný tip (3b)</span>
+    <span class="lb-legend-item"><span class="lb-legend-dot tip-winner" style="display:inline-block;width:12px;height:12px;background:#b45309;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Správný vítěz (1b)</span>
+    <span class="lb-legend-item"><span class="lb-legend-dot tip-miss" style="display:inline-block;width:12px;height:12px;background:var(--bg3);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Špatný tip (0b)</span>
+    <span class="lb-legend-item"><span style="color:var(--accent);font-size:0.9rem">✓</span> Skrytý tip</span>
+</div>
+
+{{/* ── Sticky own position bar ── */}}
+<div id="lb-my-pos" style="display:none;position:sticky;top:0;z-index:50;background:var(--navy2,#0f172a);border-bottom:2px solid var(--accent);padding:4px 12px;font-size:0.82rem;color:var(--text-d)"></div>
+
+{{if or .User.IsAdmin .User.IsOwner}}
+<div style="font-size:0.75rem;color:var(--muted-d);margin-bottom:0.4rem;display:flex;align-items:center;gap:0.9rem;flex-wrap:wrap">
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;vertical-align:middle;margin-right:3px"></span>otevřeno</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;vertical-align:middle;margin-right:3px"></span>uzavřeno</span>
+</div>
+{{end}}
+
+<div class="table-scroll">
+<table class="leaderboard-matrix">
+    <thead>
+        {{/* ── Row 1: column headers ── */}}
+        <tr>
+            <th class="col-place">#</th>
+            <th class="col-user">Tipér</th>
+            <th class="col-pts">Body</th>
+            {{range .Matches}}
+            {{$htName := coalesce .HomeTeam.DisplayName .HomeTeam.Name}}
+            {{$atName := coalesce .AwayTeam.DisplayName .AwayTeam.Name}}
+            <th class="col-match"
+                title="{{.HomeTeam.Name}} – {{.AwayTeam.Name}}{{if .MatchDate}} · {{.MatchDate.Format "02.01.2006 15:04"}}{{end}}{{if or $.User.IsAdmin $.User.IsOwner}}{{if not (index $.StartedMatchIDs .ID)}} · 🟢 otevřeno{{else}} · 🔒 uzavřeno{{end}}{{end}}">
+                {{if or $.User.IsAdmin $.User.IsOwner}}
+                <span style="display:block;width:7px;height:7px;border-radius:50%;margin:0 auto 2px;background:{{if not (index $.StartedMatchIDs .ID)}}#22c55e{{else}}#f59e0b{{end}}"></span>
+                {{end}}
+                <div class="match-header">
+                    {{if .MatchDate}}
+                    {{if and $.User.IsAdmin (not .IsFinished)}}
+                    <span class="match-date-edit"
+                          data-match-id="{{.ID}}"
+                          data-iso="{{.MatchDate.Format "2006-01-02T15:04"}}"
+                          title="Klikni pro změnu data: {{.MatchDate.Format "02.01.2006 15:04"}}"
+                          style="font-size:0.62rem;color:var(--muted-d);cursor:pointer;opacity:.9">{{.MatchDate.Format "02.01."}}</span>
+                    {{else}}
+                    <span style="font-size:0.62rem;color:var(--muted-d);opacity:.8" title="{{.MatchDate.Format "02.01.2006 15:04"}}">{{.MatchDate.Format "02.01."}}</span>
+                    {{end}}
+                    <span style="color:var(--muted-d);opacity:.35"> · </span>
+                    {{end}}
+                    {{call $.Abbrev $htName}}-{{call $.Abbrev $atName}}
+                </div>
+                {{if and $.User.IsAdmin (not .IsFinished)}}
+                <div style="display:flex;justify-content:center;align-items:center;gap:3px;margin-top:2px">
+                    <button class="match-delete-btn"
+                            data-match-id="{{.ID}}"
+                            data-label="{{.HomeTeam.Name}} – {{.AwayTeam.Name}}"
+                            title="Zrušit zápas"
+                            style="background:none;border:none;color:var(--red,#ef4444);cursor:pointer;font-size:0.75rem;padding:0 2px;line-height:1;opacity:.7"
+                            onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.7">✕</button>
+                </div>
+                {{end}}
+            </th>
+            {{end}}
+            {{range .ExtraCols}}
+            <th class="col-match" title="{{.SubText}}{{if .CorrectAnswers}} → {{range $i,$ca := .CorrectAnswers}}{{if $i}} / {{end}}{{$ca}}{{end}}{{end}} (max {{.MaxPoints}} b){{if or $.User.IsAdmin $.User.IsOwner}}{{if not .IsClosed}} · 🟢 otevřeno{{else}} · 🔒 uzavřeno{{end}}{{end}}">
+                {{if or $.User.IsAdmin $.User.IsOwner}}
+                <span style="display:block;width:7px;height:7px;border-radius:50%;margin:0 auto 2px;background:{{if not .IsClosed}}#22c55e{{else}}#f59e0b{{end}}"></span>
+                {{end}}
+                <div class="match-header" style="color:#f0c040">
+                    🎯 {{.SubText}}
+                </div>
+            </th>
+            {{end}}
+            {{if .ExtraCols}}
+            <th class="col-pts" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>
+            {{end}}
+            <th class="col-match" title="Tipy">
+                <div class="match-header" style="font-size:0.78rem">Tipy</div>
+            </th>
+        </tr>
+        {{/* ── Row 2: results ── */}}
+        <tr class="results-row">
+            <td class="col-place" style="color:var(--muted-d)"></td>
+            <td class="col-user" style="font-size:0.75rem;color:var(--muted-d)">Výsledky</td>
+            <td class="col-pts"></td>
+            {{range .Matches}}
+            <td class="cell-result{{if or $.User.IsAdmin $.User.IsOwner}} result-editable{{end}}"
+                {{if or $.User.IsAdmin $.User.IsOwner}}
+                data-match-id="{{.ID}}"
+                data-home="{{if .HomeScore}}{{intVal .HomeScore}}{{end}}"
+                data-away="{{if .AwayScore}}{{intVal .AwayScore}}{{end}}"
+                {{end}}>
+                {{if .IsFinished}}
+                    <strong>{{intVal .HomeScore}}:{{intVal .AwayScore}}</strong>
+                {{else}}
+                    <span style="color:var(--muted-d);opacity:.5">–</span>
+                {{end}}
+            </td>
+            {{end}}
+            {{range .ExtraCols}}
+            <td style="font-size:0.72rem;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center"
+                title="{{.SubText}}{{if .CorrectAnswers}} → {{range $i,$ca := .CorrectAnswers}}{{if $i}} / {{end}}{{$ca}}{{end}}{{end}}">
+                {{if .CorrectAnswers}}
+                    <span style="color:#f0c040">✓ {{range $i,$ca := .CorrectAnswers}}{{if $i}} / {{end}}{{$ca}}{{end}}</span>
+                {{else}}
+                    <span style="color:var(--muted-d)">—</span>
+                {{end}}
+            </td>
+            {{end}}
+            {{if .ExtraCols}}
+            <td class="col-pts" style="border-left:2px solid #dee2e6"></td>
+            {{end}}
+            <td></td>
+        </tr>
+    </thead>
+    <tbody>
+    {{range $_, $row := .UserRows}}
+    {{$isMe := and $.User (eq $row.User.ID $.User.ID)}}
+    <tr {{if $isMe}}class="highlight"{{end}}>
+        <td class="col-place">{{$row.Place}}.
+            {{if gt $row.Trend 0}}<span class="trend-up" title="↑{{$row.Trend}}" style="color:#22c55e;font-size:0.75rem">↑<sup>{{$row.Trend}}</sup></span>
+            {{else if lt $row.Trend 0}}<span class="trend-dn" title="↓{{absInt $row.Trend}}" style="color:#ef4444;font-size:0.75rem">↓<sup>{{absInt $row.Trend}}</sup></span>
+            {{end}}
+        </td>
+        <td class="col-user">
+            {{$accStr := "—"}}{{if $row.Accuracy}}{{$accStr = printf "%d %%" (intVal $row.Accuracy)}}{{end}}
+            {{$tipData := printf "🎯 Přesnost: %s\n✅ Přesné: %d\n☑️ Vítěz: %d\n❌ Minul: %d\n📊 Tipy: %s" $accStr $row.Exact $row.Winner $row.Miss $row.TipRatio}}
+            <span class="player-tip" data-tip="{{$tipData}}" style="cursor:pointer">{{if $isMe}}<em>{{$row.User.Username}}</em>{{else}}{{$row.User.Username}}{{end}}</span>
+            {{if $isMe}}<span class="badge-you" style="font-size:0.72rem;margin-left:0.2rem">ty</span>{{end}}
+        </td>
+        <td class="col-pts"><strong>{{$row.Total}}</strong></td>
+        {{range $.Matches}}
+        {{$tip := index (index $.TipsByUser $row.User.ID) .ID}}
+        {{$started := index $.StartedMatchIDs .ID}}
+        {{$visible := or $started $isMe}}
+        {{$ownEditable := and $isMe (not $started)}}
+        {{$adminEditable := and (or $.User.IsAdmin $.User.IsOwner) (not $ownEditable)}}
+        <td class="cell-tip{{if .HomeScore}}{{if $tip}}{{if and (eq $tip.HomeScore (intVal .HomeScore)) (eq $tip.AwayScore (intVal .AwayScore))}} tip-exact{{else if sameWinner $tip.HomeScore $tip.AwayScore (intVal .HomeScore) (intVal .AwayScore)}} tip-winner{{else}} tip-miss{{end}}{{else if $started}} tip-no-tip{{end}}{{end}}{{if $ownEditable}} tip-editable{{end}}{{if $adminEditable}} tip-admin-editable{{end}}"
+            data-match-id="{{.ID}}"
+            data-home="{{if $tip}}{{$tip.HomeScore}}{{end}}"
+            data-away="{{if $tip}}{{$tip.AwayScore}}{{end}}"
+            {{if $adminEditable}}data-user-id="{{$row.User.ID}}" data-username="{{$row.User.Username}}"{{end}}>
+            {{if $tip}}{{if $visible}}
+                {{$tip.HomeScore}}:{{$tip.AwayScore}}
+            {{else}}
+                <span class="tip-hidden" title="Tip skrytý do začátku zápasu" style="color:var(--accent)">✓</span>
+            {{end}}{{else if $started}}
+                <span style="opacity:.4">×</span>
+            {{else}}
+                <span style="color:var(--muted-d)">–</span>
+            {{end}}
+        </td>
+        {{end}}
+        {{/* ── Extra question columns ── */}}
+        {{range $.ExtraCols}}
+        {{$colKey := .ColKey}}
+        {{$qid := .QID}}
+        {{$ansText := index (index $.ExpandedEA $row.User.ID) $colKey}}
+        {{$pts := index (index $.ExtraPtsMatrix $row.User.ID) $qid}}
+        {{$isLast := .IsLast}}
+        {{$eaAdmin := or $.User.IsAdmin $.User.IsOwner}}
+        <td class="cell-tip{{if $eaAdmin}} extra-admin-editable{{end}}"
+            title="{{if $ansText}}{{$ansText}}{{else}}–{{end}}{{if and $isLast (not (isNilInt $pts))}} ({{intVal $pts}} b){{end}}"
+            style="font-size:0.78rem;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center"
+            {{if $eaAdmin}}
+            data-q-id="{{$qid}}"
+            data-user-id="{{$row.User.ID}}"
+            data-username="{{$row.User.Username}}"
+            data-sub-index="{{.SubIndex}}"
+            data-ans="{{$ansText}}"
+            {{end}}>
+            {{if $ansText}}
+                <span style="color:#94a3b8">{{truncate $ansText 12}}</span>{{if and $isLast (not (isNilInt $pts))}} <strong style="color:#4ade80">{{intVal $pts}}</strong>{{end}}
+            {{else}}
+                <span style="color:var(--muted-d)">–</span>
+            {{end}}
+        </td>
+        {{end}}
+        {{/* ── Grand total (tipy + extra) ── */}}
+        {{if $.ExtraCols}}
+        <td class="col-pts" style="border-left:2px solid #dee2e6;text-align:center">
+            <strong>{{$row.GrandTotal}}</strong>
+            {{if gt $row.Extra 0}}
+            <br><span style="font-size:0.7rem;color:#888">(+{{$row.Extra}} 🎯)</span>
+            {{end}}
+        </td>
+        {{end}}
+        {{/* ── Tip ratio ── */}}
+        <td class="col-match" style="font-size:0.82rem;text-align:center;white-space:nowrap">
+            {{$row.TipRatio}}
+        </td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+
+{{end}}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var table = document.querySelector('.leaderboard-matrix');
+    if (!table) return;
+    var scrollDiv = document.querySelector('.table-scroll');
+
+    function fixLayout() {
+        if (!scrollDiv) return;
+        var vw = window.innerWidth;
+        var pl = parseFloat(window.getComputedStyle(scrollDiv.parentElement).paddingLeft) || 0;
+        scrollDiv.style.width = vw + 'px';
+        scrollDiv.style.marginLeft = (-pl) + 'px';
+        scrollDiv.style.marginRight = '0';
+    }
+
+    function fixStickyLeft() {
+        fixLayout();
+        var vw = window.innerWidth;
+        if (vw > 0) { table.style.minWidth = vw + 'px'; }
+        var firstRow = table.querySelector('thead tr:first-child');
+        if (!firstRow) return;
+        var place = firstRow.querySelector('.col-place');
+        var user  = firstRow.querySelector('.col-user');
+        var pts   = firstRow.querySelector('.col-pts');
+        if (!place || !user || !pts) return;
+        var leftUser = place.offsetWidth;
+        var leftPts  = place.offsetWidth + user.offsetWidth;
+        table.querySelectorAll('.col-place').forEach(function(el) { el.style.left = '0px'; });
+        table.querySelectorAll('.col-user').forEach(function(el)  { el.style.left = leftUser + 'px'; });
+        table.querySelectorAll('.col-pts').forEach(function(el)   { el.style.left = leftPts  + 'px'; });
+    }
+    fixStickyLeft();
+    var _lbTimer;
+    window.addEventListener('resize', function() { clearTimeout(_lbTimer); _lbTimer = setTimeout(fixStickyLeft, 300); });
+    window.addEventListener('orientationchange', function() { clearTimeout(_lbTimer); _lbTimer = setTimeout(fixStickyLeft, 600); });
+
+    // ── Inline own-tip edit ──
+    table.querySelectorAll('.tip-editable').forEach(function (cell) {
+        cell.addEventListener('click', function () {
+            if (cell.querySelector('input')) return;
+            var matchId = cell.dataset.matchId;
+            var curHome = cell.dataset.home || '';
+            var curAway = cell.dataset.away || '';
+            var orig = cell.innerHTML;
+            cell.innerHTML = '<input type="number" class="ie-score" value="' + curHome + '" min="0" max="99"><span class="ie-sep">:</span><input type="number" class="ie-score" value="' + curAway + '" min="0" max="99">';
+            var inputs = cell.querySelectorAll('input');
+            inputs[0].focus(); inputs[0].select();
+            function save() {
+                var h = parseInt(inputs[0].value, 10), a = parseInt(inputs[1].value, 10);
+                if (isNaN(h) || isNaN(a) || h < 0 || a < 0) { cancel(); return; }
+                var fd = new FormData();
+                fd.append('match_id', matchId); fd.append('home_score', h); fd.append('away_score', a);
+                fetch('/tip/submit-ajax', { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.ok) { cell.dataset.home = h; cell.dataset.away = a; cell.innerHTML = h + ':' + a; cell.classList.remove('tip-exact','tip-winner','tip-miss'); }
+                        else { cell.innerHTML = orig; if (data.error === 'deadline_passed') alert('Uzávěrka tipování vypršela.'); }
+                    }).catch(function() { cell.innerHTML = orig; });
+            }
+            function cancel() { cell.innerHTML = orig; }
+            inputs[0].addEventListener('keydown', function(e) { if (e.key === 'Enter') { inputs[1].focus(); inputs[1].select(); } if (e.key === 'Escape') cancel(); });
+            inputs[1].addEventListener('keydown', function(e) { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); });
+            function outsideClick(e) { if (!cell.contains(e.target)) { document.removeEventListener('click', outsideClick); save(); } }
+            setTimeout(function() { document.addEventListener('click', outsideClick); }, 10);
+        });
+    });
+
+    // ── Admin confirm dialog ──
+    function confirmAdminEdit(username, onConfirm, onCancel) {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center';
+        overlay.innerHTML = '<div style="background:var(--bg2);border:2px solid #f59e0b;border-radius:12px;padding:1.3rem 1.5rem;max-width:320px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,0.6)"><div style="font-weight:700;color:#f59e0b;margin-bottom:0.5rem;font-size:1rem">⚠️ Úprava po deadline</div><div style="font-size:0.84rem;color:var(--text-d);margin-bottom:0.9rem">Měníš data hráče <strong>' + username + '</strong>.<br>Pro potvrzení napiš <code style="background:var(--bg3);padding:0 4px;border-radius:3px">POTVRDIT</code>:</div><input type="text" id="_ac_inp" autocomplete="off" placeholder="POTVRDIT" style="width:100%;box-sizing:border-box;background:var(--bg3);color:var(--text-d);border:1px solid #f59e0b;border-radius:6px;padding:0.45rem 0.65rem;font-size:0.95rem;margin-bottom:0.75rem"><div style="display:flex;gap:0.5rem;justify-content:flex-end"><button id="_ac_cancel" style="padding:0.35rem 0.9rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);cursor:pointer">Zrušit</button><button id="_ac_ok" style="padding:0.35rem 0.9rem;border-radius:6px;border:none;background:#f59e0b;color:#000;font-weight:700;cursor:pointer">Potvrdit</button></div></div>';
+        document.body.appendChild(overlay);
+        var inp = overlay.querySelector('#_ac_inp'); inp.focus();
+        function doConfirm() { if (inp.value.trim().toUpperCase() === 'POTVRDIT') { document.body.removeChild(overlay); onConfirm(); } else { inp.style.borderColor='#ef4444'; inp.value=''; inp.placeholder='Napiš přesně: POTVRDIT'; inp.focus(); } }
+        function doCancel() { document.body.removeChild(overlay); onCancel(); }
+        overlay.querySelector('#_ac_ok').addEventListener('click', doConfirm);
+        overlay.querySelector('#_ac_cancel').addEventListener('click', doCancel);
+        inp.addEventListener('keydown', function(e) { if (e.key==='Enter') doConfirm(); if (e.key==='Escape') doCancel(); });
+        overlay.addEventListener('click', function(e) { if (e.target===overlay) doCancel(); });
+    }
+
+    // ── Admin inline tip edit ──
+    table.querySelectorAll('.tip-admin-editable').forEach(function (cell) {
+        cell.addEventListener('click', function () {
+            if (cell.querySelector('input')) return;
+            var matchId  = cell.dataset.matchId;
+            var userId   = cell.dataset.userId;
+            var username = cell.dataset.username || 'hráče';
+            var curHome  = cell.dataset.home || '';
+            var curAway  = cell.dataset.away || '';
+            var orig = cell.innerHTML;
+            cell.innerHTML = '<input type="number" class="ie-score" value="' + curHome + '" min="0" max="99"><span class="ie-sep">:</span><input type="number" class="ie-score" value="' + curAway + '" min="0" max="99">';
+            var inputs = cell.querySelectorAll('input');
+            inputs[0].focus(); inputs[0].select();
+            function doPost(h, a) {
+                var fd = new FormData();
+                fd.append('match_id', matchId); fd.append('user_id', userId); fd.append('home_score', h); fd.append('away_score', a);
+                fetch('/admin/tips/set-ajax', { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.ok) { cell.dataset.home = h; cell.dataset.away = a; cell.innerHTML = h + ':' + a; cell.classList.remove('tip-exact','tip-winner','tip-miss','tip-no-tip'); }
+                        else { cell.innerHTML = orig; alert('Chyba: ' + (data.error || 'neznámá')); }
+                    }).catch(function() { cell.innerHTML = orig; alert('Chyba spojení.'); });
+            }
+            function save() {
+                var h = parseInt(inputs[0].value, 10), a = parseInt(inputs[1].value, 10);
+                if (isNaN(h) || isNaN(a) || h < 0 || a < 0) { cancel(); return; }
+                document.removeEventListener('click', outsideClick);
+                confirmAdminEdit(username, function() { doPost(h, a); }, cancel);
+            }
+            function cancel() { cell.innerHTML = orig; }
+            inputs[0].addEventListener('keydown', function(e) { if (e.key==='Enter') { inputs[1].focus(); inputs[1].select(); } if (e.key==='Escape') cancel(); });
+            inputs[1].addEventListener('keydown', function(e) { if (e.key==='Enter') save(); if (e.key==='Escape') cancel(); });
+            function outsideClick(e) { if (!cell.contains(e.target)) { document.removeEventListener('click', outsideClick); save(); } }
+            setTimeout(function() { document.addEventListener('click', outsideClick); }, 10);
+        });
+    });
+
+    // ── Admin inline extra answer edit ──
+    table.querySelectorAll('.extra-admin-editable').forEach(function (cell) {
+        cell.addEventListener('click', function () {
+            if (cell.querySelector('input')) return;
+            var qId      = cell.dataset.qId;
+            var userId   = cell.dataset.userId;
+            var username = cell.dataset.username || 'hráče';
+            var subIdx   = cell.dataset.subIndex || '0';
+            var curAns   = cell.dataset.ans || '';
+            var orig     = cell.innerHTML;
+            cell.innerHTML = '<input type="text" class="ie-text" value="' + curAns.replace(/"/g,'&quot;') + '" style="width:100%;min-width:60px;font-size:.78rem;background:var(--bg3);color:var(--text-d);border:1px solid #f59e0b;border-radius:3px;padding:1px 3px">';
+            var inp = cell.querySelector('input'); inp.focus(); inp.select();
+            function doPost(val) {
+                var fd = new FormData();
+                fd.append('question_id', qId); fd.append('user_id', userId); fd.append('sub_index', subIdx); fd.append('answer_text', val);
+                fetch('/admin/extra/answers/set-ajax', { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.ok) { cell.dataset.ans = val; var disp = val.length > 12 ? val.slice(0,12) + '\u2026' : val; cell.innerHTML = val ? '<span style="color:#94a3b8">' + disp + '</span>' : '<span style="color:var(--muted-d)">\u2013</span>'; }
+                        else { cell.innerHTML = orig; alert('Chyba: ' + (data.error || 'neznámá')); }
+                    }).catch(function() { cell.innerHTML = orig; alert('Chyba spojení.'); });
+            }
+            function save() { var val = inp.value.trim(); document.removeEventListener('click', outsideClick); confirmAdminEdit(username, function() { doPost(val); }, cancel); }
+            function cancel() { cell.innerHTML = orig; }
+            inp.addEventListener('keydown', function(e) { if (e.key==='Enter') save(); if (e.key==='Escape') cancel(); });
+            function outsideClick(e) { if (!cell.contains(e.target)) { document.removeEventListener('click', outsideClick); save(); } }
+            setTimeout(function() { document.addEventListener('click', outsideClick); }, 10);
+        });
+    });
+
+    // ── Match delete (admin) ──
+    table.querySelectorAll('.match-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var matchId = btn.dataset.matchId, label = btn.dataset.label;
+            if (!confirm('Zrušit zápas: ' + label + '?\n\nSmaže se zápas i všechny tipy k němu.')) return;
+            fetch('/admin/matches/' + matchId + '/delete', { method: 'POST' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) { if (data.ok) location.reload(); else alert('Chyba: ' + (data.error || 'neznámá')); })
+                .catch(function() { alert('Chyba spojení.'); });
+        });
+    });
+
+    // ── Inline result edit (admin) ──
+    table.querySelectorAll('.result-editable').forEach(function(cell) {
+        cell.addEventListener('click', function() {
+            if (cell.querySelector('input')) return;
+            var matchId = cell.dataset.matchId;
+            var curHome = cell.dataset.home || '', curAway = cell.dataset.away || '';
+            var orig = cell.innerHTML;
+            cell.innerHTML = '<input type="number" class="ie-score" value="' + curHome + '" min="0" max="99"><span class="ie-sep">:</span><input type="number" class="ie-score" value="' + curAway + '" min="0" max="99">';
+            var inputs = cell.querySelectorAll('input'); inputs[0].focus(); inputs[0].select();
+            function save() {
+                var h = parseInt(inputs[0].value, 10), a = parseInt(inputs[1].value, 10);
+                if (isNaN(h) || isNaN(a) || h < 0 || a < 0) { cancel(); return; }
+                var fd = new FormData(); fd.append('home_score', h); fd.append('away_score', a);
+                fetch('/admin/matches/' + matchId + '/set-result', { method: 'POST', body: fd })
+                    .then(function() { location.reload(); })
+                    .catch(function() { cell.innerHTML = orig; });
+            }
+            function cancel() { cell.innerHTML = orig; }
+            inputs[0].addEventListener('keydown', function(e) { if (e.key==='Enter') { inputs[1].focus(); inputs[1].select(); } if (e.key==='Escape') cancel(); });
+            inputs[1].addEventListener('keydown', function(e) { if (e.key==='Enter') save(); if (e.key==='Escape') cancel(); });
+            function outsideClick(e) { if (!cell.contains(e.target)) { document.removeEventListener('click', outsideClick); save(); } }
+            setTimeout(function() { document.addEventListener('click', outsideClick); }, 10);
+        });
+    });
+
+    // ── Match date edit (admin) ──
+    table.querySelectorAll('.match-date-edit').forEach(function(div) {
+        div.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (div.querySelector('input')) return;
+            var matchId = div.dataset.matchId, curIso = div.dataset.iso || '';
+            var origHtml = div.innerHTML;
+            div.innerHTML = '<input type="datetime-local" class="ie-date" value="' + curIso + '" style="font-size:0.7rem;width:12rem;background:var(--bg3);color:var(--text-d);border:1px solid var(--accent);border-radius:4px;padding:1px 3px">';
+            var inp = div.querySelector('input'); inp.focus();
+            function save() {
+                var val = inp.value, fd = new FormData(); fd.append('match_date', val);
+                fetch('/admin/matches/' + matchId + '/set-date', { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) { if (data.ok) { div.dataset.iso = data.iso; div.innerHTML = '✏️ ' + data.display; } else { div.innerHTML = origHtml; alert('Chyba: ' + (data.error || '')); } })
+                    .catch(function() { div.innerHTML = origHtml; });
+            }
+            function cancel() { div.innerHTML = origHtml; }
+            inp.addEventListener('keydown', function(e) { if (e.key==='Enter') { e.preventDefault(); save(); } if (e.key==='Escape') cancel(); });
+            inp.addEventListener('blur', function() { setTimeout(save, 150); });
+        });
+    });
+
+    // ── Sticky own position bar ──
+    var myRow = table.querySelector('tbody tr.highlight');
+    var myPosBar = document.getElementById('lb-my-pos');
+    if (myRow && myPosBar) {
+        var myPlace = myRow.querySelector('.col-place');
+        var myName  = myRow.querySelector('.col-user');
+        var myPts   = myRow.querySelector('.col-pts');
+        if (myPlace && myName && myPts) {
+            myPosBar.textContent = '📍 ' + myPlace.textContent.trim() + ' ' + myName.textContent.trim() + ' · ' + myPts.textContent.trim() + ' b';
+        }
+        var observer = new IntersectionObserver(function(entries) {
+            myPosBar.style.display = entries[0].isIntersecting ? 'none' : 'block';
+        }, { threshold: 0, rootMargin: '-60px 0px 0px 0px' });
+        observer.observe(myRow);
+    }
+
+    // ── Player stats modal ──
+    var navbar = document.querySelector('.navbar');
+    var navH = navbar ? navbar.offsetHeight : 52;
+    var modal = document.createElement('div');
+    modal.id = 'tipster-modal';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:2000;align-items:flex-start;justify-content:center;padding-top:' + (navH + 12) + 'px;padding-left:1rem;padding-right:1rem;overflow-y:auto';
+    modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:16px;padding:1.4rem 1.25rem 1.1rem;width:min(380px,92vw);margin-bottom:1rem"><div id="tipster-modal-body"></div><button id="tipster-modal-close" class="btn btn-secondary btn-sm" style="margin-top:1.1rem;width:100%">Zavřít</button></div>';
+    document.body.appendChild(modal);
+    document.getElementById('tipster-modal-close').addEventListener('click', function() { modal.style.display = 'none'; });
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+
+    function statBox(label, value, color) {
+        return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg3);border:1px solid var(--border-d);border-radius:10px;padding:.55rem .3rem .4rem;min-width:0">'
+             + '<span style="font-size:1.35rem;font-weight:800;color:' + color + ';line-height:1.1">' + value + '</span>'
+             + '<span style="font-size:.7rem;color:var(--muted-d);margin-top:.2rem;text-align:center;white-space:nowrap">' + label + '</span>'
+             + '</div>';
+    }
+
+    table.querySelectorAll('tbody tr').forEach(function(row) {
+        var nameEl = row.querySelector('.col-user .player-tip');
+        if (!nameEl) return;
+        nameEl.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var colUser = row.querySelector('.col-user');
+            var username = colUser ? colUser.textContent.trim() : '?';
+            var ptsEl = row.querySelector('.col-pts');
+            var pts = ptsEl ? ptsEl.textContent.trim() : '';
+            var rawTip = nameEl.getAttribute('data-tip') || '';
+            var lines = rawTip.split('\n');
+            function extractVal(prefix) {
+                for (var i = 0; i < lines.length; i++) {
+                    var idx = lines[i].indexOf(prefix);
+                    if (idx !== -1) return lines[i].slice(idx + prefix.length).trim();
+                }
+                return '—';
+            }
+            var acc    = extractVal('Přesnost:');
+            var exact  = extractVal('Přesné:');
+            var winner = extractVal('Vítěz:');
+            var miss   = extractVal('Minul:');
+            var ratio  = extractVal('Tipy:');
+            var html = '<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid var(--border-d)"><span style="font-size:1.6rem">👤</span><div><div style="font-weight:700;font-size:1rem;color:var(--text-d)">' + username + '</div><div style="font-size:.82rem;color:var(--accent);font-weight:600">' + pts + ' b</div></div></div>';
+            html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.45rem;margin-bottom:.6rem">';
+            html += statBox('Přesnost', acc, 'var(--text-d)');
+            html += statBox('Přesné', exact, '#22c55e');
+            html += statBox('Vítěz', winner, '#f59e0b');
+            html += statBox('Minul', miss, '#ef4444');
+            html += '</div>';
+            html += '<div style="display:flex;align-items:center;justify-content:center;gap:.5rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:10px;padding:.45rem .5rem"><span style="font-size:.75rem;color:var(--muted-d)">Tipy:</span><span style="font-weight:700;color:var(--text-d);font-size:.95rem">' + ratio + '</span></div>';
+            document.getElementById('tipster-modal-body').innerHTML = html;
+            modal.style.display = 'flex';
+        });
+    });
+});
+</script>

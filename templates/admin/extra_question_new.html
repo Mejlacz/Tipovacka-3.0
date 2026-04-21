@@ -1,0 +1,48 @@
+<div style="max-width:560px;margin:2rem auto;padding:0 1rem">
+  <div style="margin-bottom:1.5rem">
+    <h1 style="margin:0;font-size:1.6rem">🎯 Přidat extra otázku</h1>
+    <div style="color:#666;margin-top:0.25rem;font-size:0.88rem">Soutěž: <strong>{{.Comp.Name}}</strong></div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post" action="/admin/extra/{{.Comp.ID}}/questions/new">
+
+        <div style="margin-bottom:1rem">
+          <label class="form-label" style="font-weight:600">Text otázky *</label>
+          <input type="text" name="text" class="form-control"
+                 placeholder="např. Vítěz soutěže, Nejlepší střelec…"
+                 required autofocus maxlength="300">
+          <div style="font-size:0.8rem;color:#888;margin-top:0.3rem">
+            Pro otázku s více dílčími poli oddělte části pomocí <code>|~~|</code> (např. <code>Vítěz|~~|Počet gólů</code>).
+          </div>
+        </div>
+
+        <div style="margin-bottom:1rem">
+          <label class="form-label" style="font-weight:600">Maximální počet bodů</label>
+          <input type="number" name="max_points" class="form-control"
+                 value="3" min="1" max="100" style="max-width:120px">
+          <div style="font-size:0.8rem;color:#888;margin-top:0.3rem">
+            Tipér dostane tyto body, pokud odpoví správně.
+          </div>
+        </div>
+
+        <div style="margin-bottom:1.5rem">
+          <label class="form-label" style="font-weight:600">Správná odpověď <span style="font-weight:400;color:#888">(nepovinné — lze doplnit i později)</span></label>
+          <input type="text" name="correct_answer" class="form-control"
+                 placeholder="např. McDavid  (více možností oddělte: McDavid|Ovechkin)"
+                 maxlength="200">
+          <div style="font-size:0.8rem;color:#888;margin-top:0.3rem">
+            Po zadání správné odpovědi lze body přidělit automaticky tlačítkem „🎯 Vyhodnotit".
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.75rem">
+          <button type="submit" class="btn btn-primary">➕ Přidat otázku</button>
+          <a href="/extra?competition_id={{.Comp.ID}}" class="btn btn-secondary">← Zpět</a>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>

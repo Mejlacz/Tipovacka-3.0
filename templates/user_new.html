@@ -1,0 +1,35 @@
+<div class="page-header">
+    <h1>+ Nový uživatel</h1>
+    <a href="/admin/users" class="btn btn-secondary btn-sm">← Uživatelé</a>
+</div>
+
+{{if .Errors}}
+<div class="alert alert-error" style="margin-bottom:1rem">
+    {{range .Errors}}<div>{{.}}</div>{{end}}
+</div>
+{{end}}
+
+<form method="post" action="/admin/users/new" style="max-width:480px">
+    <div class="form-group">
+        <label>Nick</label>
+        <input type="text" name="username" required minlength="3" maxlength="80"
+               value="{{if .Form}}{{index .Form "username"}}{{end}}" placeholder="přezdívka" />
+    </div>
+    <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" name="email"
+               value="{{if .Form}}{{index .Form "email"}}{{end}}" placeholder="volitelný" />
+    </div>
+    <div class="form-group">
+        <label>Heslo</label>
+        <input type="text" name="password" required minlength="6" placeholder="min. 6 znaků" />
+    </div>
+    <div class="form-group">
+        <label>Role</label>
+        <select name="role">
+            <option value="user" {{if .Form}}{{if eq (index .Form "role") "user"}}selected{{end}}{{end}}>Uživatel</option>
+            <option value="admin" {{if .Form}}{{if eq (index .Form "role") "admin"}}selected{{end}}{{end}}>Admin</option>
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Vytvořit</button>
+</form>

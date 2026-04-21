@@ -1,0 +1,78 @@
+<style>
+.comp-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; margin-top:1rem; }
+.comp-card { background:var(--bg2); border:1px solid var(--border-d); border-left:4px solid var(--border-d); border-radius:10px; padding:1rem 1.1rem; display:flex; flex-direction:column; gap:.6rem; }
+.comp-card-active { border-left-color:#34d399; }
+.comp-card-inactive { border-left-color:#6b7280; opacity:.75; }
+.comp-card-title { font-size:1.05rem; font-weight:700; color:#e2e8f0; }
+.comp-card-meta { display:flex; flex-wrap:wrap; gap:.4rem .75rem; font-size:.8rem; color:var(--muted-d); }
+.comp-card-actions { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:auto; padding-top:.4rem; border-top:1px solid var(--border-d); }
+.comp-card-actions form { display:inline; }
+</style>
+
+<div class="page-header">
+    <h1>⚙️ Admin panel</h1>
+    <a href="/admin/competitions/new" class="btn btn-primary">+ Nová soutěž</a>
+</div>
+<div class="admin-nav" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
+    <a href="/admin/teams"       class="btn btn-secondary">Týmy</a>
+    <a href="/admin/users"       class="btn btn-secondary">Uživatelé</a>
+    <a href="/admin/unscored"    class="btn btn-secondary">Bez výsledku</a>
+    <a href="/admin/results"     class="btn btn-secondary">📊 Výsledky</a>
+    <a href="/admin/audit"       class="btn btn-secondary">Audit log</a>
+    <a href="/admin/ocr"          class="btn btn-secondary">📋 Import výsledků</a>
+    <a href="/admin/io"          class="btn btn-secondary">📦 Import / Export</a>
+    {{if .User.IsOwner}}<a href="/admin/groups" class="btn btn-secondary">👥 Skupiny</a>{{end}}
+    <a href="/admin/history"          class="btn btn-secondary">Historie</a>
+    <a href="/admin/manual"           class="btn btn-secondary">Manuál</a>
+    <a href="/admin/health-dashboard" class="btn btn-secondary">🩺 Health</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-info{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+<h2 style="margin-top:1.5rem">Soutěže</h2>
+
+{{if .CompData}}
+<div class="comp-cards">
+{{range .CompData}}
+    <div class="comp-card {{if .Comp.IsActive}}comp-card-active{{else}}comp-card-inactive{{end}}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
+            <div class="comp-card-title">{{.Comp.Name}}</div>
+            {{if .Comp.IsActive}}
+            <span style="font-size:.72rem;font-weight:600;color:#34d399;white-space:nowrap;padding:.15rem .45rem;background:rgba(52,211,153,.12);border-radius:99px">aktivní</span>
+            {{else}}
+            <span style="font-size:.72rem;font-weight:600;color:#9ca3af;white-space:nowrap;padding:.15rem .45rem;background:rgba(156,163,175,.1);border-radius:99px">neaktivní</span>
+            {{end}}
+        </div>
+        <div class="comp-card-meta">
+            <span>{{.SportLabel}}</span>
+            <span>📅 {{.Comp.Season}}</span>
+            <span>📋 {{.RoundsCount}} kol</span>
+            {{if .LastRound}}<span style="color:var(--text);font-weight:500">🏁 {{.LastRound.Name}}</span>{{end}}
+        </div>
+        <div class="comp-card-actions">
+            <a href="/admin/competitions/{{.Comp.ID}}/edit" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">Upravit</a>
+            <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">Kola</a>
+            <a href="/admin/competitions/{{.Comp.ID}}/teams" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">👥 Týmy</a>
+            <a href="/admin/extra/{{.Comp.ID}}/answers" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">🎯 Extra</a>
+            <form method="post" action="/admin/competitions/{{.Comp.ID}}/toggle">
+                <button class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">
+                    {{if .Comp.IsActive}}Deaktivovat{{else}}Aktivovat{{end}}
+                </button>
+            </form>
+            {{if not .Comp.IsActive}}
+            <form method="post" action="/admin/competitions/{{.Comp.ID}}/delete"
+                  onsubmit="return confirm('Smazat soutěž {{.Comp.Name}}?')">
+                <button class="btn btn-sm btn-danger" style="font-size:.78rem;padding:.2rem .5rem">Smazat</button>
+            </form>
+            {{end}}
+        </div>
+    </div>
+{{end}}
+</div>
+{{else}}
+<p class="empty">Žádné soutěže.</p>
+{{end}}

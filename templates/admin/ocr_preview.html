@@ -1,0 +1,51 @@
+<div class="page-header">
+    <h1>📋 Náhled výsledků</h1>
+    <a href="/admin/ocr" class="btn btn-secondary">← Zpět</a>
+</div>
+
+<p style="color:var(--muted-d);font-size:.88rem;margin-bottom:1rem">
+    Zkontroluj rozpoznané výsledky. Po potvrzení se zápasy uloží do kola a přepočítají se body.
+</p>
+
+<div style="overflow-x:auto;margin-bottom:1.25rem">
+<table style="width:100%;border-collapse:collapse;font-size:.88rem">
+    <thead>
+        <tr style="background:var(--bg3)">
+            <th style="padding:.4rem .6rem;text-align:left">#</th>
+            <th style="padding:.4rem .6rem;text-align:left">Domácí</th>
+            <th style="padding:.4rem .6rem;text-align:center">Výsledek</th>
+            <th style="padding:.4rem .6rem;text-align:left">Hosté</th>
+            <th style="padding:.4rem .6rem;text-align:left;color:var(--muted-d)">Původní řádek</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range $i, $m := .Parsed}}
+        <tr style="border-bottom:1px solid var(--border-d)">
+            <td style="padding:.35rem .6rem;color:var(--muted-d)">{{add $i 1}}</td>
+            <td style="padding:.35rem .6rem;font-weight:500">{{$m.HomeTeam}}</td>
+            <td style="padding:.35rem .6rem;text-align:center">
+                <strong>{{$m.HomeScore}}:{{$m.AwayScore}}</strong>
+            </td>
+            <td style="padding:.35rem .6rem;font-weight:500">{{$m.AwayTeam}}</td>
+            <td style="padding:.35rem .6rem;color:var(--muted-d);font-size:.78rem;font-family:monospace">{{$m.RawLine}}</td>
+        </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+
+<p style="font-size:.85rem;color:var(--muted-d);margin-bottom:1rem">
+    Celkem rozpoznáno: <strong>{{len .Parsed}}</strong> zápasů.
+    Týmy které ještě neexistují budou automaticky vytvořeny.
+</p>
+
+<div style="display:flex;gap:.6rem;flex-wrap:wrap">
+    <form method="post" action="/admin/ocr/confirm">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+        <button type="submit" class="btn btn-primary">✅ Potvrdit a uložit</button>
+    </form>
+    <form method="post" action="/admin/ocr/cancel">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+        <button type="submit" class="btn btn-secondary">❌ Zrušit</button>
+    </form>
+</div>

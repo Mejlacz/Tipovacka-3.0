@@ -1,0 +1,39 @@
+<div class="page-header">
+    <h1>{{.Comp.Name}}{{if .Comp.Season}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span>{{end}} — Žebříček</h1>
+    <a href="/archive" class="btn btn-secondary btn-sm">← Archiv</a>
+</div>
+
+{{if .UserRows}}
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;max-width:600px;font-size:0.9rem">
+    <thead>
+        <tr style="background:var(--bg2)">
+            <th style="padding:.4rem .5rem;text-align:center">#</th>
+            <th style="text-align:left;padding:.4rem .5rem">Tipér</th>
+            <th style="padding:.4rem .5rem;text-align:center">Celkem</th>
+            <th style="padding:.4rem .5rem;text-align:center" title="Přesné">🎯</th>
+            <th style="padding:.4rem .5rem;text-align:center" title="Výsledek">✅</th>
+            <th style="padding:.4rem .5rem;text-align:center" title="Špatně">❌</th>
+            {{if .HasExtra}}<th style="padding:.4rem .5rem;text-align:center">Extra</th>{{end}}
+        </tr>
+    </thead>
+    <tbody>
+    {{range .UserRows}}
+    <tr {{if eq .Place 1}}style="background:rgba(251,191,36,.06)"{{end}}>
+        <td style="padding:.3rem .5rem;text-align:center;font-weight:700;color:{{if eq .Place 1}}#fbbf24{{else if eq .Place 2}}#9ca3af{{else if eq .Place 3}}#b45309{{else}}var(--muted-d){{end}}">
+            {{.Place}}.
+        </td>
+        <td style="padding:.3rem .5rem;font-weight:600">{{.User.Username}}</td>
+        <td style="padding:.3rem .5rem;text-align:center;font-weight:700;color:#fbbf24">{{.GrandTotal}}</td>
+        <td style="padding:.3rem .5rem;text-align:center;color:#34d399">{{.Exact}}</td>
+        <td style="padding:.3rem .5rem;text-align:center;color:#60a5fa">{{.Partial}}</td>
+        <td style="padding:.3rem .5rem;text-align:center;color:var(--muted-d)">{{.Missed}}</td>
+        {{if $.HasExtra}}<td style="padding:.3rem .5rem;text-align:center;color:#a78bfa">{{if .Extra}}+{{.Extra}}{{else}}—{{end}}</td>{{end}}
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{else}}
+<p class="empty">Žádná data.</p>
+{{end}}

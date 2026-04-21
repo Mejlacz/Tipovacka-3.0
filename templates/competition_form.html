@@ -1,0 +1,37 @@
+<div class="page-header">
+    <h1>{{if .Competition}}Upravit soutěž{{else}}Nová soutěž{{end}}</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+<form method="post" style="max-width:480px">
+    <div class="form-group">
+        <label>Název</label>
+        <input type="text" name="name" required
+               value="{{if .Competition}}{{.Competition.Name}}{{end}}"
+               placeholder="Liga mistrů" />
+    </div>
+    <div class="form-group">
+        <label>Sezóna</label>
+        <input type="text" name="season" required
+               value="{{if .Competition}}{{.Competition.Season}}{{end}}"
+               placeholder="2025/2026" />
+    </div>
+    <div class="form-group">
+        <label>Sport</label>
+        <select name="sport">
+            <option value="football" {{if .Competition}}{{if eq .Competition.Sport "football"}}selected{{end}}{{end}}>⚽ Fotbal</option>
+            <option value="hockey" {{if .Competition}}{{if eq .Competition.Sport "hockey"}}selected{{end}}{{end}}>🏒 Hokej</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label style="display:flex;align-items:center;gap:.5rem">
+            <input type="checkbox" name="is_active"
+                   {{if .Competition}}{{if .Competition.IsActive}}checked{{end}}{{else}}checked{{end}} />
+            Aktivní
+        </label>
+    </div>
+    <div style="display:flex;gap:.5rem;margin-top:1rem">
+        <button type="submit" class="btn btn-primary">Uložit</button>
+        <a href="/admin" class="btn btn-secondary">Zrušit</a>
+    </div>
+</form>

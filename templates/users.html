@@ -1,0 +1,92 @@
+<div class="page-header">
+    <h1>👥 Uživatelé</h1>
+    <div style="display:flex;gap:.5rem">
+        <a href="/admin/users/new" class="btn btn-primary btn-sm">+ Nový uživatel</a>
+        <a href="/admin/export/csv?type=users" class="btn btn-secondary btn-sm">⬇ CSV</a>
+    </div>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">{{index .Flash "msg"}}</div>
+{{end}}
+
+{{/* Makro: vypíše tabulku uživatelů */}}
+{{define "userTable"}}
+<div style="overflow-x:auto;margin-bottom:1.5rem">
+<table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+    <thead>
+        <tr style="background:var(--bg2)">
+            <th style="text-align:left;padding:.4rem .5rem">Nick</th>
+            <th style="text-align:left;padding:.4rem .5rem">E-mail</th>
+            <th style="text-align:left;padding:.4rem .5rem">Role</th>
+            <th style="text-align:left;padding:.4rem .5rem">Registrace</th>
+            <th style="padding:.4rem .5rem">Akce</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .}}
+    <tr {{if .IsBlocked}}style="opacity:.4"{{end}}>
+        <td style="padding:.3rem .5rem;font-weight:600">{{.Username}}</td>
+        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">
+            {{if .Email}}{{strVal .Email}}{{else}}—{{end}}
+        </td>
+        <td style="padding:.3rem .5rem">
+            {{if .IsOwner}}<span style="color:#f59e0b">owner</span>
+            {{else if .IsAdmin}}<span style="color:#60a5fa">admin</span>
+            {{else}}<span style="color:var(--muted-d)">user</span>{{end}}
+        </td>
+        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.75rem">
+            {{if not .CreatedAt.IsZero}}{{.CreatedAt.Format "02.01.2006"}}{{else}}—{{end}}
+        </td>
+        <td style="padding:.3rem .5rem;white-space:nowrap">
+            <a href="/admin/users/{{.ID}}/edit" class="btn btn-sm btn-secondary" style="font-size:.75rem;padding:.15rem .4rem">Upravit</a>
+            {{if not .IsApproved}}
+            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/approve">
+                <button class="btn btn-sm btn-primary" style="font-size:.75rem;padding:.15rem .4rem">Schválit</button>
+            </form>
+            {{end}}
+            {{if .IsBlocked}}
+            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/unblock">
+                <button class="btn btn-sm btn-secondary" style="font-size:.75rem;padding:.15rem .4rem">Odblokovat</button>
+            </form>
+            {{else if .IsApproved}}
+            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/block"
+                  onsubmit="return confirm('Blokovat uživatele {{.Username}}?')">
+                <button class="btn btn-sm btn-danger" style="font-size:.75rem;padding:.15rem .4rem">Blokovat</button>
+            </form>
+            {{end}}
+            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/delete"
+                  onsubmit="return confirm('Trvale smazat uživatele {{.Username}}?')">
+                <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem">✕</button>
+            </form>
+        </td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{end}}
+
+{{if .PendingUsers}}
+<h2 style="font-size:1rem;margin-bottom:.5rem;color:#f59e0b">⏳ Čekající na schválení ({{len .PendingUsers}})</h2>
+{{template "userTable" .PendingUsers}}
+{{end}}
+
+{{if .ActiveUsers}}
+<h2 style="font-size:1rem;margin-bottom:.5rem;color:#34d399">✅ Aktivní ({{len .ActiveUsers}})</h2>
+{{template "userTable" .ActiveUsers}}
+{{end}}
+
+{{if .InactiveUsers}}
+<h2 style="font-size:1rem;margin-bottom:.5rem;color:var(--muted-d)">💤 Neaktivní ({{len .InactiveUsers}})</h2>
+{{template "userTable" .InactiveUsers}}
+{{end}}
+
+{{if .BlockedUsers}}
+<h2 style="font-size:1rem;margin-bottom:.5rem;color:#ef4444">🚫 Blokovaní ({{len .BlockedUsers}})</h2>
+{{template "userTable" .BlockedUsers}}
+{{end}}
+
+{{if and (not .ActiveUsers) (not .PendingUsers) (not .InactiveUsers) (not .BlockedUsers)}}
+<p class="empty">Žádní uživatelé.</p>
+{{end}}

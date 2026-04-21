@@ -1,0 +1,17 @@
+<div class="page-header">
+    <h1>✏️ Upravit pravidla</h1>
+    <a href="/pravidla" class="btn btn-secondary btn-sm">← Pravidla</a>
+</div>
+
+<form method="post" action="/admin/pravidla/edit" style="max-width:720px">
+    <div class="form-group">
+        <textarea name="content" rows="20" style="width:100%;font-family:monospace;font-size:.85rem">{{.Content}}</textarea>
+    </div>
+    <div style="display:flex;gap:.5rem">
+        <button type="submit" class="btn btn-primary">Uložit</button>
+        <a href="/pravidla" class="btn btn-secondary">Zrušit</a>
+        <form method="post" action="/admin/pravidla/reset" onsubmit="return confirm('Resetovat na výchozí?')">
+            <button type="submit" class="btn btn-danger btn-sm">Reset</button>
+        </form>
+    </div>
+</form>

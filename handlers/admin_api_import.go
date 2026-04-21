@@ -1,0 +1,452 @@
+// handlers/admin_api_import.go — Tipovačka 2.0
+// Import zápasů z football-data.org API (v4).
+//
+// Endpointy:
+//   GET  /admin/api/rounds    — JSON seznam kol pro vybranou soutěž (AJAX)
+//   GET  /admin/api/preview   — JSON náhled zápasů z API (AJAX)
+//   POST /admin/api/import    — skutečný import do DB
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"tipovacka/config"
+	"tipovacka/db"
+	"tipovacka/middleware"
+)
+
+// ── football-data.org API structs ─────────────────────────────────────────────
+
+type fdMatchList struct {
+	Matches []fdMatch `json:"matches"`
+}
+
+type fdMatch struct {
+	ID       int    `json:"id"`
+	UtcDate  string `json:"utcDate"`
+	Status   string `json:"status"`
+	Matchday *int   `json:"matchday"`
+	HomeTeam fdTeam `json:"homeTeam"`
+	AwayTeam fdTeam `json:"awayTeam"`
+	Score    fdScore `json:"score"`
+}
+
+type fdTeam struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	ShortName string `json:"shortName"`
+	TLA       string `json:"tla"`
+}
+
+type fdScore struct {
+	FullTime fdGoals `json:"fullTime"`
+}
+
+type fdGoals struct {
+	Home *int `json:"home"`
+	Away *int `json:"away"`
+}
+
+// fdCall volá football-data.org API a dekóduje JSON do dst.
+func fdCall(path string, dst interface{}) error {
+	if config.FootballAPIKey == "" {
+		return fmt.Errorf("FOOTBALL_API_KEY není nastaven")
+	}
+	url := "https://api.football-data.org/v4/" + strings.TrimPrefix(path, "/")
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Auth-Token", config.FootballAPIKey)
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		// Pokus o čtení chybové zprávy z API
+		var apiErr struct {
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(body, &apiErr)
+		msg := apiErr.Message
+		if msg == "" {
+			msg = string(body)
+			if len(msg) > 200 {
+				msg = msg[:200]
+			}
+		}
+		return fmt.Errorf("API %d: %s", resp.StatusCode, msg)
+	}
+	return json.Unmarshal(body, dst)
+}
+
+// ── GET /admin/api/rounds ─────────────────────────────────────────────────────
+// Vrátí JSON seznam kol pro zadanou soutěž.
+// Query params: competition_id
+
+func AdminAPIRounds(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
+		return
+	}
+
+	compID, _ := strconv.Atoi(r.URL.Query().Get("competition_id"))
+	if compID == 0 {
+		w.Write([]byte(`{"ok":true,"rounds":[]}`))
+		return
+	}
+
+	ctx := context.Background()
+	rows, err := db.Pool.Query(ctx,
+		`SELECT id, name FROM rounds WHERE competition_id=$1 ORDER BY id`, compID)
+	if err != nil {
+		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": err.Error()})
+		w.Write(b)
+		return
+	}
+	defer rows.Close()
+
+	type roundItem struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	var rounds []roundItem
+	for rows.Next() {
+		var ri roundItem
+		if err := rows.Scan(&ri.ID, &ri.Name); err == nil {
+			rounds = append(rounds, ri)
+		}
+	}
+	if rounds == nil {
+		rounds = []roundItem{}
+	}
+	b, _ := json.Marshal(map[string]interface{}{"ok": true, "rounds": rounds})
+	w.Write(b)
+}
+
+// ── GET /admin/api/preview ────────────────────────────────────────────────────
+// Vrátí JSON seznam zápasů z football-data.org pro zobrazení náhledu.
+// Query params: fd_code (kód soutěže v API), matchday (číslo, nepovinné)
+
+func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
+		return
+	}
+	if config.FootballAPIKey == "" {
+		w.Write([]byte(`{"ok":false,"error":"FOOTBALL_API_KEY není nastaven v prostředí"}`))
+		return
+	}
+
+	fdCode := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("fd_code")))
+	matchdayStr := strings.TrimSpace(r.URL.Query().Get("matchday"))
+
+	if fdCode == "" {
+		w.Write([]byte(`{"ok":false,"error":"Chybí kód soutěže (fd_code)"}`))
+		return
+	}
+
+	path := "competitions/" + fdCode + "/matches"
+	if matchdayStr != "" {
+		path += "?matchday=" + matchdayStr
+	}
+
+	var list fdMatchList
+	if err := fdCall(path, &list); err != nil {
+		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": err.Error()})
+		w.Write(b)
+		return
+	}
+
+	// Zjednodušená odpověď pro frontend
+	type previewMatch struct {
+		Home    string `json:"home"`
+		Away    string `json:"away"`
+		Date    string `json:"date"`
+		Status  string `json:"status"`
+		ScoreH  *int   `json:"score_h"`
+		ScoreA  *int   `json:"score_a"`
+	}
+	var preview []previewMatch
+	for _, m := range list.Matches {
+		pm := previewMatch{
+			Home:   m.HomeTeam.Name,
+			Away:   m.AwayTeam.Name,
+			Status: m.Status,
+		}
+		if m.UtcDate != "" {
+			if t, err := time.Parse(time.RFC3339, m.UtcDate); err == nil {
+				pm.Date = t.In(pragueLocation).Format("02.01.2006 15:04")
+			}
+		}
+		pm.ScoreH = m.Score.FullTime.Home
+		pm.ScoreA = m.Score.FullTime.Away
+		preview = append(preview, pm)
+	}
+	if preview == nil {
+		preview = []previewMatch{}
+	}
+	b, _ := json.Marshal(map[string]interface{}{"ok": true, "matches": preview})
+	w.Write(b)
+}
+
+// ── POST /admin/api/import ────────────────────────────────────────────────────
+// Importuje zápasy z football-data.org do zvoleného kola.
+// Form params:
+//   competition_id  — ID naší soutěže
+//   round_id        — ID kola (nebo 0 = vytvořit nové)
+//   new_round_name  — název nového kola (pokud round_id == 0)
+//   fd_code         — kód soutěže v API (např. CL, PL)
+//   matchday        — číslo kola v API (nepovinné)
+//   sport           — sport pro týmy (default "football")
+//   skip_finished   — pokud "1", přeskočí odehrané zápasy
+
+func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	if config.FootballAPIKey == "" {
+		middleware.SetFlash(w, r, "error", "FOOTBALL_API_KEY není nastaven v prostředí serveru.")
+		http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+		return
+	}
+
+	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
+	roundID, _ := strconv.Atoi(r.FormValue("round_id"))
+	newRoundName := strings.TrimSpace(r.FormValue("new_round_name"))
+	fdCode := strings.ToUpper(strings.TrimSpace(r.FormValue("fd_code")))
+	matchdayStr := strings.TrimSpace(r.FormValue("matchday"))
+	sport := r.FormValue("sport")
+	if sport == "" {
+		sport = "football"
+	}
+	skipFinished := r.FormValue("skip_finished") == "1"
+
+	if fdCode == "" {
+		middleware.SetFlash(w, r, "error", "Chybí kód soutěže (fd_code).")
+		http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+		return
+	}
+	if compID == 0 {
+		middleware.SetFlash(w, r, "error", "Chybí výběr soutěže.")
+		http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+		return
+	}
+
+	// Ověř soutěž
+	ctx := context.Background()
+	var compName string
+	if err := db.Pool.QueryRow(ctx, `SELECT name FROM competitions WHERE id=$1`, compID).Scan(&compName); err != nil {
+		middleware.SetFlash(w, r, "error", "Soutěž nenalezena.")
+		http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+		return
+	}
+
+	// Vytvoř nebo ověř kolo
+	if roundID == 0 {
+		if newRoundName == "" {
+			if matchdayStr != "" {
+				newRoundName = "Kolo " + matchdayStr
+			} else {
+				newRoundName = "Import z API"
+			}
+		}
+		if err := db.Pool.QueryRow(ctx,
+			`INSERT INTO rounds (competition_id, name, is_active) VALUES ($1,$2,true) RETURNING id`,
+			compID, newRoundName).Scan(&roundID); err != nil {
+			middleware.SetFlash(w, r, "error", "Nepodařilo se vytvořit kolo: "+err.Error())
+			http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+			return
+		}
+	} else {
+		// Ověř že kolo patří do soutěže
+		var ownerComp int
+		if err := db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&ownerComp); err != nil || ownerComp != compID {
+			middleware.SetFlash(w, r, "error", "Kolo nepatří do vybrané soutěže.")
+			http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+			return
+		}
+	}
+
+	// Stáhni zápasy z API
+	path := "competitions/" + fdCode + "/matches"
+	if matchdayStr != "" {
+		path += "?matchday=" + matchdayStr
+	}
+	var list fdMatchList
+	if err := fdCall(path, &list); err != nil {
+		middleware.SetFlash(w, r, "error", "Chyba API: "+err.Error())
+		http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+		return
+	}
+	if len(list.Matches) == 0 {
+		middleware.SetFlash(w, r, "error", "API nevrátilo žádné zápasy pro tento filtr.")
+		http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+		return
+	}
+
+	// Importuj zápasy
+	created, skipped, teamsNew := 0, 0, 0
+
+	for _, m := range list.Matches {
+		// Přeskoč odehrané pokud je nastaveno
+		if skipFinished && m.Score.FullTime.Home != nil {
+			skipped++
+			continue
+		}
+
+		// Upsert domácí tým
+		homeID, isNew := upsertTeam(ctx, m.HomeTeam, sport)
+		if homeID == 0 {
+			skipped++
+			continue
+		}
+		if isNew {
+			teamsNew++
+		}
+
+		// Upsert hostující tým
+		awayID, isNew := upsertTeam(ctx, m.AwayTeam, sport)
+		if awayID == 0 {
+			skipped++
+			continue
+		}
+		if isNew {
+			teamsNew++
+		}
+
+		// Přiřaď oba týmy k soutěži
+		_, _ = db.Pool.Exec(ctx,
+			`INSERT INTO competition_teams (competition_id, team_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+			compID, homeID)
+		_, _ = db.Pool.Exec(ctx,
+			`INSERT INTO competition_teams (competition_id, team_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+			compID, awayID)
+
+		// Datum zápasu
+		var matchDate *time.Time
+		if m.UtcDate != "" {
+			if t, err := time.Parse(time.RFC3339, m.UtcDate); err == nil {
+				tp := t.In(pragueLocation)
+				matchDate = &tp
+			}
+		}
+
+		// Skóre (pokud odehrán)
+		var homeScore, awayScore *int
+		isFinished := false
+		if m.Score.FullTime.Home != nil && m.Score.FullTime.Away != nil {
+			homeScore = m.Score.FullTime.Home
+			awayScore = m.Score.FullTime.Away
+			isFinished = true
+		}
+
+		// Zkontroluj duplicitu (stejný round + same teams)
+		var existingID int
+		_ = db.Pool.QueryRow(ctx,
+			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			roundID, homeID, awayID).Scan(&existingID)
+
+		if existingID > 0 {
+			// Aktualizuj datum a skóre pokud existuje
+			if homeScore != nil {
+				_, _ = db.Pool.Exec(ctx,
+					`UPDATE matches SET match_date=$1, home_score=$2, away_score=$3, is_finished=$4 WHERE id=$5`,
+					matchDate, homeScore, awayScore, isFinished, existingID)
+				// Přepočítej tipy
+				RecalculateTips(ctx, existingID, *homeScore, *awayScore)
+			} else if matchDate != nil {
+				_, _ = db.Pool.Exec(ctx, `UPDATE matches SET match_date=$1 WHERE id=$2`, matchDate, existingID)
+			}
+			skipped++
+			continue
+		}
+
+		// Vlož nový zápas
+		var newMatchID int
+		err := db.Pool.QueryRow(ctx,
+			`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, home_score, away_score, is_finished)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+			roundID, homeID, awayID, matchDate, homeScore, awayScore, isFinished).Scan(&newMatchID)
+		if err != nil {
+			skipped++
+			continue
+		}
+		// Přepočítej tipy pokud má skóre
+		if isFinished {
+			RecalculateTips(ctx, newMatchID, *homeScore, *awayScore)
+		}
+		created++
+	}
+
+	// Přepočítej standings
+	RecalculateStandings(compID)
+
+	msg := fmt.Sprintf("Import dokončen: <b>%d</b> nových zápasů, <b>%d</b> nových týmů, %d přeskočeno.",
+		created, teamsNew, skipped)
+	middleware.SetFlash(w, r, "ok", msg)
+	http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/rounds", compID), http.StatusSeeOther)
+}
+
+// upsertTeam vrátí ID týmu (existující nebo nově vytvořeného).
+// Druhý return value = true pokud byl tým nově vytvořen.
+func upsertTeam(ctx context.Context, ft fdTeam, sport string) (int, bool) {
+	if ft.Name == "" {
+		return 0, false
+	}
+	// Alias = TLA (3-písmená zkratka)
+	alias := ft.TLA
+	// ShortName jako display_name
+	displayName := ft.ShortName
+	if displayName == ft.Name {
+		displayName = ""
+	}
+
+	// Zkus najít existující tým (přesná shoda jména + sport)
+	var id int
+	err := db.Pool.QueryRow(ctx,
+		`SELECT id FROM teams WHERE name=$1 AND sport=$2`, ft.Name, sport).Scan(&id)
+	if err == nil {
+		// Existuje — aktualizuj alias a display_name pokud jsou prázdné
+		_, _ = db.Pool.Exec(ctx,
+			`UPDATE teams SET
+			   alias       = COALESCE(NULLIF(alias,''), NULLIF($1,'')),
+			   display_name= COALESCE(NULLIF(display_name,''), NULLIF($2,''))
+			 WHERE id=$3`,
+			alias, displayName, id)
+		return id, false
+	}
+
+	// Neexistuje — vlož
+	var newID int
+	insertErr := db.Pool.QueryRow(ctx,
+		`INSERT INTO teams (name, sport, display_name, alias)
+		 VALUES ($1,$2,$3,$4) RETURNING id`,
+		ft.Name, sport, PtrStr(displayName), PtrStr(alias)).Scan(&newID)
+	if insertErr != nil {
+		return 0, false
+	}
+	return newID, true
+}

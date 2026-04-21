@@ -1,0 +1,50 @@
+<div class="page-header">
+    <h1>⏳ Zápasy bez výsledku</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+{{if .CompOrder}}
+{{range .CompOrder}}
+{{$ce := index $.Comps .}}
+<div style="margin-bottom:2rem">
+    <h2 style="font-size:1rem;font-weight:700;margin-bottom:.5rem;color:var(--muted-d)">{{$ce.Comp.Name}}</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+        <thead>
+            <tr style="background:var(--bg2)">
+                <th style="text-align:left;padding:.4rem .5rem">Zápas</th>
+                <th style="text-align:left;padding:.4rem .5rem">Kolo</th>
+                <th style="text-align:left;padding:.4rem .5rem">Datum</th>
+                <th style="padding:.4rem .5rem">Výsledek</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range $ce.Matches}}
+        <tr>
+            <td style="padding:.4rem .5rem;font-weight:600">
+                {{if .HomeTeam}}{{coalesce .HomeTeam.DisplayName .HomeTeam.Name}}{{else}}tým {{.HomeTeamID}}{{end}}
+                vs
+                {{if .AwayTeam}}{{coalesce .AwayTeam.DisplayName .AwayTeam.Name}}{{else}}tým {{.AwayTeamID}}{{end}}
+            </td>
+            <td style="padding:.4rem .5rem;color:var(--muted-d);font-size:.8rem">
+                {{if .Round}}{{.Round.Name}}{{end}}
+            </td>
+            <td style="padding:.4rem .5rem;color:var(--muted-d);font-size:.8rem">
+                {{if .MatchDate}}{{.MatchDate.Format "02.01. 15:04"}}{{else}}—{{end}}
+            </td>
+            <td style="padding:.4rem .5rem">
+                <form style="display:inline-flex;align-items:center;gap:.3rem" method="post" action="/admin/matches/{{.ID}}/set-result">
+                    <input type="number" name="home_score" min="0" max="99" placeholder="D" required style="width:3.5rem" />
+                    <span>:</span>
+                    <input type="number" name="away_score" min="0" max="99" placeholder="H" required style="width:3.5rem" />
+                    <button type="submit" class="btn btn-sm btn-primary">Uložit</button>
+                </form>
+            </td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+{{else}}
+<div class="alert alert-success" style="max-width:420px">Všechny zápasy mají výsledky! 🎉</div>
+{{end}}

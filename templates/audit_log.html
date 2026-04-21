@@ -1,0 +1,45 @@
+<div class="page-header">
+    <h1>📋 Audit log</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">{{index .Flash "msg"}}</div>
+{{end}}
+
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+    <thead>
+        <tr style="background:var(--bg2)">
+            <th style="padding:.4rem .5rem;text-align:left">Čas</th>
+            <th style="padding:.4rem .5rem;text-align:left">Admin</th>
+            <th style="padding:.4rem .5rem;text-align:left">Akce</th>
+            <th style="padding:.4rem .5rem;text-align:left">Popis</th>
+            <th style="padding:.4rem .5rem">Undo</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Entries}}
+    <tr {{if .Undone}}style="opacity:.4"{{end}}>
+        <td style="padding:.3rem .5rem;white-space:nowrap;color:var(--muted-d);font-size:.75rem">
+            {{if .Timestamp}}{{.Timestamp.Format "02.01. 15:04"}}{{end}}
+        </td>
+        <td style="padding:.3rem .5rem">{{.AdminUsername}}</td>
+        <td style="padding:.3rem .5rem">
+            <code style="font-size:.75rem;background:var(--bg3);padding:.1rem .3rem;border-radius:3px">{{.Action}}</code>
+        </td>
+        <td style="padding:.3rem .5rem">{{.Description}}</td>
+        <td style="padding:.3rem .5rem;text-align:center">
+            {{if not .Undone}}{{if index $.UndoableIDs .ID}}
+            <form method="post" action="/admin/audit/{{.ID}}/undo"
+                  onsubmit="return confirm('Vrátit tuto akci?')">
+                <button type="submit" class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .4rem">↩ Zpět</button>
+            </form>
+            {{end}}{{end}}
+            {{if .Undone}}<span style="color:var(--muted-d);font-size:.75rem">vráceno</span>{{end}}
+        </td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>

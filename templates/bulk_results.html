@@ -1,0 +1,67 @@
+<div class="page-header">
+    <h1>📊 Hromadné výsledky</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+{{if not .CompOrder}}
+<div class="alert alert-success" style="max-width:420px">Všechny zápasy mají výsledky! 🎉</div>
+{{else}}
+
+<p style="color:var(--muted-d);font-size:.85rem;margin-bottom:1rem">
+    Zadej výsledky pro neodehrané zápasy. Prázdná pole budou přeskočena.
+</p>
+
+<form method="post" action="/admin/results" id="bulk-form">
+    {{range .CompOrder}}
+    {{$ce := index $.Comps .}}
+    <h2 style="margin:1.5rem 0 .5rem;font-size:1rem;color:var(--muted-d)">{{$ce.Comp.Name}} {{$ce.Comp.Season}}</h2>
+    {{range $ce.RoundOrder}}
+    {{$re := index $ce.Rounds .}}
+    <h3 style="margin:.75rem 0 .35rem;font-size:.9rem">{{$re.Round.Name}}</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-bottom:.5rem">
+        <thead>
+            <tr style="background:var(--bg2)">
+                <th style="text-align:left;padding:.35rem .5rem">Zápas</th>
+                <th style="text-align:center;padding:.35rem .5rem;width:5rem">Dom.</th>
+                <th style="text-align:center;padding:.35rem .5rem;width:1rem"></th>
+                <th style="text-align:center;padding:.35rem .5rem;width:5rem">Hosté</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range $re.Matches}}
+        <tr>
+            <td style="padding:.35rem .5rem;font-weight:500">
+                {{if .HomeTeam}}{{coalesce .HomeTeam.DisplayName .HomeTeam.Name}}{{else}}tým {{.HomeTeamID}}{{end}}
+                vs
+                {{if .AwayTeam}}{{coalesce .AwayTeam.DisplayName .AwayTeam.Name}}{{else}}tým {{.AwayTeamID}}{{end}}
+                {{if .MatchDate}}<span style="color:var(--muted-d);font-size:.78rem;margin-left:.4rem">{{.MatchDate.Format "02.01. 15:04"}}</span>{{end}}
+            </td>
+            <td style="padding:.3rem .4rem;text-align:center">
+                <input type="number" name="home_{{.ID}}" min="0" max="99"
+                       value="{{if .HomeScore}}{{intVal .HomeScore}}{{end}}"
+                       placeholder="—" style="width:3.5rem;text-align:center" />
+            </td>
+            <td style="padding:.3rem .4rem;text-align:center;color:var(--muted-d)">:</td>
+            <td style="padding:.3rem .4rem;text-align:center">
+                <input type="number" name="away_{{.ID}}" min="0" max="99"
+                       value="{{if .AwayScore}}{{intVal .AwayScore}}{{end}}"
+                       placeholder="—" style="width:3.5rem;text-align:center" />
+            </td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{end}}
+    {{end}}
+
+    <div style="margin-top:1.25rem">
+        <button type="submit" class="btn btn-primary">💾 Uložit výsledky</button>
+    </div>
+</form>
+{{end}}

@@ -1,0 +1,41 @@
+<div class="page-header">
+    <h1>✏️ Upravit uživatele: {{.Edited.Username}}</h1>
+    <a href="/admin/users" class="btn btn-secondary btn-sm">← Uživatelé</a>
+</div>
+
+{{if .Error}}<div class="alert alert-error" style="margin-bottom:1rem">{{.Error}}</div>{{end}}
+
+<form method="post" action="/admin/users/{{.Edited.ID}}/edit" style="max-width:480px">
+    <div class="form-group">
+        <label>Nick</label>
+        <input type="text" name="username" value="{{.Edited.Username}}" required />
+    </div>
+    <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" name="email" value="{{strVal .Edited.Email}}" />
+    </div>
+    <div class="form-group">
+        <label>Role</label>
+        <select name="role">
+            <option value="user" {{if not .Edited.IsAdmin}}selected{{end}}>Uživatel</option>
+            <option value="admin" {{if and .Edited.IsAdmin (not .Edited.IsOwner)}}selected{{end}}>Admin</option>
+            <option value="owner" {{if .Edited.IsOwner}}selected{{end}}>Owner</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label style="display:flex;align-items:center;gap:.5rem">
+            <input type="checkbox" name="is_approved" {{if .Edited.IsApproved}}checked{{end}} />
+            Schválený
+        </label>
+    </div>
+    <div class="form-group">
+        <label style="display:flex;align-items:center;gap:.5rem">
+            <input type="checkbox" name="is_blocked" {{if .Edited.IsBlocked}}checked{{end}} />
+            Blokovaný
+        </label>
+    </div>
+    <div style="display:flex;gap:.5rem;margin-top:1rem">
+        <button type="submit" class="btn btn-primary">Uložit</button>
+        <a href="/admin/users" class="btn btn-secondary">Zrušit</a>
+    </div>
+</form>

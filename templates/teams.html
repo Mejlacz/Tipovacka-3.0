@@ -1,0 +1,91 @@
+<div class="page-header">
+    <h1>⚽ Týmy</h1>
+    <a href="/admin/export/csv?type=teams" class="btn btn-secondary btn-sm">⬇ CSV export</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+{{if .Msg}}<div class="alert alert-success" style="margin-bottom:1rem">{{.Msg}}</div>{{end}}
+{{if .Error}}<div class="alert alert-error" style="margin-bottom:1rem">{{.Error}}</div>{{end}}
+
+<form method="post" action="/admin/teams/new"
+      style="display:flex;gap:.5rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;background:var(--bg2);padding:1rem;border-radius:8px">
+    <input type="text" name="name" placeholder="Název týmu" required style="flex:2;min-width:150px" />
+    <select name="sport" style="flex:1;min-width:100px">
+        <option value="football">⚽ Fotbal</option>
+        <option value="hockey">🏒 Hokej</option>
+        <option value="tennis">🎾 Tenis</option>
+        <option value="basketball">🏀 Basketbal</option>
+    </select>
+    <input type="text" name="display_name" placeholder="Zkrácené jméno" style="flex:1;min-width:100px" />
+    <input type="text" name="category" placeholder="Kategorie" style="flex:1;min-width:80px" />
+    <button type="submit" class="btn btn-primary btn-sm">+ Přidat tým</button>
+</form>
+
+{{if .Teams}}
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+    <thead>
+        <tr style="background:var(--bg2)">
+            <th style="text-align:left;padding:.4rem .5rem">ID</th>
+            <th style="text-align:left;padding:.4rem .5rem">Název</th>
+            <th style="text-align:left;padding:.4rem .5rem">Sport</th>
+            <th style="text-align:left;padding:.4rem .5rem">Zkrácené jméno</th>
+            <th style="text-align:left;padding:.4rem .5rem">Zkratka</th>
+            <th style="text-align:left;padding:.4rem .5rem">Kategorie</th>
+            <th style="padding:.4rem .5rem">Akce</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Teams}}
+    <tr id="team-row-{{.ID}}">
+        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.75rem">{{.ID}}</td>
+        <td style="padding:.3rem .5rem;font-weight:600">{{.Name}}</td>
+        <td style="padding:.3rem .5rem;font-size:.8rem">{{.Sport}}</td>
+        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">{{if .DisplayName}}{{.DisplayName}}{{else}}—{{end}}</td>
+        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">{{if .Alias}}{{.Alias}}{{else}}—{{end}}</td>
+        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">{{if .Category}}{{.Category}}{{else}}—{{end}}</td>
+        <td style="padding:.3rem .5rem;white-space:nowrap">
+            <button type="button" class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.1rem .35rem"
+                    onclick="toggleTeamEdit({{.ID}})">✏️</button>
+            <form style="display:inline" method="post" action="/admin/teams/{{.ID}}/delete"
+                  onsubmit="return confirm('Smazat tým {{.Name}}?')">
+                <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem">✕</button>
+            </form>
+        </td>
+    </tr>
+    <tr id="team-edit-{{.ID}}" style="display:none;background:var(--bg3)">
+        <td colspan="7" style="padding:.5rem">
+            <form method="post" action="/admin/teams/{{.ID}}/edit"
+                  style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                <input type="text" name="name" required value="{{.Name}}"
+                       style="flex:2;min-width:140px" placeholder="Název" />
+                <input type="text" name="display_name" value="{{if .DisplayName}}{{.DisplayName}}{{end}}"
+                       style="flex:1;min-width:100px" placeholder="Zkrácené jméno" />
+                <input type="text" name="alias" value="{{if .Alias}}{{.Alias}}{{end}}"
+                       style="flex:1;min-width:60px" placeholder="Zkratka" />
+                <input type="text" name="category" value="{{if .Category}}{{.Category}}{{end}}"
+                       style="flex:1;min-width:80px" placeholder="Kategorie" />
+                <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">Uložit</button>
+                <button type="button" class="btn btn-sm btn-secondary" style="font-size:.78rem"
+                        onclick="toggleTeamEdit({{.ID}})">Zrušit</button>
+            </form>
+        </td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{else}}
+<p class="empty">Žádné týmy.</p>
+{{end}}
+
+<script>
+function toggleTeamEdit(id) {
+    var row = document.getElementById('team-edit-' + id);
+    row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+</script>
