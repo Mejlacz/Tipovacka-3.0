@@ -322,10 +322,10 @@ func templateFuncs() template.FuncMap {
 		},
 		// isNilInt reports whether a *int pointer is nil
 		"isNilInt": func(p *int) bool { return p == nil },
-		// coalesce returns the first non-empty string
-		"coalesce": func(a, b string) string {
-			if a != "" {
-				return a
+		// coalesce returns b if a is nil or empty, otherwise dereferences a
+		"coalesce": func(a *string, b string) string {
+			if a != nil && *a != "" {
+				return *a
 			}
 			return b
 		},
