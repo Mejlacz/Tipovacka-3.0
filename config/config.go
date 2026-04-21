@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	AppName    = "Tipovačka 2.0"
-	AppVersion = "2.0.0"
+	AppName    = "Tipovačka 3.0"
+	AppVersion = "3.0.0"
 
 	SecretKey     string
 	SessionMaxAge int

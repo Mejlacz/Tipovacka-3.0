@@ -249,7 +249,7 @@ func main() {
 		port = "8080"
 	}
 	addr := ":" + port
-	fmt.Printf("[Tipovačka 2.0] Listening on %s\n", addr)
+	fmt.Printf("[Tipovačka 3.0] Listening on %s\n", addr)
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatal(err)
 	}
@@ -383,7 +383,7 @@ func setLangHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, referer, http.StatusSeeOther)
 }
 
-const serviceWorkerContent = `/* Tipovačka 2.0 — PWA service worker */
+const serviceWorkerContent = `/* Tipovačka 3.0 — PWA service worker */
 const CACHE = 'tipovacka-pwa-v4';
 
 self.addEventListener('install', e => { self.skipWaiting(); });
@@ -441,7 +441,7 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	w.Write([]byte(`{
-  "name": "Tipovačka 2.0",
+  "name": "Tipovačka 3.0",
   "short_name": "Tipovačka",
   "description": "Tipuj fotbalové zápasy se přáteli",
   "start_url": "/",
