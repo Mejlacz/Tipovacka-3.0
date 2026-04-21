@@ -170,6 +170,7 @@ func ProfilePage(tmpl *template.Template) http.HandlerFunc {
 			"PushDevices":        len(pushSubs),
 			"Msg":                r.URL.Query().Get("msg"),
 			"Error":              r.URL.Query().Get("error"),
+			"Flash":              middleware.GetFlash(w, r),
 		})
 	}
 }

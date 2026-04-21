@@ -4,6 +4,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/sessions"
 	"tipovacka/config"
@@ -13,13 +14,14 @@ var Store *sessions.CookieStore
 
 func InitStore() {
 	Store = sessions.NewCookieStore([]byte(config.SecretKey))
+	// Secure: true when running over HTTPS (production), false for local HTTP
+	secureFlag := strings.HasPrefix(config.AppURL, "https://")
 	Store.Options = &sessions.Options{
 		Path:     "/",
 		MaxAge:   config.SessionMaxAge,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		// Secure: true — zapnout v produkci (HTTPS)
-		Secure: false,
+		Secure:   secureFlag,
 	}
 }
 

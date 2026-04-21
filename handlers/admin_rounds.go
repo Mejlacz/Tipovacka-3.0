@@ -46,9 +46,10 @@ func AdminRoundsList(tmpl *template.Template) http.HandlerFunc {
 		rows.Close()
 
 		RenderTemplate(w, r, tmpl, "rounds.html", TemplateData{
-			"User":  admin,
-			"Comp":  comp,
+			"User":   admin,
+			"Comp":   comp,
 			"Rounds": rounds,
+			"Flash":  middleware.GetFlash(w, r),
 		})
 	}
 }

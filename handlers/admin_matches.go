@@ -90,6 +90,7 @@ func AdminMatchesList(tmpl *template.Template) http.HandlerFunc {
 			"Matches":   matches,
 			"Teams":     teams,
 			"AllRounds": allRounds,
+			"Flash":     middleware.GetFlash(w, r),
 		})
 	}
 }

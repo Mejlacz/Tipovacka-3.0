@@ -50,6 +50,7 @@ func AdminTeamsList(tmpl *template.Template) http.HandlerFunc {
 			"Comps":  comps,
 			"Msg":    r.URL.Query().Get("msg"),
 			"Error":  r.URL.Query().Get("error"),
+			"Flash":  middleware.GetFlash(w, r),
 		})
 	}
 }
