@@ -16,6 +16,34 @@
 
 <div style="max-width:500px;display:flex;flex-direction:column;gap:1.5rem">
 
+{{/* ── Profilová fotka ── */}}
+<section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
+    <h2 style="margin:0 0 1rem;font-size:1rem">🖼️ Profilová fotka</h2>
+    {{if .User.BackgroundURL}}
+    <div style="margin-bottom:.75rem">
+        <img src="{{strVal .User.BackgroundURL}}" alt="Profilová fotka"
+             style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border-d)" />
+    </div>
+    <form method="post" action="/profile/avatar/delete" style="display:inline;margin-bottom:.75rem">
+        <button type="submit" class="btn btn-sm btn-danger"
+                onclick="return confirm('Opravdu smazat profilovou fotku?')">Smazat fotku</button>
+    </form>
+    <div style="margin-top:.75rem">
+    {{else}}
+    <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">Nemáš nastavenou profilovou fotku.</p>
+    <div>
+    {{end}}
+        <form method="post" action="/profile/avatar" enctype="multipart/form-data">
+            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                <input type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp" required
+                       style="font-size:.82rem" />
+                <button type="submit" class="btn btn-sm btn-primary">Nahrát fotku</button>
+            </div>
+            <p style="color:var(--muted-d);font-size:.78rem;margin:.4rem 0 0">Max 5 MB, formáty: JPG, PNG, WEBP.</p>
+        </form>
+    </div>
+</section>
+
 {{/* ── Základní údaje ── */}}
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
     <h2 style="margin:0 0 1rem;font-size:1rem">Základní údaje</h2>

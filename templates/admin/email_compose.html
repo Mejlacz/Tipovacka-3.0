@@ -1,0 +1,64 @@
+<style>
+.em-card { background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.1rem 1.25rem;margin-bottom:1rem; }
+.em-card h2 { margin:0 0 .75rem;font-size:.95rem;color:var(--muted-d);text-transform:uppercase;letter-spacing:.05em; }
+.form-group { margin-bottom:.85rem; }
+.form-group label { display:block;font-size:.85rem;color:var(--muted-d);margin-bottom:.3rem; }
+.form-group input[type=text], .form-group select, .form-group textarea {
+    width:100%;padding:.45rem .6rem;background:var(--bg3);border:1px solid var(--border-d);
+    border-radius:6px;color:var(--text);font-size:.88rem;box-sizing:border-box;
+}
+.form-group textarea { resize:vertical; }
+</style>
+
+<div class="page-header">
+    <h1>✉️ Hromadný email</h1>
+    <a href="/admin" class="btn btn-secondary">← Admin</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-danger{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+{{if not .SMTPEnabled}}
+<div class="alert alert-danger" style="margin-bottom:1rem">
+    ⚠️ SMTP není nakonfigurováno. Nastav proměnné MAIL_SERVER (nebo SMTP_HOST), MAIL_USERNAME, MAIL_PASSWORD.
+</div>
+{{end}}
+
+<div class="em-card">
+    <h2>Sestavit zprávu</h2>
+    <p style="font-size:.85rem;color:var(--muted-d);margin-bottom:.75rem">
+        Příjemci: <strong>{{.RecipientCount}}</strong> uživatelů s emailem
+        {{if gt .RecipientCount 0}}(volitelně filtruj níže podle soutěže){{end}}
+    </p>
+
+    <form method="post" action="/admin/email/send">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+
+        <div class="form-group">
+            <label>Filtr — jen uživatelé z vybrané soutěže (nepovinné)</label>
+            <select name="competition_id">
+                <option value="">— Všichni uživatelé s emailem —</option>
+                {{range .Competitions}}
+                <option value="{{.ID}}">{{.Name}} {{.Season}}</option>
+                {{end}}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Předmět *</label>
+            <input type="text" name="subject" required placeholder="Předmět emailu">
+        </div>
+
+        <div class="form-group">
+            <label>Tělo zprávy *</label>
+            <textarea name="body" rows="10" required placeholder="Text emailu…"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" {{if not .SMTPEnabled}}disabled{{end}}>
+            📨 Odeslat všem příjemcům
+        </button>
+    </form>
+</div>

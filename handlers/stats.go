@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"net/http"
 	"sort"
@@ -403,6 +404,257 @@ func StatsDetail(tmpl *template.Template) http.HandlerFunc {
 			"CompareUsers":         compareUsers,
 		})
 	}
+}
+
+// GET /stats/{competition_id}/extended
+// Rozšířené statistiky pro konkrétního uživatele v dané soutěži.
+// Parametr: ?user_id=N (volitelný — výchozí je přihlášený uživatel)
+func StatsExtended(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		currentUser := RequireLogin(w, r)
+		if currentUser == nil {
+			return
+		}
+		compID, _ := strconv.Atoi(r.PathValue("competition_id"))
+		ctx := context.Background()
+
+		comp := &models.Competition{}
+		err := db.Pool.QueryRow(ctx,
+			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE id=$1`, compID).
+			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder)
+		if err != nil {
+			http.Redirect(w, r, "/stats", http.StatusSeeOther)
+			return
+		}
+
+		// Resolve target user
+		targetUser := currentUser
+		if userIDStr := r.URL.Query().Get("user_id"); userIDStr != "" {
+			uid, _ := strconv.Atoi(userIDStr)
+			if uid > 0 && uid != currentUser.ID {
+				other := &models.User{}
+				cols, _ := buildUserSelect()
+				otherRow := db.Pool.QueryRow(ctx, "SELECT "+cols+" FROM users WHERE id=$1", uid)
+				if err := scanUser(other, otherRow); err == nil {
+					targetUser = other
+				}
+			}
+		}
+
+		// Extended stats query
+		type ExtTip struct {
+			TipHome   int
+			TipAway   int
+			Points    int
+			ActHome   int
+			ActAway   int
+			HomeTeam  string
+			AwayTeam  string
+			MatchDate *time.Time
+		}
+
+		rows, _ := db.Pool.Query(ctx, `
+			SELECT t.home_score, t.away_score, COALESCE(t.points,0),
+			       m.home_score, m.away_score,
+			       ht.name, at.name, m.match_date
+			FROM tips t
+			JOIN matches m ON m.id = t.match_id
+			JOIN teams ht ON ht.id = m.home_team_id
+			JOIN teams at ON at.id = m.away_team_id
+			JOIN rounds ro ON ro.id = m.round_id
+			WHERE ro.competition_id = $1 AND t.user_id = $2
+			  AND m.is_finished = TRUE AND t.points IS NOT NULL
+			ORDER BY m.match_date`, compID, targetUser.ID)
+
+		var tips []ExtTip
+		for rows.Next() {
+			var et ExtTip
+			var actH, actA *int
+			_ = rows.Scan(&et.TipHome, &et.TipAway, &et.Points, &actH, &actA, &et.HomeTeam, &et.AwayTeam, &et.MatchDate)
+			if actH != nil {
+				et.ActHome = *actH
+			}
+			if actA != nil {
+				et.ActAway = *actA
+			}
+			tips = append(tips, et)
+		}
+		rows.Close()
+
+		// Tendence
+		var homeTipped, drawTipped, awayTipped int
+		var homeWon, drawWon, awayWon int
+		for _, t := range tips {
+			switch {
+			case t.TipHome > t.TipAway:
+				homeTipped++
+				if t.ActHome > t.ActAway {
+					homeWon++
+				}
+			case t.TipHome == t.TipAway:
+				drawTipped++
+				if t.ActHome == t.ActAway {
+					drawWon++
+				}
+			default:
+				awayTipped++
+				if t.ActHome < t.ActAway {
+					awayWon++
+				}
+			}
+		}
+
+		// Nejlepší / nejhorší týmy
+		type TeamExtStat struct {
+			Name    string
+			Tips    int
+			Pts     int
+			Avg     float64
+		}
+		teamMap := map[string]*TeamExtStat{}
+		for _, t := range tips {
+			for _, name := range []string{t.HomeTeam, t.AwayTeam} {
+				ts, ok := teamMap[name]
+				if !ok {
+					ts = &TeamExtStat{Name: name}
+					teamMap[name] = ts
+				}
+				ts.Tips++
+				ts.Pts += t.Points
+			}
+		}
+		teamList := make([]TeamExtStat, 0, len(teamMap))
+		for _, ts := range teamMap {
+			if ts.Tips >= 2 {
+				ts.Avg = float64(ts.Pts) / float64(ts.Tips)
+				teamList = append(teamList, *ts)
+			}
+		}
+		sort.Slice(teamList, func(i, j int) bool { return teamList[i].Avg > teamList[j].Avg })
+		bestTeams := teamList
+		if len(bestTeams) > 5 {
+			bestTeams = bestTeams[:5]
+		}
+		sort.Slice(teamList, func(i, j int) bool { return teamList[i].Avg < teamList[j].Avg })
+		worstTeams := teamList
+		if len(worstTeams) > 5 {
+			worstTeams = worstTeams[:5]
+		}
+
+		// Série
+		bestStreak, curStreak, currentStreak := 0, 0, 0
+		for i, t := range tips {
+			if t.Points == 3 {
+				curStreak++
+				if curStreak > bestStreak {
+					bestStreak = curStreak
+				}
+				if i == len(tips)-1 {
+					currentStreak = curStreak
+				}
+			} else {
+				if i == len(tips)-1 {
+					currentStreak = 0
+				}
+				curStreak = 0
+			}
+		}
+		// fix currentStreak for last element
+		if len(tips) > 0 {
+			curStreak2 := 0
+			for i := len(tips) - 1; i >= 0; i-- {
+				if tips[i].Points == 3 {
+					curStreak2++
+				} else {
+					break
+				}
+			}
+			currentStreak = curStreak2
+		}
+
+		// Users pro select
+		var compareUsers []*models.User
+		{
+			blockedFilter := ""
+			if userCols.IsBlocked {
+				blockedFilter = " AND u.is_blocked=FALSE"
+			}
+			var roundIDs []int
+			rRows, _ := db.Pool.Query(ctx, `SELECT id FROM rounds WHERE competition_id=$1`, compID)
+			for rRows.Next() {
+				var rid int
+				_ = rRows.Scan(&rid)
+				roundIDs = append(roundIDs, rid)
+			}
+			rRows.Close()
+			if len(roundIDs) > 0 {
+				cuRows, _ := db.Pool.Query(ctx,
+					`SELECT DISTINCT u.id, u.username
+					   FROM users u
+					   JOIN tips t ON t.user_id = u.id
+					   JOIN matches m ON m.id = t.match_id
+					  WHERE m.round_id = ANY($1)`+blockedFilter+`
+					  ORDER BY u.username`, roundIDs)
+				for cuRows.Next() {
+					u := &models.User{}
+					_ = cuRows.Scan(&u.ID, &u.Username)
+					compareUsers = append(compareUsers, u)
+				}
+				cuRows.Close()
+			}
+		}
+
+		// All competitions for nav
+		allCompRows, _ := db.Pool.Query(ctx,
+			`SELECT id, name, season, is_active, sport, sort_order FROM competitions ORDER BY id DESC`)
+		var activeComps, inactiveComps []*models.Competition
+		for allCompRows.Next() {
+			c := &models.Competition{}
+			_ = allCompRows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.Sport, &c.SortOrder)
+			if c.IsActive {
+				activeComps = append(activeComps, c)
+			} else {
+				inactiveComps = append(inactiveComps, c)
+			}
+		}
+		allCompRows.Close()
+
+		type TendencyRow struct {
+			Label   string
+			Tipped  int
+			Won     int
+			WinPct  string
+		}
+		tendencies := []TendencyRow{
+			{"Domácí výhra", homeTipped, homeWon, pct(homeWon, homeTipped)},
+			{"Remíza", drawTipped, drawWon, pct(drawWon, drawTipped)},
+			{"Hostující výhra", awayTipped, awayWon, pct(awayWon, awayTipped)},
+		}
+
+		RenderTemplate(w, r, tmpl, "stats/extended.html", TemplateData{
+			"User":                 currentUser,
+			"TargetUser":          targetUser,
+			"Comp":                 comp,
+			"CompID":               compID,
+			"Tips":                 tips,
+			"TotalTips":            len(tips),
+			"Tendencies":          tendencies,
+			"BestTeams":           bestTeams,
+			"WorstTeams":          worstTeams,
+			"BestStreak":          bestStreak,
+			"CurrentStreak":       currentStreak,
+			"ActiveCompetitions":  activeComps,
+			"InactiveCompetitions": inactiveComps,
+			"CompareUsers":        compareUsers,
+		})
+	}
+}
+
+func pct(won, total int) string {
+	if total == 0 {
+		return "—"
+	}
+	return fmt.Sprintf("%d%%", 100*won/total)
 }
 
 // GET /stats/{competition_id}/vs/{other_user_id}

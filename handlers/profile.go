@@ -5,11 +5,16 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html/template"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
+	"tipovacka/config"
 	"tipovacka/db"
 	"tipovacka/middleware"
 	"tipovacka/models"
@@ -382,5 +387,91 @@ func ProfilePushDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"ok":true}`))
+}
+
+// POST /profile/avatar — nahrání profilové fotky
+func ProfileAvatarUpload(w http.ResponseWriter, r *http.Request) {
+	user := RequireLogin(w, r)
+	if user == nil {
+		return
+	}
+
+	if err := r.ParseMultipartForm(int64(config.MaxUploadBytes)); err != nil {
+		middleware.SetFlash(w, r, "err", "Soubor je příliš velký (max 5 MB).")
+		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+		return
+	}
+
+	file, fileHeader, err := r.FormFile("avatar")
+	if err != nil {
+		middleware.SetFlash(w, r, "err", "Vyberte obrázek (JPEG, PNG nebo WEBP).")
+		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if !config.AllowedImageExtensions[ext] {
+		middleware.SetFlash(w, r, "err", "Nepodporovaný formát. Použijte .jpg, .jpeg, .png nebo .webp.")
+		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+		return
+	}
+
+	// Ensure avatars directory exists
+	avatarDir := "static/avatars"
+	if err := os.MkdirAll(avatarDir, 0755); err != nil {
+		middleware.SetFlash(w, r, "err", "Chyba serveru při ukládání souboru.")
+		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+		return
+	}
+
+	// Remove any existing avatar for this user (different extension)
+	cleanOldAvatars(user.ID)
+
+	filename := fmt.Sprintf("%d%s", user.ID, ext)
+	destPath := filepath.Join(avatarDir, filename)
+	out, err := os.Create(destPath)
+	if err != nil {
+		middleware.SetFlash(w, r, "err", "Nepodařilo se uložit soubor.")
+		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+		return
+	}
+	defer out.Close()
+	if _, err = io.Copy(out, file); err != nil {
+		middleware.SetFlash(w, r, "err", "Chyba při zápisu souboru.")
+		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+		return
+	}
+
+	avatarURL := "/static/avatars/" + filename
+	_, _ = db.Pool.Exec(context.Background(),
+		`UPDATE users SET background_url=$1 WHERE id=$2`, avatarURL, user.ID)
+
+	middleware.SetFlash(w, r, "ok", "Profilová fotka byla nahrána.")
+	http.Redirect(w, r, "/profile", http.StatusSeeOther)
+}
+
+// POST /profile/avatar/delete — smazání profilové fotky
+func ProfileAvatarDelete(w http.ResponseWriter, r *http.Request) {
+	user := RequireLogin(w, r)
+	if user == nil {
+		return
+	}
+
+	cleanOldAvatars(user.ID)
+
+	_, _ = db.Pool.Exec(context.Background(),
+		`UPDATE users SET background_url=NULL WHERE id=$1`, user.ID)
+
+	middleware.SetFlash(w, r, "ok", "Profilová fotka byla odstraněna.")
+	http.Redirect(w, r, "/profile", http.StatusSeeOther)
+}
+
+// cleanOldAvatars smaže všechny existující avatary uživatele (jakákoli přípona).
+func cleanOldAvatars(userID int) {
+	for ext := range config.AllowedImageExtensions {
+		path := filepath.Join("static", "avatars", fmt.Sprintf("%d%s", userID, ext))
+		_ = os.Remove(path) // ignore error — file may not exist
+	}
 }
 

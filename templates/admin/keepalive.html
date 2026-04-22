@@ -1,0 +1,64 @@
+<style>
+.ka-card { background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.1rem 1.25rem;margin-bottom:1rem; }
+.ka-card h2 { margin:0 0 .75rem;font-size:.95rem;color:var(--muted-d);text-transform:uppercase;letter-spacing:.05em; }
+.badge-active   { display:inline-block;background:#052e16;border:1px solid #34d399;color:#34d399;border-radius:6px;padding:.2rem .7rem;font-size:.82rem;font-weight:600; }
+.badge-disabled { display:inline-block;background:#3b0606;border:1px solid #f87171;color:#f87171;border-radius:6px;padding:.2rem .7rem;font-size:.82rem;font-weight:600; }
+.badge-unknown  { display:inline-block;background:var(--bg3);border:1px solid var(--border-d);color:var(--muted-d);border-radius:6px;padding:.2rem .7rem;font-size:.82rem;font-weight:600; }
+</style>
+
+<div class="page-header">
+    <h1>🔄 Keep Alive — GitHub Actions</h1>
+    <a href="/admin" class="btn btn-secondary">← Admin</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-danger{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+<div class="ka-card">
+    <h2>Stav workflow</h2>
+    {{if not .PatSet}}
+    <p class="badge-unknown">⚠️ GITHUB_PAT není nastaveno — nelze zjistit stav</p>
+    {{else if eq .State "active"}}
+    <p><span class="badge-active">✅ active</span> — workflow běží, Koyeb zůstane vzhůru</p>
+    {{else if .State}}
+    <p><span class="badge-disabled">⛔ {{.State}}</span> — workflow je vypnuto</p>
+    {{else}}
+    <p><span class="badge-unknown">❓ Neznámý</span> — nepodařilo se zjistit stav (chyba API)</p>
+    {{end}}
+
+    {{if .GithubRepo}}
+    <p style="margin-top:.5rem;font-size:.82rem;color:var(--muted-d)">
+        Repo: <strong>{{.GithubRepo}}</strong> &nbsp;|&nbsp; Workflow: <strong>{{.Workflow}}</strong>
+    </p>
+    {{end}}
+</div>
+
+<div class="ka-card">
+    <h2>Ovládání</h2>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+        <form method="post" action="/admin/keepalive/enable">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+            <button type="submit" class="btn btn-primary" {{if not .PatSet}}disabled{{end}}>
+                ▶ Enable
+            </button>
+        </form>
+        <form method="post" action="/admin/keepalive/disable">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+            <button type="submit" class="btn btn-secondary" {{if not .PatSet}}disabled{{end}}>
+                ⏸ Disable
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="ka-card">
+    <h2>Co dělá Keep Alive?</h2>
+    <p style="font-size:.88rem;line-height:1.6;color:var(--muted-d)">
+        GitHub Actions workflow <strong>keepalive.yml</strong> pinguje endpoint <code>/health</code>
+        každých 10 minut. Díky tomu Koyeb neuspí aplikaci při nečinnosti.
+        Pokud workflow vypneš, aplikace může přejít do spánku a první request trvá déle.
+    </p>
+</div>

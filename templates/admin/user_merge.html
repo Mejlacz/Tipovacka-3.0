@@ -1,0 +1,58 @@
+<style>
+.merge-card { background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.1rem 1.25rem;margin-bottom:1rem; }
+.merge-card h2 { margin:0 0 .75rem;font-size:.95rem;color:var(--muted-d);text-transform:uppercase;letter-spacing:.05em; }
+.form-group { margin-bottom:.85rem; }
+.form-group label { display:block;font-size:.85rem;color:var(--muted-d);margin-bottom:.3rem; }
+.form-group select { width:100%;padding:.45rem .6rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:var(--text);font-size:.88rem;box-sizing:border-box; }
+</style>
+
+<div class="page-header">
+    <h1>🔀 Sloučení uživatelů</h1>
+    <div style="display:flex;gap:.5rem">
+        <a href="/admin/users" class="btn btn-secondary">← Uživatelé</a>
+        <a href="/admin" class="btn btn-secondary">Admin</a>
+    </div>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-danger{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+<div class="merge-card">
+    <h2>Sloučit uživatele</h2>
+    <p style="font-size:.85rem;color:#fbbf24;background:#312107;border:1px solid #92400e;border-radius:6px;padding:.6rem .8rem;margin-bottom:1rem">
+        ⚠️ <strong>Varování:</strong> Tato operace je nevratná! Zdrojový uživatel bude <strong>smazán</strong>,
+        jeho tipy, extra odpovědi a nastavení budou přesunuty na cílového uživatele.
+    </p>
+
+    <form method="post" action="/admin/users/merge">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+
+        <div class="form-group">
+            <label>Zdrojový uživatel (bude smazán) *</label>
+            <select name="source_user_id" required>
+                <option value="">— Vyberte zdrojového uživatele —</option>
+                {{range .Users}}
+                <option value="{{.ID}}">{{.Username}} (id={{.ID}})</option>
+                {{end}}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Cílový uživatel (tipy se přesunou sem) *</label>
+            <select name="target_user_id" required>
+                <option value="">— Vyberte cílového uživatele —</option>
+                {{range .Users}}
+                <option value="{{.ID}}">{{.Username}} (id={{.ID}})</option>
+                {{end}}
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary"
+            onclick="return confirm('Opravdu sloučit? Zdrojový uživatel bude smazán.')">
+            🔀 Sloučit uživatele
+        </button>
+    </form>
+</div>

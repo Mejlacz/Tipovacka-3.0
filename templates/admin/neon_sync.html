@@ -1,0 +1,110 @@
+<style>
+.ns-card { background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.1rem 1.25rem;margin-bottom:1rem; }
+.ns-card h2 { margin:0 0 .75rem;font-size:.95rem;color:var(--muted-d);text-transform:uppercase;letter-spacing:.05em; }
+.ns-table { width:100%;border-collapse:collapse;font-size:.82rem; }
+.ns-table th { text-align:left;padding:.3rem .6rem;color:var(--muted-d);font-weight:600;border-bottom:1px solid var(--border-d); }
+.ns-table td { padding:.3rem .6rem;border-bottom:1px solid rgba(255,255,255,.04); }
+.ns-table tr:last-child td { border-bottom:none; }
+.badge-ok      { color:#34d399;font-weight:600; }
+.badge-error   { color:#f87171;font-weight:600; }
+.badge-running { color:#fbbf24;font-weight:600; }
+.badge-skipped { color:var(--muted-d);font-weight:600; }
+</style>
+
+<div class="page-header">
+    <h1>🔄 Neon Sync — záloha databáze</h1>
+    <a href="/admin" class="btn btn-secondary">← Admin</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-danger{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+{{/* ── Poslední sync ── */}}
+<div class="ns-card">
+    <h2>Poslední záloha</h2>
+    {{with .LastSyncAt}}
+    <p style="font-size:.88rem">
+        Čas: <strong>{{.}}</strong> &nbsp;|&nbsp;
+        Stav: <strong>{{$.LastSyncStatus}}</strong>
+    </p>
+    {{if $.LastSyncMsg}}
+    <p style="font-size:.82rem;color:var(--muted-d);margin-top:.3rem">{{$.LastSyncMsg}}</p>
+    {{end}}
+    {{else}}
+    <p style="color:var(--muted-d)">Záloha ještě nebyla spuštěna.</p>
+    {{end}}
+</div>
+
+{{/* ── Spustit zálohu ── */}}
+<div class="ns-card">
+    <h2>Ruční záloha</h2>
+    {{if not .NeonURLSet}}
+    <p style="color:#f87171">⚠️ NEON_BACKUP_URL není nastavena v env proměnných.</p>
+    {{else}}
+    <p style="font-size:.85rem;color:var(--muted-d);margin-bottom:.75rem">
+        Spustí okamžitou zálohu CockroachDB → Neon na pozadí. Výsledek se zobrazí v logu níže po obnovení stránky.
+    </p>
+    <form method="post" action="/admin/neon-sync/run">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        <button type="submit" class="btn btn-primary">▶ Spustit zálohu</button>
+    </form>
+    {{end}}
+</div>
+
+{{/* ── Nastavení ── */}}
+<div class="ns-card">
+    <h2>Automatická záloha</h2>
+    <form method="post" action="/admin/neon-sync/settings">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:.4rem;font-size:.9rem">
+                <input type="checkbox" name="enabled" {{if .ConfigEnabled}}checked{{end}}>
+                Zapnout automatickou zálohu
+            </label>
+            <label style="font-size:.9rem">
+                Hodina spuštění:
+                <select name="auto_hour" style="margin-left:.3rem;font-size:.85rem">
+                    {{range .Hours}}
+                    <option value="{{.Val}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+            </label>
+            <button type="submit" class="btn btn-secondary btn-sm">Uložit</button>
+        </div>
+    </form>
+</div>
+
+{{/* ── Log ── */}}
+<div class="ns-card">
+    <h2>Log zálohovacích operací (posledních 20)</h2>
+    {{if .Log}}
+    <table class="ns-table">
+        <tr>
+            <th>ID</th><th>Spuštěno</th><th>Dokončeno</th><th>Stav</th><th>Kdo</th><th>Zpráva</th><th>Doba</th>
+        </tr>
+        {{range .Log}}
+        <tr>
+            <td style="color:var(--muted-d)">{{.ID}}</td>
+            <td style="white-space:nowrap">{{.StartedAtStr}}</td>
+            <td style="white-space:nowrap">
+                {{if .FinishedAtStr}}{{.FinishedAtStr}}{{else}}<span class="badge-running">běží…</span>{{end}}
+            </td>
+            <td>
+                {{if eq .Status "ok"}}<span class="badge-ok">✅ ok</span>
+                {{else if eq .Status "error"}}<span class="badge-error">❌ chyba</span>
+                {{else if eq .Status "running"}}<span class="badge-running">⏳ běží</span>
+                {{else}}<span class="badge-skipped">{{.Status}}</span>{{end}}
+            </td>
+            <td>{{.TriggeredBy}}</td>
+            <td style="font-size:.78em;max-width:320px;word-break:break-word">{{.Message}}</td>
+            <td>{{if .FinishedAtStr}}{{printf "%.1f" .DurationSec}}s{{end}}</td>
+        </tr>
+        {{end}}
+    </table>
+    {{else}}
+    <p class="empty">Žádné zálohy v logu.</p>
+    {{end}}
+</div>

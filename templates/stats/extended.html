@@ -1,0 +1,148 @@
+<div class="page-header">
+    <h1>📊 Rozšířené statistiky</h1>
+    <a href="/stats/{{.CompID}}" class="btn btn-secondary">← Zpět na statistiky</a>
+</div>
+
+{{/* Competition tabs */}}
+<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1.5rem">
+    {{range .ActiveCompetitions}}
+    <a href="/stats/{{.ID}}/extended" class="btn btn-sm {{if eq .ID $.CompID}}btn-primary{{else}}btn-secondary{{end}}">
+        {{.Name}}{{if .Season}} {{.Season}}{{end}}
+    </a>
+    {{end}}
+    {{range .InactiveCompetitions}}
+    <a href="/stats/{{.ID}}/extended" class="btn btn-sm {{if eq .ID $.CompID}}btn-primary{{else}}btn-secondary{{end}}"
+       style="opacity:.7">{{.Name}}{{if .Season}} {{.Season}}{{end}}</a>
+    {{end}}
+</div>
+
+{{if .Comp}}
+<h2 style="font-size:1.1rem;margin-bottom:1rem">
+    {{.Comp.Name}}{{if .Comp.Season}} — {{.Comp.Season}}{{end}}
+</h2>
+{{end}}
+
+{{/* User selector */}}
+{{if .CompareUsers}}
+<div style="margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+    <label style="font-size:.85rem;color:var(--muted-d)">Zobrazit statistiky pro:</label>
+    <select onchange="location.href='/stats/{{.CompID}}/extended?user_id='+this.value"
+            style="font-size:.85rem;padding:.2rem .4rem;background:var(--bg2);border:1px solid var(--border-d);border-radius:6px;color:inherit">
+        <option value="{{.User.ID}}" {{if eq .TargetUser.ID .User.ID}}selected{{end}}>{{.User.Username}} (já)</option>
+        {{range .CompareUsers}}
+        {{if ne .ID $.User.ID}}
+        <option value="{{.ID}}" {{if eq .ID $.TargetUser.ID}}selected{{end}}>{{.Username}}</option>
+        {{end}}
+        {{end}}
+    </select>
+    {{if ne .TargetUser.ID .User.ID}}
+    <span style="font-size:.8rem;color:var(--muted-d)">— zobrazuji statistiky pro <strong>{{.TargetUser.Username}}</strong></span>
+    {{end}}
+</div>
+{{end}}
+
+{{if eq .TotalTips 0}}
+<p class="empty" style="margin-top:1rem">Zatím žádná data pro tuto soutěž.</p>
+{{else}}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-bottom:1.5rem">
+
+    {{/* ── Tendence ── */}}
+    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem">
+        <h3 style="margin:0 0 .75rem;font-size:.95rem">📈 Tipovací tendence</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+            <thead>
+                <tr style="color:var(--muted-d)">
+                    <th style="padding:.25rem .4rem;text-align:left">Výsledek</th>
+                    <th style="padding:.25rem .4rem;text-align:center">Tipováno</th>
+                    <th style="padding:.25rem .4rem;text-align:center">Trefeno</th>
+                    <th style="padding:.25rem .4rem;text-align:center">Úspěšnost</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .Tendencies}}
+            <tr style="border-top:1px solid var(--border-d)">
+                <td style="padding:.3rem .4rem">{{.Label}}</td>
+                <td style="padding:.3rem .4rem;text-align:center">{{.Tipped}}</td>
+                <td style="padding:.3rem .4rem;text-align:center">{{.Won}}</td>
+                <td style="padding:.3rem .4rem;text-align:center"><strong>{{.WinPct}}</strong></td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+        <p style="margin:.6rem 0 0;font-size:.78rem;color:var(--muted-d)">Celkem tipů s výsledkem: {{.TotalTips}}</p>
+    </div>
+
+    {{/* ── Série ── */}}
+    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem">
+        <h3 style="margin:0 0 .75rem;font-size:.95rem">🔥 Série přesných tipů</h3>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap">
+            <div style="text-align:center">
+                <div style="font-size:2rem;font-weight:700;color:#fbbf24">{{.BestStreak}}</div>
+                <div style="font-size:.78rem;color:var(--muted-d)">nejdelší série</div>
+            </div>
+            <div style="text-align:center">
+                <div style="font-size:2rem;font-weight:700;color:{{if gt .CurrentStreak 0}}#34d399{{else}}#ef4444{{end}}">{{.CurrentStreak}}</div>
+                <div style="font-size:.78rem;color:var(--muted-d)">aktuální série</div>
+            </div>
+        </div>
+        <p style="margin:.75rem 0 0;font-size:.82rem;color:var(--muted-d)">
+            Série = počet za sebou jdoucích přesných tipů (3 body).
+        </p>
+    </div>
+
+    {{/* ── Nejlepší týmy ── */}}
+    {{if .BestTeams}}
+    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem">
+        <h3 style="margin:0 0 .75rem;font-size:.95rem">⭐ Nejlepší týmy</h3>
+        <p style="font-size:.78rem;color:var(--muted-d);margin:0 0 .5rem">Týmy kde tipu nejlépe (průměr bodů):</p>
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+            <thead>
+                <tr style="color:var(--muted-d)">
+                    <th style="padding:.2rem .4rem;text-align:left">Tým</th>
+                    <th style="padding:.2rem .4rem;text-align:center">Tipů</th>
+                    <th style="padding:.2rem .4rem;text-align:center">Průměr</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .BestTeams}}
+            <tr style="border-top:1px solid var(--border-d)">
+                <td style="padding:.3rem .4rem">{{.Name}}</td>
+                <td style="padding:.3rem .4rem;text-align:center">{{.Tips}}</td>
+                <td style="padding:.3rem .4rem;text-align:center"><strong style="color:#34d399">{{.Avg}}</strong></td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+
+    {{/* ── Nejhorší týmy ── */}}
+    {{if .WorstTeams}}
+    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem">
+        <h3 style="margin:0 0 .75rem;font-size:.95rem">📉 Nejhorší týmy</h3>
+        <p style="font-size:.78rem;color:var(--muted-d);margin:0 0 .5rem">Týmy kde tipuji nejhůře (průměr bodů):</p>
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+            <thead>
+                <tr style="color:var(--muted-d)">
+                    <th style="padding:.2rem .4rem;text-align:left">Tým</th>
+                    <th style="padding:.2rem .4rem;text-align:center">Tipů</th>
+                    <th style="padding:.2rem .4rem;text-align:center">Průměr</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .WorstTeams}}
+            <tr style="border-top:1px solid var(--border-d)">
+                <td style="padding:.3rem .4rem">{{.Name}}</td>
+                <td style="padding:.3rem .4rem;text-align:center">{{.Tips}}</td>
+                <td style="padding:.3rem .4rem;text-align:center"><strong style="color:#ef4444">{{.Avg}}</strong></td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+
+</div>
+
+{{end}}

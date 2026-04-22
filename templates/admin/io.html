@@ -22,7 +22,60 @@
 </div>
 {{end}}
 
-<h2 style="margin-bottom:.5rem">Export dat (CSV)</h2>
+<h2 style="margin-bottom:.5rem">Export dat (Excel .xlsx)</h2>
+<p style="color:var(--muted-d);font-size:.85rem;margin-bottom:.75rem">XLSX soubory pro přímé otevření v Excelu / LibreOffice. Filtry jsou nepovinné.</p>
+<div class="io-grid">
+
+    <div class="io-card">
+        <h3>🏆 Tipy (XLSX)</h3>
+        <p>Kompletní export tipů s uživateli, zápasy a body.</p>
+        <div class="io-actions">
+            <a href="/admin/export/xlsx?type=tips" class="btn btn-sm btn-primary">Všechny tipy</a>
+            {{if .Competitions}}
+            <select id="exp-xlsx-tips-comp" style="font-size:.8rem">
+                <option value="">Bez filtru</option>
+                {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+            </select>
+            <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-xlsx-tips-comp').value;location.href='/admin/export/xlsx?type=tips'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
+            {{end}}
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>⚽ Zápasy (XLSX)</h3>
+        <p>Export zápasů se skóre, datumem a výsledky.</p>
+        <div class="io-actions">
+            <a href="/admin/export/xlsx?type=matches" class="btn btn-sm btn-primary">Export</a>
+            <a href="/admin/export/xlsx?type=matches&only_finished=1" class="btn btn-sm btn-secondary">Jen odehrané</a>
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>👤 Uživatelé (XLSX)</h3>
+        <p>Export uživatelů se jmény, emaily a rolemi.</p>
+        <div class="io-actions">
+            <a href="/admin/export/xlsx?type=users" class="btn btn-sm btn-primary">Export</a>
+        </div>
+    </div>
+
+    <div class="io-card">
+        <h3>📊 Žebříček (XLSX)</h3>
+        <p>Export žebříčku s body a přesnými tipy.</p>
+        <div class="io-actions">
+            <a href="/admin/export/xlsx?type=leaderboard" class="btn btn-sm btn-primary">Celkový</a>
+            {{if .Competitions}}
+            <select id="exp-xlsx-lb-comp" style="font-size:.8rem">
+                <option value="">Bez filtru</option>
+                {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+            </select>
+            <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-xlsx-lb-comp').value;location.href='/admin/export/xlsx?type=leaderboard'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
+            {{end}}
+        </div>
+    </div>
+
+</div>
+
+<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Export dat (CSV)</h2>
 <p style="color:var(--muted-d);font-size:.85rem;margin-bottom:.75rem">CSV soubory lze otevřít v Excelu (UTF-8 s BOM). Filtry jsou nepovinné.</p>
 <div class="io-grid">
 
@@ -210,13 +263,52 @@
     </div>
 </div>
 
-<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Správa skupin</h2>
+<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Správa skupin a uživatelů</h2>
 <div class="io-grid">
     <div class="io-card">
         <h3>👥 Skupiny uživatelů</h3>
         <p>Přiřazovat speciální oprávnění vybraným uživatelům (pouze Owner).</p>
         <div class="io-actions">
             <a href="/admin/groups" class="btn btn-primary btn-sm">Otevřít</a>
+        </div>
+    </div>
+    <div class="io-card">
+        <h3>🔀 Sloučení uživatelů</h3>
+        <p>Sloučí tipy a extra odpovědi z jednoho účtu do druhého (např. duplicity).</p>
+        <div class="io-actions">
+            <a href="/admin/users/merge" class="btn btn-primary btn-sm">Otevřít</a>
+        </div>
+    </div>
+    <div class="io-card">
+        <h3>📥 Import uživatelů</h3>
+        <p>Hromadný import uživatelů ze CSV souboru.</p>
+        <div class="io-actions">
+            <a href="/admin/users/import" class="btn btn-primary btn-sm">Otevřít</a>
+        </div>
+    </div>
+</div>
+
+<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Systémová správa</h2>
+<div class="io-grid">
+    <div class="io-card">
+        <h3>💓 Keep Alive</h3>
+        <p>Automatické pingování serveru aby Koyeb/Render nepozastavil instanci.</p>
+        <div class="io-actions">
+            <a href="/admin/keepalive" class="btn btn-primary btn-sm">Otevřít</a>
+        </div>
+    </div>
+    <div class="io-card">
+        <h3>☁️ Neon Sync</h3>
+        <p>Synchronizace dat s Neon záložní databází. Konfigurace a spuštění sync.</p>
+        <div class="io-actions">
+            <a href="/admin/neon-sync" class="btn btn-primary btn-sm">Otevřít</a>
+        </div>
+    </div>
+    <div class="io-card">
+        <h3>📧 Hromadný email</h3>
+        <p>Odeslání emailu všem nebo vybraným uživatelům aplikace.</p>
+        <div class="io-actions">
+            <a href="/admin/email" class="btn btn-primary btn-sm">Otevřít</a>
         </div>
     </div>
 </div>

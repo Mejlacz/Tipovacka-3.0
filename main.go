@@ -20,6 +20,7 @@ import (
 	"tipovacka/db"
 	"tipovacka/handlers"
 	"tipovacka/middleware"
+	"tipovacka/scheduler"
 )
 
 func init() {
@@ -40,11 +41,18 @@ func main() {
 	// Ensure admin exists (schema-aware — uses only columns that exist in DB)
 	handlers.EnsureAdmin(config.AdminUsername, config.AdminPassword)
 
+	// Init Neon sync tables
+	handlers.InitNeonSyncTables()
+
 	// Parse all templates
 	tmpl := parseTemplates()
 
 	// Init session store
 	middleware.InitStore()
+
+	// Spusť scheduler na pozadí
+	ctx := context.Background()
+	go scheduler.Start(ctx, db.Pool)
 
 	// Set up router
 	r := chi.NewRouter()
@@ -115,10 +123,13 @@ func main() {
 	r.Post("/profile/push-unsubscribe", handlers.ProfilePushUnsubscribe)
 	r.Post("/profile/push-test", handlers.ProfilePushTest)
 	r.Post("/profile/push-delete/{sub_id}", handlers.ProfilePushDelete)
+	r.Post("/profile/avatar", handlers.ProfileAvatarUpload)
+	r.Post("/profile/avatar/delete", handlers.ProfileAvatarDelete)
 
 	// ── Stats ─────────────────────────────────────────────────────────────────
 	r.Get("/stats", handlers.StatsRedirect)
 	r.Get("/stats/{competition_id}", handlers.StatsDetail(tmpl))
+	r.Get("/stats/{competition_id}/extended", handlers.StatsExtended(tmpl))
 	r.Get("/stats/{competition_id}/vs/{other_user_id}", handlers.StatsVs(tmpl))
 
 	// ── Achievements ──────────────────────────────────────────────────────────
@@ -221,8 +232,33 @@ func main() {
 	r.Get("/admin/tips/{competition_id}/export", handlers.AdminTipsExportCSV)
 	r.Get("/admin/export/csv", handlers.AdminGeneralExportCSV)
 
+	// Admin XLSX exports
+	r.Get("/admin/export/xlsx", handlers.AdminGeneralExportXLSX)
+
 	// Admin health dashboard
 	r.Get("/admin/health-dashboard", handlers.AdminHealthDashboard(tmpl))
+
+	// Keep Alive
+	r.Get("/admin/keepalive", handlers.AdminKeepalive(tmpl))
+	r.Post("/admin/keepalive/enable", handlers.AdminKeepaliveEnable)
+	r.Post("/admin/keepalive/disable", handlers.AdminKeepaliveDisable)
+
+	// Neon Sync
+	r.Get("/admin/neon-sync", handlers.AdminNeonSync(tmpl))
+	r.Post("/admin/neon-sync/run", handlers.AdminNeonSyncRun)
+	r.Post("/admin/neon-sync/settings", handlers.AdminNeonSyncSettings)
+
+	// Hromadný email
+	r.Get("/admin/email", handlers.AdminEmailForm(tmpl))
+	r.Post("/admin/email/send", handlers.AdminEmailSend(tmpl))
+
+	// User merge
+	r.Get("/admin/users/merge", handlers.AdminUserMergeForm(tmpl))
+	r.Post("/admin/users/merge", handlers.AdminUserMerge)
+
+	// User import
+	r.Get("/admin/users/import", handlers.AdminUserImportForm(tmpl))
+	r.Post("/admin/users/import", handlers.AdminUserImportSubmit)
 
 	// Admin extra questions
 	r.Get("/admin/extra/{competition_id}/questions/new", handlers.AdminExtraQuestionNewForm(tmpl))

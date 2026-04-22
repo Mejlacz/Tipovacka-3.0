@@ -65,6 +65,12 @@
 </div>
 {{end}}
 
+{{if .S}}
+<div style="margin-bottom:1.5rem">
+    <a href="/stats/{{.CompID}}/extended" class="btn btn-sm btn-secondary">📊 Rozšířené statistiky</a>
+</div>
+{{end}}
+
 {{else}}
 <p class="empty" style="margin-top:1rem">Zatím žádná data pro tuto soutěž.</p>
 {{end}}

@@ -1,0 +1,49 @@
+<style>
+.import-card { background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.1rem 1.25rem;margin-bottom:1rem; }
+.import-card h2 { margin:0 0 .75rem;font-size:.95rem;color:var(--muted-d);text-transform:uppercase;letter-spacing:.05em; }
+.csv-spec { background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;padding:.7rem 1rem;font-size:.82rem;margin-bottom:.75rem; }
+.csv-spec code { color:#93c5fd;font-family:monospace; }
+</style>
+
+<div class="page-header">
+    <h1>📥 Import uživatelů z CSV</h1>
+    <div style="display:flex;gap:.5rem">
+        <a href="/admin/users" class="btn btn-secondary">← Uživatelé</a>
+        <a href="/admin" class="btn btn-secondary">Admin</a>
+    </div>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-danger{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+<div class="import-card">
+    <h2>Formát CSV souboru</h2>
+    <div class="csv-spec">
+        <p style="margin:.0 0 .4rem">Sloupce (oddělené čárkou nebo středníkem):</p>
+        <code>username, email, first_name, last_name, role</code>
+        <ul style="margin:.5rem 0 0 1.2rem;color:var(--muted-d)">
+            <li><code>username</code> — povinný, unikátní přihlašovací jméno</li>
+            <li><code>email</code> — volitelný</li>
+            <li><code>first_name</code> — volitelný</li>
+            <li><code>last_name</code> — volitelný</li>
+            <li><code>role</code> — volitelný: <code>user</code> (výchozí), <code>admin</code>, <code>owner</code></li>
+        </ul>
+        <p style="margin:.5rem 0 0;color:var(--muted-d)">
+            Hlavička je nepovinná. Kódování: UTF-8.<br>
+            Existující uživatelé budou <strong>aktualizováni</strong> (email, jméno). Noví dostanou náhodné heslo.
+        </p>
+    </div>
+
+    <form method="post" action="/admin/users/import" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        <div style="margin-bottom:.85rem">
+            <label style="display:block;font-size:.85rem;color:var(--muted-d);margin-bottom:.3rem">CSV soubor *</label>
+            <input type="file" name="csvfile" accept=".csv,text/csv" required
+                   style="font-size:.88rem;color:var(--text)">
+        </div>
+        <button type="submit" class="btn btn-primary">📥 Importovat</button>
+    </form>
+</div>
