@@ -67,7 +67,7 @@
 
         {{/* Smazat skupinu */}}
         <form method="post" action="/admin/groups/{{.ID}}/delete" style="margin:0"
-              onsubmit="return confirm('Opravdu smazat skupinu „{{.Name}}"?')">
+              onsubmit="return confirm('Opravdu smazat skupinu {{.Name}}?')">
             <button type="submit" class="btn" style="font-size:0.8rem;padding:0.25rem 0.6rem;color:var(--red,#ef4444)">🗑 Smazat</button>
         </form>
     </div>
