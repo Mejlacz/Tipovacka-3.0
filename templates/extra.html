@@ -19,17 +19,17 @@
             {{end}}
         </div>
         {{if .Comp}}
-        <div style="color:var(--muted-d);margin-top:0.25rem;font-size:0.88rem">Soutěž: <strong>{{.Comp.Name}}</strong></div>
+        <div style="color:var(--muted-d);margin-top:0.25rem;font-size:0.88rem">{{tr .Lang "extra_comp_label"}} <strong>{{.Comp.Name}}</strong></div>
         {{end}}
     </div>
 
     {{if and .User.IsAdmin .Comp}}
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
         <a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary" style="font-size:0.85rem">
-            + Přidat otázku
+            {{tr .Lang "extra_add_question"}}
         </a>
         <a href="/admin/extra/{{.Comp.ID}}/answers" class="btn btn-secondary" style="font-size:0.85rem">
-            📋 Spravovat odpovědi
+            {{tr .Lang "extra_manage_answers"}}
         </a>
         <a href="/admin/extra/{{.Comp.ID}}/export" class="btn btn-secondary"
            style="font-size:0.85rem;background:#1a3a5c;color:#fff;border-color:#1a3a5c">
@@ -41,15 +41,15 @@
 
 {{/* ── Obsah ── */}}
 {{if not .Comp}}
-    <p class="empty">Žádná soutěž nenalezena.</p>
+    <p class="empty">{{tr .Lang "extra_no_comp"}}</p>
 
 {{else if not .Questions}}
     <div style="padding:2rem;text-align:center;background:var(--bg2);border-radius:12px;color:var(--muted-d)">
         <div style="font-size:2rem;margin-bottom:0.5rem">🎯</div>
-        Pro tuto soutěž zatím nejsou žádné extra otázky.
+        {{tr .Lang "extra_no_questions"}}
         {{if .User.IsAdmin}}
         <div style="margin-top:0.75rem">
-            <a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary btn-sm">+ Přidat první otázku</a>
+            <a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary btn-sm">{{tr .Lang "extra_add_first"}}</a>
         </div>
         {{end}}
     </div>

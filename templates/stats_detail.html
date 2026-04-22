@@ -1,5 +1,5 @@
 <div class="page-header">
-    <h1>📊 Statistiky</h1>
+    <h1>{{tr .Lang "stats_title"}}</h1>
 </div>
 
 {{/* Competition tabs */}}
@@ -23,35 +23,35 @@
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem;margin-bottom:1.5rem">
     <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
         <div style="font-size:1.6rem;font-weight:700;color:#fbbf24">{{.S.TotalPts}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">bodů celkem</div>
+        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_pts_total"}}</div>
     </div>
     <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
         <div style="font-size:1.6rem;font-weight:700;color:#34d399">{{.S.Exact}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">přesných tipů</div>
+        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_exact"}}</div>
     </div>
     <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
         <div style="font-size:1.6rem;font-weight:700;color:#60a5fa">{{.S.Winner}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">správný vítěz</div>
+        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "profile_winner"}}</div>
     </div>
     <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
         <div style="font-size:1.6rem;font-weight:700;color:#ef4444">{{.S.Miss}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">chybných tipů</div>
+        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_miss"}}</div>
     </div>
     <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
         <div style="font-size:1.6rem;font-weight:700">{{.S.TipsGiven}}/{{.S.TotalFinished}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">tipů zadáno</div>
+        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_tips"}}</div>
     </div>
     <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
         <div style="font-size:1.6rem;font-weight:700">{{.S.Rank}}./{{.S.TotalPlayers}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">pořadí</div>
+        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_rank"}}</div>
     </div>
 </div>
 
 <div style="display:flex;flex-wrap:wrap;gap:.5rem .9rem;font-size:.82rem;color:var(--muted-d);margin-bottom:1rem">
-    <span>Průměr: <strong style="color:#e2e8f0">{{.S.Avg}}</strong></span>
-    <span>Průměr skupiny: <strong style="color:#e2e8f0">{{.S.GroupAvg}}</strong></span>
-    {{if .S.FavScore}}<span>Oblíbené skóre: <strong style="color:#e2e8f0">{{.S.FavScore}} ({{.S.FavScoreCount}}×)</strong></span>{{end}}
-    {{if .S.BestStreak}}<span>Nejlepší série: <strong style="color:#e2e8f0">{{.S.BestStreak}}</strong></span>{{end}}
+    <span>{{tr .Lang "stats_avg"}}: <strong style="color:#e2e8f0">{{.S.Avg}}</strong></span>
+    <span>{{tr .Lang "stats_group_avg"}}: <strong style="color:#e2e8f0">{{.S.GroupAvg}}</strong></span>
+    {{if .S.FavScore}}<span>{{tr .Lang "stats_fav_score"}}: <strong style="color:#e2e8f0">{{.S.FavScore}} ({{.S.FavScoreCount}}×)</strong></span>{{end}}
+    {{if .S.BestStreak}}<span>{{tr .Lang "stats_streak"}}: <strong style="color:#e2e8f0">{{.S.BestStreak}}</strong></span>{{end}}
 </div>
 
 {{if .CompareUsers}}
@@ -72,5 +72,5 @@
 {{end}}
 
 {{else}}
-<p class="empty" style="margin-top:1rem">Zatím žádná data pro tuto soutěž.</p>
+<p class="empty" style="margin-top:1rem">{{tr .Lang "stats_no_data"}}</p>
 {{end}}

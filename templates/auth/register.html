@@ -1,5 +1,5 @@
 <div class="auth-card">
-    <h1>Registrace</h1>
+    <h1>{{tr .Lang "reg_title"}}</h1>
 
     {{if .Error}}
     <div class="alert alert-error">{{.Error}}</div>
@@ -7,23 +7,23 @@
 
     <form method="post" action="/register">
         <div class="form-group">
-            <label for="username">Přezdívka</label>
+            <label for="username">{{tr .Lang "reg_username"}}</label>
             <input type="text" id="username" name="username" required autocomplete="username"
-                   placeholder="vaše přezdívka" minlength="3" maxlength="80" />
+                   placeholder="{{tr .Lang "reg_username_ph"}}" minlength="3" maxlength="80" />
         </div>
         <div class="form-group">
-            <label for="email">E-mail</label>
-            <input type="email" id="email" name="email" required autocomplete="email" placeholder="vas@email.cz" />
+            <label for="email">{{tr .Lang "login_email"}}</label>
+            <input type="email" id="email" name="email" required autocomplete="email" placeholder="{{tr .Lang "login_email_ph"}}" />
         </div>
         <div class="form-group">
-            <label for="password">Heslo</label>
+            <label for="password">{{tr .Lang "login_password"}}</label>
             <input type="password" id="password" name="password" required autocomplete="new-password"
-                   placeholder="min. 8 znaků" minlength="8" />
+                   placeholder="{{tr .Lang "reg_password_ph"}}" minlength="8" />
         </div>
-        <button type="submit" class="btn btn-primary">Registrovat se</button>
+        <button type="submit" class="btn btn-primary">{{tr .Lang "reg_submit"}}</button>
     </form>
 
     <p class="auth-switch">
-        Již máte účet? <a href="/login">Přihlásit se</a>
+        {{tr .Lang "reg_have_account"}} <a href="/login">{{tr .Lang "reg_login_link"}}</a>
     </p>
 </div>

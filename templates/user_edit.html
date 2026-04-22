@@ -34,6 +34,14 @@
             Blokovaný
         </label>
     </div>
+    {{if .User.IsOwner}}
+    <div class="form-group">
+        <label style="display:flex;align-items:center;gap:.5rem">
+            <input type="checkbox" name="is_hidden" {{if .Edited.IsHidden}}checked{{end}} />
+            👻 Skrytý uživatel (Rodina) — viditelný jen pro skupiny s oprávněním
+        </label>
+    </div>
+    {{end}}
     <div style="display:flex;gap:.5rem;margin-top:1rem">
         <button type="submit" class="btn btn-primary">Uložit</button>
         <a href="/admin/users" class="btn btn-secondary">Zrušit</a>

@@ -19,6 +19,7 @@ import (
 	"tipovacka/config"
 	"tipovacka/db"
 	"tipovacka/handlers"
+	"tipovacka/i18n"
 	"tipovacka/middleware"
 	"tipovacka/scheduler"
 )
@@ -395,6 +396,10 @@ func templateFuncs() template.FuncMap {
 				return s
 			}
 			return string(r[:n]) + "…"
+		},
+		// tr translates a key to the given language (CS/EN)
+		"tr": func(lang, key string) string {
+			return i18n.Tr(lang, key)
 		},
 	}
 }

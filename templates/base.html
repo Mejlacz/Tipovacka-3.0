@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="cs" id="html-root">
+<html lang="{{if .Lang}}{{.Lang}}{{else}}cs{{end}}" id="html-root">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -22,39 +22,39 @@
 
 <nav class="navbar">
     <a class="navbar-brand" href="/">Tipovačka 3.0 <span id="navbar-clock" style="font-size:0.72rem;font-weight:400;opacity:0.65;margin-left:0.5rem"></span></a>
-    <button class="theme-toggle" id="theme-toggle" title="Přepnout téma" aria-label="Přepnout téma">🌙</button>
+    <button class="theme-toggle" id="theme-toggle" title="{{tr .Lang "nav_theme_title"}}" aria-label="{{tr .Lang "nav_theme_title"}}">🌙</button>
     <button class="navbar-burger" id="navbar-burger" aria-label="Menu" aria-expanded="false">☰</button>
     <div class="navbar-links" id="navbar-links">
         {{if .User}}
             {{$u := .User}}
             {{if $u.IsApproved}}
-            <a href="/leaderboard">Žebříček</a>
+            <a href="/leaderboard">{{tr $.Lang "nav_leaderboard"}}</a>
             {{end}}
-            <a href="/">Zápasy</a>
+            <a href="/">{{tr $.Lang "nav_matches"}}</a>
             {{if $u.IsAdmin}}
-            <a href="/admin/unscored" class="nav-quick-btn">Výsledky</a>
-            <a href="/admin/io" class="nav-quick-btn">IO</a>
-            <a href="/admin/competitions" class="nav-quick-btn">Soutěže</a>
+            <a href="/admin/unscored" class="nav-quick-btn">{{tr $.Lang "nav_results"}}</a>
+            <a href="/admin/io" class="nav-quick-btn">{{tr $.Lang "nav_io"}}</a>
+            <a href="/admin/competitions" class="nav-quick-btn">{{tr $.Lang "nav_competitions"}}</a>
             {{end}}
-            <a href="/extra">Extra</a>
-            {{if $u.IsApproved}}<a href="/achievements">🏅 Achievementy</a>{{end}}
-            {{if $u.IsApproved}}<a href="/stats">Statistiky</a>{{end}}
-            {{if $u.IsApproved}}<a href="/archive">Archiv</a>{{end}}
-            <a href="/pravidla">Pravidla</a>
+            <a href="/extra">{{tr $.Lang "nav_extra"}}</a>
+            {{if $u.IsApproved}}<a href="/achievements">{{tr $.Lang "nav_achievements"}}</a>{{end}}
+            {{if $u.IsApproved}}<a href="/stats">{{tr $.Lang "nav_stats"}}</a>{{end}}
+            {{if $u.IsApproved}}<a href="/archive">{{tr $.Lang "nav_archive"}}</a>{{end}}
+            <a href="/pravidla">{{tr $.Lang "nav_rules"}}</a>
             {{if $u.IsAdmin}}
             <div class="nav-dropdown">
-                <span class="nav-dropdown-toggle">Admin</span>
+                <span class="nav-dropdown-toggle">{{tr $.Lang "nav_admin"}}</span>
                 <div class="nav-dropdown-menu">
-                    <a href="/admin">Dashboard</a>
-                    <a href="/admin/competitions">🏆 Soutěže</a>
-                    <a href="/admin/competitions/new">Nová soutěž</a>
+                    <a href="/admin">{{tr $.Lang "nav_dashboard"}}</a>
+                    <a href="/admin/competitions">{{tr $.Lang "nav_competitions"}}</a>
+                    <a href="/admin/competitions/new">{{tr $.Lang "nav_new_competition"}}</a>
                     <div class="nav-dropdown-divider"></div>
-                    <a href="/admin/unscored">Bez výsledku <span id="unscored-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;font-size:.7rem;font-weight:700;padding:.05rem .4rem;margin-left:.2rem;vertical-align:middle"></span></a>
-                    <a href="/admin/teams">Týmy</a>
-                    <a href="/admin/users">Uživatelé</a>
+                    <a href="/admin/unscored">{{tr $.Lang "nav_unscored"}} <span id="unscored-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;font-size:.7rem;font-weight:700;padding:.05rem .4rem;margin-left:.2rem;vertical-align:middle"></span></a>
+                    <a href="/admin/teams">{{tr $.Lang "nav_teams"}}</a>
+                    <a href="/admin/users">{{tr $.Lang "nav_users"}}</a>
                     <div class="nav-dropdown-divider"></div>
-                    <a href="/admin/history">Historie</a>
-                    <a href="/admin/audit">Audit log</a>
+                    <a href="/admin/history">{{tr $.Lang "nav_history"}}</a>
+                    <a href="/admin/audit">{{tr $.Lang "nav_audit"}}</a>
                     {{if $u.IsOwner}}
                     <div class="nav-dropdown-divider"></div>
                     <a href="/admin/groups">👥 Skupiny</a>
@@ -66,19 +66,19 @@
                 <span class="nav-dropdown-toggle navbar-username">👤 {{$u.Username}}</span>
                 <div class="nav-dropdown-menu">
                     {{if $u.Email}}<span style="display:block;padding:.4rem .9rem;font-size:.78rem;color:var(--muted-d);border-bottom:1px solid var(--border-d);word-break:break-all">{{$u.Email}}</span>{{end}}
-                    <a href="/profile">Profil</a>
+                    <a href="/profile">{{tr $.Lang "nav_profile"}}</a>
                     <div class="nav-dropdown-divider"></div>
-                    <a href="/set-lang/en" style="display:flex;align-items:center;gap:.4rem;text-decoration:none">🌐 English</a>
+                    <a href="{{if eq $.Lang "en"}}/set-lang/cs{{else}}/set-lang/en{{end}}" style="display:flex;align-items:center;gap:.4rem;text-decoration:none">{{tr $.Lang "lang_switch_to"}}</a>
                     <div class="nav-dropdown-divider"></div>
                     <form method="post" action="/logout">
                         <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
-                        <button type="submit" class="nav-dropdown-btn">Odhlásit se</button>
+                        <button type="submit" class="nav-dropdown-btn">{{tr $.Lang "logout"}}</button>
                     </form>
                 </div>
             </div>
         {{else}}
-            <a href="/login">Přihlásit se</a>
-            <a href="/register">Registrace</a>
+            <a href="/login">{{tr $.Lang "nav_login"}}</a>
+            <a href="/register">{{tr $.Lang "nav_register"}}</a>
         {{end}}
     </div>
 </nav>

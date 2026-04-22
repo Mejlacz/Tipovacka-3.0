@@ -1,5 +1,5 @@
 <div class="page-header">
-    <h1>👤 Profil</h1>
+    <h1>{{tr .Lang "profile_title"}}</h1>
 </div>
 
 {{if .Flash}}
@@ -18,7 +18,7 @@
 
 {{/* ── Profilová fotka ── */}}
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 1rem;font-size:1rem">🖼️ Profilová fotka</h2>
+    <h2 style="margin:0 0 1rem;font-size:1rem">🖼️ {{tr .Lang "profile_bg"}}</h2>
     {{if .User.BackgroundURL}}
     <div style="margin-bottom:.75rem">
         <img src="{{strVal .User.BackgroundURL}}" alt="Profilová fotka"
@@ -46,37 +46,37 @@
 
 {{/* ── Základní údaje ── */}}
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 1rem;font-size:1rem">Základní údaje</h2>
+    <h2 style="margin:0 0 1rem;font-size:1rem">{{tr .Lang "profile_personal"}}</h2>
     <form method="post" action="/profile/update">
         <div class="form-group">
-            <label>Nick</label>
+            <label>{{tr .Lang "profile_nickname"}}</label>
             <input type="text" name="username" value="{{.User.Username}}" disabled style="opacity:.6" />
         </div>
         <div class="form-group">
-            <label>E-mail</label>
+            <label>{{tr .Lang "profile_email"}}</label>
             <input type="email" name="email" value="{{if .User.Email}}{{.User.Email}}{{end}}" />
         </div>
-        <button type="submit" class="btn btn-primary btn-sm">Uložit</button>
+        <button type="submit" class="btn btn-primary btn-sm">{{tr .Lang "profile_save"}}</button>
     </form>
 </section>
 
 {{/* ── Změna hesla ── */}}
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 1rem;font-size:1rem">Změna hesla</h2>
+    <h2 style="margin:0 0 1rem;font-size:1rem">{{tr .Lang "profile_change_pwd"}}</h2>
     <form method="post" action="/profile/password">
         <div class="form-group">
-            <label>Aktuální heslo</label>
+            <label>{{tr .Lang "profile_old_pwd"}}</label>
             <input type="password" name="old_password" required autocomplete="current-password" />
         </div>
         <div class="form-group">
-            <label>Nové heslo</label>
+            <label>{{tr .Lang "profile_new_pwd"}}</label>
             <input type="password" name="new_password" required minlength="8" autocomplete="new-password" />
         </div>
         <div class="form-group">
-            <label>Potvrdit nové heslo</label>
+            <label>{{tr .Lang "profile_new_pwd2"}}</label>
             <input type="password" name="new_password2" required minlength="8" autocomplete="new-password" />
         </div>
-        <button type="submit" class="btn btn-primary btn-sm">Změnit heslo</button>
+        <button type="submit" class="btn btn-primary btn-sm">{{tr .Lang "profile_change_pwd_btn"}}</button>
     </form>
 </section>
 
@@ -84,7 +84,7 @@
 {{if or .User.IsOwner .User.NotifyAccess}}
 {{if .ActiveCompetitions}}
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 .5rem;font-size:1rem">🔔 Upozornění na zápasy</h2>
+    <h2 style="margin:0 0 .5rem;font-size:1rem">{{tr .Lang "profile_notify"}}</h2>
     <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">
         Dostávej push notifikace před začátkem tipování.
     </p>
@@ -108,7 +108,7 @@
 {{/* ── Push notifikace ── */}}
 {{if or .User.IsOwner .User.NotifyAccess}}
 <section id="push-section" style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 .5rem;font-size:1rem">📱 Push notifikace</h2>
+    <h2 style="margin:0 0 .5rem;font-size:1rem">{{tr .Lang "profile_push"}}</h2>
     <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">
         Přihlášená zařízení: <strong>{{.PushDevices}}</strong> — push platí jen pro toto zařízení.
     </p>
@@ -148,7 +148,7 @@
 {{/* ── Statistiky ── */}}
 {{if .Stats}}
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 1rem;font-size:1rem">📊 Moje statistiky</h2>
+    <h2 style="margin:0 0 1rem;font-size:1rem">{{tr .Lang "profile_my_stats"}}</h2>
     {{range .Stats}}
     <div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border-d)">
         <div style="font-weight:700;margin-bottom:.4rem">{{.Comp.Name}} {{.Comp.Season}}</div>

@@ -1,15 +1,15 @@
 <div class="page-header">
     <h1>{{.Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
     {{if and .User .User.IsAdmin}}
-    <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-primary btn-sm">+ Přidat zápas</a>
+    <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-primary btn-sm">{{tr .Lang "tips_add_match"}}</a>
     {{end}}
 </div>
 
 {{if not .MatchContext}}
     {{if .AllLocked}}
-    <div class="alert alert-success" style="max-width:480px">Všechny zápasy jsou utipovány!</div>
+    <div class="alert alert-success" style="max-width:480px">{{tr .Lang "tips_all_tipped"}}</div>
     {{else}}
-    <p class="empty">Žádné aktivní zápasy.</p>
+    <p class="empty">{{tr .Lang "tips_no_active"}}</p>
     {{end}}
 {{else}}
 
@@ -49,16 +49,16 @@
         </div>
         {{end}}
         {{if .Match.IsFinished}}
-            <div class="match-result">Výsledek: <strong>{{intVal .Match.HomeScore}}:{{intVal .Match.AwayScore}}</strong></div>
+            <div class="match-result">{{tr $.Lang "tips_result"}} <strong>{{intVal .Match.HomeScore}}:{{intVal .Match.AwayScore}}</strong></div>
             {{if .Tip}}
             <div class="match-tip">
-                Váš tip: {{.Tip.HomeScore}}:{{.Tip.AwayScore}}
+                {{tr $.Lang "tips_your_tip"}} {{.Tip.HomeScore}}:{{.Tip.AwayScore}}
                 <span class="points points-{{intVal .Tip.Points}}">
                     {{if eq (intVal .Tip.Points) 3}}🎯 3b{{else if eq (intVal .Tip.Points) 1}}✅ 1b{{else}}❌ 0b{{end}}
                 </span>
             </div>
             {{else}}
-            <div class="match-tip muted">Netipoval(a) jste.</div>
+            <div class="match-tip muted">{{tr $.Lang "tips_not_tipped"}}</div>
             {{end}}
         {{else if .CanTip}}
             <form method="post" action="/tip/submit" class="tip-form" data-match-id="{{.Match.ID}}">
@@ -71,14 +71,14 @@
                        value="{{if .Tip}}{{.Tip.AwayScore}}{{end}}"
                        placeholder="0" required class="score-input" />
                 <button type="submit" class="btn btn-primary btn-sm">
-                    {{if .Tip}}Upravit{{else}}Tipovat{{end}}
+                    {{if .Tip}}{{tr $.Lang "tips_edit"}}{{else}}{{tr $.Lang "tips_tip"}}{{end}}
                 </button>
             </form>
         {{else}}
             {{if .Tip}}
-            <div class="match-tip muted">Váš tip: {{.Tip.HomeScore}}:{{.Tip.AwayScore}} (uzavřeno)</div>
+            <div class="match-tip muted">{{tr $.Lang "tips_your_tip"}} {{.Tip.HomeScore}}:{{.Tip.AwayScore}} {{tr $.Lang "tips_locked"}}</div>
             {{else}}
-            <div class="match-tip muted">Tipování uzavřeno.</div>
+            <div class="match-tip muted">{{tr $.Lang "tips_deadline"}}</div>
             {{end}}
         {{end}}
     </div>

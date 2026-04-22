@@ -1,4 +1,4 @@
-<h1>Tipy</h1>
+<h1>{{tr .Lang "tips_title"}}</h1>
 {{if .Competitions}}
 <div class="card-list">
 {{range .Competitions}}
@@ -9,5 +9,5 @@
 {{end}}
 </div>
 {{else}}
-<p class="empty">Žádné aktivní soutěže.</p>
+<p class="empty">{{tr .Lang "tips_no_comps"}}</p>
 {{end}}

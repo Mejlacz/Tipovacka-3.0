@@ -26,7 +26,7 @@
     <tbody>
     {{range .}}
     <tr {{if .IsBlocked}}style="opacity:.4"{{end}}>
-        <td style="padding:.3rem .5rem;font-weight:600">{{.Username}}</td>
+        <td style="padding:.3rem .5rem;font-weight:600">{{.Username}}{{if .IsHidden}} <span title="Skrytý uživatel">👻</span>{{end}}</td>
         <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">
             {{if .Email}}{{strVal .Email}}{{else}}—{{end}}
         </td>

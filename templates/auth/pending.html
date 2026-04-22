@@ -1,7 +1,12 @@
 <div class="auth-card">
-    <h1>⏳ Čekání na schválení</h1>
-    <p>Váš účet čeká na schválení administrátorem. Zkuste to prosím za chvíli.</p>
-    <form method="post" action="/logout">
-        <button type="submit" class="btn btn-secondary" style="margin-top:1rem">Odhlásit se</button>
+    <h1>⏳ {{tr .Lang "pending_title"}}</h1>
+    <p>{{tr .Lang "pending_desc"}}</p>
+    <p>{{tr .Lang "pending_can_tip"}}</p>
+    <div style="display:flex;gap:.75rem;margin-top:1rem;flex-wrap:wrap">
+        <a href="/" class="btn btn-primary">{{tr .Lang "pending_go_tips"}}</a>
+        <a href="/extra" class="btn btn-secondary">{{tr .Lang "pending_go_extra"}}</a>
+    </div>
+    <form method="post" action="/logout" style="margin-top:1rem">
+        <button type="submit" class="btn btn-secondary">{{tr .Lang "logout"}}</button>
     </form>
 </div>

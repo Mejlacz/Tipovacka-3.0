@@ -26,6 +26,7 @@ var userCols struct {
 	IsAdmin   bool
 	IsOwner   bool
 	IsBlocked bool
+	IsHidden  bool
 	Lang      bool
 	CreatedAt bool
 }
@@ -49,12 +50,13 @@ func InitUserSchema() {
 		case "is_admin":   userCols.IsAdmin = true
 		case "is_owner":   userCols.IsOwner = true
 		case "is_blocked": userCols.IsBlocked = true
+		case "is_hidden":  userCols.IsHidden = true
 		case "lang":       userCols.Lang = true
 		case "created_at": userCols.CreatedAt = true
 		}
 	}
-	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v lang=%v created_at=%v",
-		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.Lang, userCols.CreatedAt)
+	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v is_hidden=%v lang=%v created_at=%v",
+		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.Lang, userCols.CreatedAt)
 }
 
 // buildUserSelect vrátí SELECT sloupců + jejich scan cíle pro daného uživatele.
@@ -74,6 +76,9 @@ func buildUserSelect() (cols string, scanInto func(u *models.User) []interface{}
 	}
 	if userCols.IsBlocked {
 		names = append(names, "is_blocked")
+	}
+	if userCols.IsHidden {
+		names = append(names, "is_hidden")
 	}
 	if userCols.Lang {
 		names = append(names, "lang")
@@ -117,7 +122,7 @@ func scanUser(u *models.User, row interface {
 	Scan(...interface{}) error
 }) error {
 	var email *string
-	var isAdmin, isOwner, isBlocked bool
+	var isAdmin, isOwner, isBlocked, isHidden bool
 	var lang string
 	var createdAt time.Time
 
@@ -134,6 +139,9 @@ func scanUser(u *models.User, row interface {
 	if userCols.IsBlocked {
 		ptrs = append(ptrs, &isBlocked)
 	}
+	if userCols.IsHidden {
+		ptrs = append(ptrs, &isHidden)
+	}
 	if userCols.Lang {
 		ptrs = append(ptrs, &lang)
 	}
@@ -149,6 +157,7 @@ func scanUser(u *models.User, row interface {
 	u.IsAdmin = isAdmin || (config.AdminUsername != "" && u.Username == config.AdminUsername)
 	u.IsOwner = isOwner || (config.AdminUsername != "" && u.Username == config.AdminUsername)
 	u.IsBlocked = isBlocked
+	u.IsHidden = isHidden
 	u.IsApproved = true
 	if lang != "" {
 		u.Lang = lang

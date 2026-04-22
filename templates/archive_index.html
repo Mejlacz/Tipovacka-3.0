@@ -1,9 +1,9 @@
 <div class="page-header">
-    <h1>📦 Archiv</h1>
+    <h1>📦 {{tr .Lang "archive_title"}}</h1>
 </div>
 
 {{if .Active}}
-<h2 style="font-size:1rem;color:var(--muted-d);margin-bottom:.5rem">Aktivní soutěže</h2>
+<h2 style="font-size:1rem;color:var(--muted-d);margin-bottom:.5rem">{{tr .Lang "archive_active"}}</h2>
 <div class="card-list" style="margin-bottom:1.5rem">
 {{range .Active}}
     <a class="card" href="/competition/{{.ID}}">
@@ -39,5 +39,5 @@
 {{end}}
 
 {{if and (not .Active) (not .Football) (not .Hockey)}}
-<p class="empty">Archiv je prázdný.</p>
+<p class="empty">{{tr .Lang "archive_no_comps"}}</p>
 {{end}}

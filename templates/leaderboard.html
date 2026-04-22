@@ -1,5 +1,5 @@
 <div class="page-header">
-    <h1>Žebříček</h1>
+    <h1>{{tr .Lang "lb_title"}}</h1>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
         <form method="get" action="/leaderboard" class="filter-form" style="margin:0">
             <select name="competition_id" onchange="this.form.submit()">
@@ -97,7 +97,7 @@
 {{end}}
 
 {{if not .UserRows}}
-    <p class="empty">Žádné tipy zatím.</p>
+    <p class="empty">{{tr .Lang "lb_no_tips"}}</p>
 {{else if not .Matches}}
     <p class="empty">Žádné zápasy.</p>
 {{else}}

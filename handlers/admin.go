@@ -521,8 +521,12 @@ func AdminUserToggleHidden(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
 	}
-	// is_hidden column not in Neon backup schema — skip operation
-	_ = userID
+	ctx := context.Background()
+	if userCols.IsHidden {
+		var current bool
+		_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(is_hidden, false) FROM users WHERE id=$1`, userID).Scan(&current)
+		_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_hidden=$1 WHERE id=$2`, !current, userID)
+	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
 
@@ -819,6 +823,7 @@ func AdminUserEditSubmit(tmpl *template.Template) http.HandlerFunc {
 		}
 		isOwner := role == "owner"
 		isAdmin := role == "admin" || role == "owner"
+		isHidden := r.FormValue("is_hidden") == "on"
 
 		// first_name, last_name not in Neon backup schema — suppress unused
 		_ = firstName
@@ -829,6 +834,7 @@ func AdminUserEditSubmit(tmpl *template.Template) http.HandlerFunc {
 			{Col: "email", Val: PtrStr(email), Include: userCols.Email},
 			{Col: "is_owner", Val: isOwner, Include: userCols.IsOwner},
 			{Col: "is_admin", Val: isAdmin, Include: userCols.IsAdmin},
+			{Col: "is_hidden", Val: isHidden, Include: userCols.IsHidden && admin.IsOwner},
 		})
 		_, _ = db.Pool.Exec(ctx, usql, uvals...)
 
