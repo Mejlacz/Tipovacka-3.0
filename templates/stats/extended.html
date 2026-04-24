@@ -109,7 +109,7 @@
             <tr style="border-top:1px solid var(--border-d)">
                 <td style="padding:.3rem .4rem">{{.Name}}</td>
                 <td style="padding:.3rem .4rem;text-align:center">{{.Tips}}</td>
-                <td style="padding:.3rem .4rem;text-align:center"><strong style="color:#34d399">{{.Avg}}</strong></td>
+                <td style="padding:.3rem .4rem;text-align:center"><strong style="color:#34d399">{{printf "%.2f" .Avg}}</strong></td>
             </tr>
             {{end}}
             </tbody>
@@ -135,7 +135,7 @@
             <tr style="border-top:1px solid var(--border-d)">
                 <td style="padding:.3rem .4rem">{{.Name}}</td>
                 <td style="padding:.3rem .4rem;text-align:center">{{.Tips}}</td>
-                <td style="padding:.3rem .4rem;text-align:center"><strong style="color:#ef4444">{{.Avg}}</strong></td>
+                <td style="padding:.3rem .4rem;text-align:center"><strong style="color:#ef4444">{{printf "%.2f" .Avg}}</strong></td>
             </tr>
             {{end}}
             </tbody>
