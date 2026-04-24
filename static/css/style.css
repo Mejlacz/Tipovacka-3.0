@@ -651,6 +651,14 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
     box-shadow: 3px 0 10px -2px rgba(0,0,0,0.3);
     color: var(--text-d);
 }
+/* col-total = "Celkem" (tipy+extra) column — similar to col-pts but NOT sticky */
+.leaderboard-matrix .col-total {
+    width: 4rem;
+    font-weight: 700;
+    text-align: center;
+    background: var(--bg2);
+    color: var(--text-d);
+}
 .leaderboard-matrix .col-stat {
     width: 3rem;
     text-align: center;
@@ -664,13 +672,15 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
 }
 .leaderboard-matrix thead th.col-place,
 .leaderboard-matrix thead th.col-user,
-.leaderboard-matrix thead th.col-pts { background: #07111d; }
+.leaderboard-matrix thead th.col-pts,
+.leaderboard-matrix thead th.col-total { background: #07111d; }
 
 /* Body buňky */
 .leaderboard-matrix tbody td { background: var(--bg2); color: var(--text-d); }
 .leaderboard-matrix tbody td.col-place,
 .leaderboard-matrix tbody td.col-user,
-.leaderboard-matrix tbody td.col-pts { background: var(--bg2); }
+.leaderboard-matrix tbody td.col-pts,
+.leaderboard-matrix tbody td.col-total { background: var(--bg2); }
 .leaderboard-matrix tbody td.col-pts { box-shadow: 3px 0 10px -2px rgba(0,0,0,0.3); }
 
 /* Top 3 medaile */
@@ -687,7 +697,8 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
 /* Highlight */
 .leaderboard-matrix tbody tr.highlight td.col-place,
 .leaderboard-matrix tbody tr.highlight td.col-user,
-.leaderboard-matrix tbody tr.highlight td.col-pts { background: #1a2f4a; }
+.leaderboard-matrix tbody tr.highlight td.col-pts,
+.leaderboard-matrix tbody tr.highlight td.col-total { background: #1a2f4a; }
 
 /* Tip colors ve highlight zachovat (o trochu světlejší) */
 .leaderboard-matrix tbody tr.highlight td.cell-tip { background: transparent; }
@@ -700,10 +711,12 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
 .leaderboard-matrix tbody tr:hover td { background: var(--bg3); }
 .leaderboard-matrix tbody tr:hover td.col-place,
 .leaderboard-matrix tbody tr:hover td.col-user,
-.leaderboard-matrix tbody tr:hover td.col-pts { background: var(--bg3); }
+.leaderboard-matrix tbody tr:hover td.col-pts,
+.leaderboard-matrix tbody tr:hover td.col-total { background: var(--bg3); }
 .leaderboard-matrix tbody tr.highlight:hover td.col-place,
 .leaderboard-matrix tbody tr.highlight:hover td.col-user,
-.leaderboard-matrix tbody tr.highlight:hover td.col-pts { background: #21395c; }
+.leaderboard-matrix tbody tr.highlight:hover td.col-pts,
+.leaderboard-matrix tbody tr.highlight:hover td.col-total { background: #21395c; }
 
 /* Záhlaví zápasů */
 .leaderboard-matrix .col-match { min-width: 1.8rem; width: 1.8rem; text-align: center; }
@@ -728,7 +741,8 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
 }
 .results-row td.col-place,
 .results-row td.col-user,
-.results-row td.col-pts { background: #0d1b2a; }
+.results-row td.col-pts,
+.results-row td.col-total { background: #0d1b2a; }
 
 .cell-result { font-weight: 700; color: var(--text-d); }
 .cell-tip { font-size: 0.82rem; }
@@ -1030,29 +1044,35 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
 [data-theme="classic"] .leaderboard-matrix thead tr:first-child th { background:#cc0000; color:#fff; }
 [data-theme="classic"] .leaderboard-matrix thead th.col-place,
 [data-theme="classic"] .leaderboard-matrix thead th.col-user,
-[data-theme="classic"] .leaderboard-matrix thead th.col-pts { background:#990000; }
+[data-theme="classic"] .leaderboard-matrix thead th.col-pts,
+[data-theme="classic"] .leaderboard-matrix thead th.col-total { background:#990000; }
 [data-theme="classic"] .leaderboard-matrix tbody td { background:#ebebeb; color:#1e293b; border-color:#ccc; }
 [data-theme="classic"] .leaderboard-matrix tbody td.col-place,
 [data-theme="classic"] .leaderboard-matrix tbody td.col-user,
-[data-theme="classic"] .leaderboard-matrix tbody td.col-pts { background:#ebebeb; }
+[data-theme="classic"] .leaderboard-matrix tbody td.col-pts,
+[data-theme="classic"] .leaderboard-matrix tbody td.col-total { background:#ebebeb; }
 [data-theme="classic"] .leaderboard-matrix tbody td.col-pts { box-shadow:3px 0 8px -2px rgba(0,0,0,0.1); }
 [data-theme="classic"] .leaderboard-matrix tbody tr:hover td { background:#ddd; }
 [data-theme="classic"] .leaderboard-matrix tbody tr:hover td.col-place,
 [data-theme="classic"] .leaderboard-matrix tbody tr:hover td.col-user,
-[data-theme="classic"] .leaderboard-matrix tbody tr:hover td.col-pts { background:#ddd; }
+[data-theme="classic"] .leaderboard-matrix tbody tr:hover td.col-pts,
+[data-theme="classic"] .leaderboard-matrix tbody tr:hover td.col-total { background:#ddd; }
 [data-theme="classic"] .leaderboard-matrix tbody tr.highlight td { background:#b2f0e0; }
 [data-theme="classic"] .leaderboard-matrix tbody tr.highlight td.col-place,
 [data-theme="classic"] .leaderboard-matrix tbody tr.highlight td.col-user,
-[data-theme="classic"] .leaderboard-matrix tbody tr.highlight td.col-pts { background:#9de8d6; }
+[data-theme="classic"] .leaderboard-matrix tbody tr.highlight td.col-pts,
+[data-theme="classic"] .leaderboard-matrix tbody tr.highlight td.col-total { background:#9de8d6; }
 [data-theme="classic"] .leaderboard-matrix tbody tr.highlight:hover td.col-place,
 [data-theme="classic"] .leaderboard-matrix tbody tr.highlight:hover td.col-user,
-[data-theme="classic"] .leaderboard-matrix tbody tr.highlight:hover td.col-pts { background:#88e0cc; }
+[data-theme="classic"] .leaderboard-matrix tbody tr.highlight:hover td.col-pts,
+[data-theme="classic"] .leaderboard-matrix tbody tr.highlight:hover td.col-total { background:#88e0cc; }
 
 /* Výsledky řádek */
 [data-theme="classic"] .results-row td { background:#c8c8c8; color:#64748b; border-bottom-color:#aaa; }
 [data-theme="classic"] .results-row td.col-place,
 [data-theme="classic"] .results-row td.col-user,
-[data-theme="classic"] .results-row td.col-pts { background:#c8c8c8; }
+[data-theme="classic"] .results-row td.col-pts,
+[data-theme="classic"] .results-row td.col-total { background:#c8c8c8; }
 
 /* Tip barvy — věrné originálu Tipovačky 1.0 */
 [data-theme="classic"] .leaderboard-matrix tbody td.tip-exact  { background:#ff4500; color:#fff; font-weight:700; }

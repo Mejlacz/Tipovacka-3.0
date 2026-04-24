@@ -179,7 +179,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             </th>
             {{end}}
             {{if .ExtraCols}}
-            <th class="col-pts" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>
+            <th class="col-total" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>
             {{end}}
             <th class="col-match" title="Tipy">
                 <div class="match-header" style="font-size:0.78rem">Tipy</div>
@@ -215,7 +215,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             </td>
             {{end}}
             {{if .ExtraCols}}
-            <td class="col-pts" style="border-left:2px solid #dee2e6"></td>
+            <td class="col-total" style="border-left:2px solid #dee2e6"></td>
             {{end}}
             <td></td>
         </tr>
@@ -285,7 +285,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         {{end}}
         {{/* ── Grand total (tipy + extra) ── */}}
         {{if $.ExtraCols}}
-        <td class="col-pts" style="border-left:2px solid #dee2e6;text-align:center">
+        <td class="col-total" style="border-left:2px solid #dee2e6;text-align:center">
             <strong>{{$row.GrandTotal}}</strong>
             {{if gt $row.Extra 0}}
             <br><span style="font-size:0.7rem;color:#888">(+{{$row.Extra}} 🎯)</span>
