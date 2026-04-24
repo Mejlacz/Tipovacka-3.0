@@ -220,15 +220,20 @@ func computeStats(ctx context.Context, user *models.User, comp *models.Competiti
 		}
 	}
 	sort.Slice(teamList, func(i, j int) bool { return teamList[i].Avg > teamList[j].Avg })
-	bestTeams := teamList
-	if len(bestTeams) > 5 {
-		bestTeams = bestTeams[:5]
+	bestN := 5
+	if len(teamList) < bestN {
+		bestN = len(teamList)
 	}
+	bestTeams := make([]TeamStat, bestN)
+	copy(bestTeams, teamList[:bestN])
+
 	sort.Slice(teamList, func(i, j int) bool { return teamList[i].Avg < teamList[j].Avg })
-	worstTeams := teamList
-	if len(worstTeams) > 5 {
-		worstTeams = worstTeams[:5]
+	worstN := 5
+	if len(teamList) < worstN {
+		worstN = len(teamList)
 	}
+	worstTeams := make([]TeamStat, worstN)
+	copy(worstTeams, teamList[:worstN])
 
 	// Streak
 	sort.Slice(userTips, func(i, j int) bool {
