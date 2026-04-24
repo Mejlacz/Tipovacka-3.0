@@ -7,13 +7,19 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"html/template"
+	"io"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/xuri/excelize/v2"
 	"tipovacka/db"
+	"tipovacka/middleware"
+	"tipovacka/models"
 )
 
 // ─── GET /admin/tips/{competition_id}/export ───────────────────────────────────
@@ -641,4 +647,207 @@ func sanitizeFilename(s string, maxLen int) string {
 		b = b[:maxLen]
 	}
 	return string(b)
+}
+
+// ─── GET/POST /admin/tips/{competition_id}/import ────────────────────────────
+// Import tipů ze CSV souboru (stejný formát jako export).
+
+type importResults struct {
+	Created int
+	Updated int
+	Skipped int
+	Errors  []string
+}
+
+func AdminTipsImportForm(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin := RequireAdmin(w, r)
+		if admin == nil {
+			return
+		}
+		compID, err := strconv.Atoi(chi.URLParam(r, "competition_id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		ctx := context.Background()
+		var comp models.Competition
+		err = db.Pool.QueryRow(ctx,
+			`SELECT id, name, season FROM competitions WHERE id=$1`, compID).
+			Scan(&comp.ID, &comp.Name, &comp.Season)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		flash := middleware.GetFlash(w, r)
+		RenderTemplate(w, r, tmpl, "admin/tips_import.html", TemplateData{
+			"Comp":  &comp,
+			"Flash": flash,
+		})
+	}
+}
+
+func AdminTipsImportSubmit(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin := RequireAdmin(w, r)
+		if admin == nil {
+			return
+		}
+		compID, err := strconv.Atoi(chi.URLParam(r, "competition_id"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		ctx := context.Background()
+		var comp models.Competition
+		err = db.Pool.QueryRow(ctx,
+			`SELECT id, name, season FROM competitions WHERE id=$1`, compID).
+			Scan(&comp.ID, &comp.Name, &comp.Season)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Parse multipart form (max 5 MB)
+		if err := r.ParseMultipartForm(5 << 20); err != nil {
+			middleware.SetFlash(w, r, "err", "Chyba při načítání souboru.")
+			http.Redirect(w, r, fmt.Sprintf("/admin/tips/%d/import", compID), http.StatusSeeOther)
+			return
+		}
+		file, _, err := r.FormFile("csv_file")
+		if err != nil {
+			middleware.SetFlash(w, r, "err", "Soubor nebyl nahrán.")
+			http.Redirect(w, r, fmt.Sprintf("/admin/tips/%d/import", compID), http.StatusSeeOther)
+			return
+		}
+		defer file.Close()
+
+		// Read entire file (strip UTF-8 BOM if present)
+		raw, _ := io.ReadAll(file)
+		content := strings.TrimPrefix(string(raw), "\xEF\xBB\xBF")
+
+		reader := csv.NewReader(strings.NewReader(content))
+		records, err := reader.ReadAll()
+		if err != nil {
+			middleware.SetFlash(w, r, "err", "CSV nelze parsovat: "+err.Error())
+			http.Redirect(w, r, fmt.Sprintf("/admin/tips/%d/import", compID), http.StatusSeeOther)
+			return
+		}
+		if len(records) < 2 {
+			middleware.SetFlash(w, r, "err", "CSV neobsahuje data (pouze hlavička nebo prázdný soubor).")
+			http.Redirect(w, r, fmt.Sprintf("/admin/tips/%d/import", compID), http.StatusSeeOther)
+			return
+		}
+
+		// Find column indices from header row
+		// Expected: tip_id, user_id, username, match_id, datum, domaci, hoste, tip_home, tip_away, body
+		header := records[0]
+		colIdx := make(map[string]int)
+		for i, h := range header {
+			colIdx[strings.TrimSpace(strings.ToLower(h))] = i
+		}
+		userIDCol, hasUserID := colIdx["user_id"]
+		matchIDCol, hasMatchID := colIdx["match_id"]
+		tipHomeCol, hasTipHome := colIdx["tip_home"]
+		tipAwayCol, hasTipAway := colIdx["tip_away"]
+		if !hasUserID || !hasMatchID || !hasTipHome || !hasTipAway {
+			middleware.SetFlash(w, r, "err", "CSV nemá požadované sloupce (user_id, match_id, tip_home, tip_away).")
+			http.Redirect(w, r, fmt.Sprintf("/admin/tips/%d/import", compID), http.StatusSeeOther)
+			return
+		}
+
+		res := &importResults{}
+
+		for lineNum, row := range records[1:] {
+			if len(row) == 0 {
+				continue
+			}
+			userID, err := strconv.Atoi(strings.TrimSpace(row[userIDCol]))
+			if err != nil {
+				res.Errors = append(res.Errors, fmt.Sprintf("řádek %d: neplatné user_id", lineNum+2))
+				res.Skipped++
+				continue
+			}
+			matchID, err := strconv.Atoi(strings.TrimSpace(row[matchIDCol]))
+			if err != nil {
+				res.Errors = append(res.Errors, fmt.Sprintf("řádek %d: neplatné match_id", lineNum+2))
+				res.Skipped++
+				continue
+			}
+			tipHome, err := strconv.Atoi(strings.TrimSpace(row[tipHomeCol]))
+			if err != nil {
+				res.Errors = append(res.Errors, fmt.Sprintf("řádek %d: neplatné tip_home", lineNum+2))
+				res.Skipped++
+				continue
+			}
+			tipAway, err := strconv.Atoi(strings.TrimSpace(row[tipAwayCol]))
+			if err != nil {
+				res.Errors = append(res.Errors, fmt.Sprintf("řádek %d: neplatné tip_away", lineNum+2))
+				res.Skipped++
+				continue
+			}
+
+			// Verify match belongs to this competition
+			var matchCompID int
+			err = db.Pool.QueryRow(ctx,
+				`SELECT c.id FROM competitions c
+				 JOIN rounds r ON r.competition_id=c.id
+				 JOIN matches m ON m.round_id=r.id
+				 WHERE m.id=$1`, matchID).Scan(&matchCompID)
+			if err != nil || matchCompID != compID {
+				res.Errors = append(res.Errors, fmt.Sprintf("řádek %d: zápas %d nepatří do soutěže", lineNum+2, matchID))
+				res.Skipped++
+				continue
+			}
+
+			// Check if user exists
+			var exists bool
+			_ = db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id=$1)`, userID).Scan(&exists)
+			if !exists {
+				res.Errors = append(res.Errors, fmt.Sprintf("řádek %d: uživatel %d neexistuje", lineNum+2, userID))
+				res.Skipped++
+				continue
+			}
+
+			// Upsert tip
+			var existingTipID int
+			err = db.Pool.QueryRow(ctx,
+				`SELECT id FROM tips WHERE user_id=$1 AND match_id=$2`, userID, matchID).Scan(&existingTipID)
+			if err == nil {
+				// Update existing
+				_, err = db.Pool.Exec(ctx,
+					`UPDATE tips SET home_score=$1, away_score=$2 WHERE id=$3`,
+					tipHome, tipAway, existingTipID)
+				if err != nil {
+					log.Printf("[import-tips] update error: %v", err)
+					res.Errors = append(res.Errors, fmt.Sprintf("řádek %d: chyba aktualizace tipu", lineNum+2))
+					res.Skipped++
+					continue
+				}
+				res.Updated++
+			} else {
+				// Insert new
+				_, err = db.Pool.Exec(ctx,
+					`INSERT INTO tips (user_id, match_id, home_score, away_score) VALUES ($1,$2,$3,$4)`,
+					userID, matchID, tipHome, tipAway)
+				if err != nil {
+					log.Printf("[import-tips] insert error: %v", err)
+					res.Errors = append(res.Errors, fmt.Sprintf("řádek %d: chyba při vytváření tipu", lineNum+2))
+					res.Skipped++
+					continue
+				}
+				res.Created++
+			}
+		}
+
+		// Recalculate tips scoring for changed tips
+		RecalculateStandings(compID)
+
+		flash := middleware.GetFlash(w, r)
+		RenderTemplate(w, r, tmpl, "admin/tips_import.html", TemplateData{
+			"Comp":    &comp,
+			"Results": res,
+			"Flash":   flash,
+		})
+	}
 }

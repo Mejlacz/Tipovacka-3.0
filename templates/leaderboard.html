@@ -17,7 +17,9 @@
         {{end}}
         {{if and .User.IsAdmin .SelectedCompetitionID}}
         <a href="/admin/tips/{{.SelectedCompetitionID}}/export" class="btn btn-secondary btn-sm"
-           style="font-size:0.82rem" title="Stáhnout CSV se tipy soutěže">⬇ Tipy CSV</a>
+           style="font-size:0.82rem" title="Stáhnout CSV se tipy soutěže">Export tipů</a>
+        <a href="/admin/tips/{{.SelectedCompetitionID}}/import" class="btn btn-secondary btn-sm"
+           style="font-size:0.82rem" title="Importovat tipy ze CSV">Import tipů</a>
         {{end}}
     </div>
 </div>
@@ -104,10 +106,10 @@
 
 {{/* ── Barevná legenda ── */}}
 <div class="lb-legend" style="margin-bottom:.75rem;font-size:.82rem;display:flex;gap:1rem;flex-wrap:wrap">
-    <span class="lb-legend-item"><span class="lb-legend-dot tip-exact" style="display:inline-block;width:12px;height:12px;background:#16a34a;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Přesný tip (3b)</span>
-    <span class="lb-legend-item"><span class="lb-legend-dot tip-winner" style="display:inline-block;width:12px;height:12px;background:#b45309;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Správný vítěz (1b)</span>
-    <span class="lb-legend-item"><span class="lb-legend-dot tip-miss" style="display:inline-block;width:12px;height:12px;background:var(--bg3);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Špatný tip (0b)</span>
-    <span class="lb-legend-item"><span style="color:var(--accent);font-size:0.9rem">✓</span> Skrytý tip</span>
+    <span class="lb-legend-item"><span class="lb-legend-dot tip-exact" style="display:inline-block;width:12px;height:12px;background:#16a34a;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Přesný tip</span>
+    <span class="lb-legend-item"><span class="lb-legend-dot tip-winner" style="display:inline-block;width:12px;height:12px;background:#b45309;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Správný vítěz</span>
+    <span class="lb-legend-item"><span class="lb-legend-dot tip-miss" style="display:inline-block;width:12px;height:12px;background:var(--bg3);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Špatný tip</span>
+    <span class="lb-legend-item"><span style="color:var(--accent);font-size:0.9rem">✓</span> Vsazeno (skryto)</span>
 </div>
 
 {{/* ── Sticky own position bar ── */}}
@@ -115,8 +117,8 @@
 
 {{if or .User.IsAdmin .User.IsOwner}}
 <div style="font-size:0.75rem;color:var(--muted-d);margin-bottom:0.4rem;display:flex;align-items:center;gap:0.9rem;flex-wrap:wrap">
-    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;vertical-align:middle;margin-right:3px"></span>otevřeno</span>
-    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;vertical-align:middle;margin-right:3px"></span>uzavřeno</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;vertical-align:middle;margin-right:3px"></span>otevřeno (editovatelně uživateli)</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;vertical-align:middle;margin-right:3px"></span>uzavřeno (jen admin)</span>
 </div>
 {{end}}
 

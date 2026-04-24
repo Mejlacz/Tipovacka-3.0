@@ -40,6 +40,7 @@
             {{if $u.IsApproved}}<a href="/achievements">{{tr $.Lang "nav_achievements"}}</a>{{end}}
             {{if $u.IsApproved}}<a href="/stats">{{tr $.Lang "nav_stats"}}</a>{{end}}
             {{if $u.IsApproved}}<a href="/archive">{{tr $.Lang "nav_archive"}}</a>{{end}}
+            {{if $u.IsAdmin}}<a href="/admin/email">{{tr $.Lang "nav_email"}}</a>{{end}}
             <a href="/pravidla">{{tr $.Lang "nav_rules"}}</a>
             {{if $u.IsAdmin}}
             <div class="nav-dropdown">

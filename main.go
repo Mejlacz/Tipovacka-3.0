@@ -233,6 +233,10 @@ func main() {
 	r.Get("/admin/tips/{competition_id}/export", handlers.AdminTipsExportCSV)
 	r.Get("/admin/export/csv", handlers.AdminGeneralExportCSV)
 
+	// Admin CSV import (tipy)
+	r.Get("/admin/tips/{competition_id}/import", handlers.AdminTipsImportForm(tmpl))
+	r.Post("/admin/tips/{competition_id}/import", handlers.AdminTipsImportSubmit(tmpl))
+
 	// Admin XLSX exports
 	r.Get("/admin/export/xlsx", handlers.AdminGeneralExportXLSX)
 

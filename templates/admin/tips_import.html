@@ -1,0 +1,63 @@
+<div class="page-header">
+    <h1>📥 Import tipů — {{.Comp.Name}}</h1>
+    <a href="/leaderboard?competition_id={{.Comp.ID}}" class="btn btn-secondary btn-sm">← Zpět</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+{{if .Results}}
+<div style="margin-bottom:1.5rem">
+    <h2 style="font-size:1rem;margin-bottom:.75rem">Výsledek importu</h2>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+        <div style="background:var(--bg2);border:1px solid #22c55e;border-radius:8px;padding:.6rem 1rem;min-width:100px;text-align:center">
+            <div style="font-size:1.5rem;font-weight:700;color:#22c55e">{{.Results.Created}}</div>
+            <div style="font-size:.78rem;color:var(--muted-d)">Nových tipů</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid #60a5fa;border-radius:8px;padding:.6rem 1rem;min-width:100px;text-align:center">
+            <div style="font-size:1.5rem;font-weight:700;color:#60a5fa">{{.Results.Updated}}</div>
+            <div style="font-size:.78rem;color:var(--muted-d)">Aktualizovaných</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:.6rem 1rem;min-width:100px;text-align:center">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--muted-d)">{{.Results.Skipped}}</div>
+            <div style="font-size:.78rem;color:var(--muted-d)">Přeskočeno</div>
+        </div>
+    </div>
+    {{if .Results.Errors}}
+    <details>
+        <summary style="cursor:pointer;font-size:.85rem;color:#f59e0b">⚠️ {{len .Results.Errors}} chyb</summary>
+        <ul style="font-size:.82rem;color:var(--muted-d);margin-top:.5rem">
+        {{range .Results.Errors}}<li>{{.}}</li>{{end}}
+        </ul>
+    </details>
+    {{end}}
+</div>
+{{end}}
+
+<div style="max-width:580px">
+    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem;margin-bottom:1.5rem">
+        <h2 style="margin:0 0 .75rem;font-size:1rem">Nahrát CSV soubor s tipy</h2>
+        <p style="font-size:.82rem;color:var(--muted-d);margin:0 0 1rem">
+            Soubor musí být ve formátu exportu tipů (sloupce: <code>tip_id, user_id, username, match_id, datum, domaci, hoste, tip_home, tip_away, body</code>).
+            Tipy se identifikují podle <strong>user_id</strong> a <strong>match_id</strong> — existující tipy se aktualizují, nové se vytvoří.
+        </p>
+        <form method="post" action="/admin/tips/{{.Comp.ID}}/import" enctype="multipart/form-data">
+            <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+                <input type="file" name="csv_file" accept=".csv" required style="font-size:.85rem;flex:1;min-width:200px" />
+                <button type="submit" class="btn btn-primary">📥 Importovat</button>
+            </div>
+        </form>
+    </div>
+
+    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
+        <h2 style="margin:0 0 .5rem;font-size:.95rem">Jak exportovat tipy pro reimport?</h2>
+        <ol style="font-size:.82rem;color:var(--muted-d);margin:.5rem 0 0;padding-left:1.25rem;line-height:1.7">
+            <li>Na žebříčku klikni <strong>Export tipů</strong></li>
+            <li>Ulož CSV soubor</li>
+            <li>Zde ho nahraj pro reimport</li>
+        </ol>
+    </div>
+</div>
