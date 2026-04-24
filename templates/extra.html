@@ -115,7 +115,7 @@
             {{if $.User.IsAdmin}}
             <div style="margin-top:0.6rem;text-align:right">
                 <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete"
-                      onsubmit="return confirm('Opravdu smazat otázku „{{$q.Text}}"?')" style="display:inline">
+                      onsubmit="return confirm('Opravdu smazat otázku {{$q.Text}}?')" style="display:inline">
                     <button type="submit" style="font-size:0.75rem;color:#dc3545;background:none;border:none;cursor:pointer;text-decoration:underline">
                         Smazat otázku
                     </button>
