@@ -1,92 +1,266 @@
+<style>
+.utab-bar { display:flex; gap:.25rem; flex-wrap:wrap; margin-bottom:0; border-bottom:2px solid var(--border-d); }
+.utab { padding:.45rem 1.1rem; border-radius:6px 6px 0 0; border:1px solid transparent; border-bottom:none;
+        font-size:.88rem; font-weight:600; cursor:pointer; color:var(--muted-d); background:transparent;
+        position:relative; bottom:-2px; transition:color .15s; }
+.utab:hover { color:var(--text-d); background:var(--bg3); }
+.utab.active { color:var(--text-d); background:var(--bg2); border-color:var(--border-d); border-bottom-color:var(--bg2); }
+.utab .badge { display:inline-block; min-width:1.3rem; padding:.1rem .35rem; border-radius:99px; font-size:.72rem;
+               font-weight:700; margin-left:.3rem; background:var(--bg3); color:var(--muted-d); line-height:1.4; }
+.utab.active .badge { background:var(--accent); color:#fff; }
+.utab-pending.active .badge { background:#f59e0b; }
+.utab-blocked.active .badge { background:#ef4444; }
+
+.bulk-bar { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;
+            padding:.55rem .75rem; background:var(--bg3); border:1px solid var(--border-d);
+            border-top:none; border-radius:0 0 6px 6px; margin-bottom:1rem; font-size:.82rem; }
+.bulk-bar select, .bulk-bar input[type="text"], .bulk-bar input[type="password"] {
+    font-size:.82rem; padding:.25rem .45rem; background:var(--bg2);
+    border:1px solid var(--border-d); border-radius:5px; color:inherit; }
+.bulk-hint { font-size:.78rem; color:var(--muted-d); margin-right:.5rem; }
+.bulk-sep { width:1px; height:1.4rem; background:var(--border-d); margin:0 .2rem; }
+
+.u-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+.u-table th { padding:.4rem .5rem; text-align:left; background:var(--bg2); color:var(--muted-d);
+              font-size:.78rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+.u-table td { padding:.35rem .5rem; border-bottom:1px solid var(--border-d); }
+.u-table tbody tr:hover td { background:var(--bg3); }
+.u-table tbody tr.is-blocked td { opacity:.5; }
+.u-table .cb-col { width:2rem; text-align:center; }
+</style>
+
 <div class="page-header">
     <h1>👥 Uživatelé</h1>
-    <div style="display:flex;gap:.5rem">
-        <a href="/admin/users/new" class="btn btn-primary btn-sm">+ Nový uživatel</a>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
+        <a href="/admin/users/new" class="btn btn-primary btn-sm">+ Přidat uživatele</a>
+        <a href="/admin/users/import" class="btn btn-secondary btn-sm">⬆ Import</a>
+        <a href="/admin/email" class="btn btn-secondary btn-sm">✉ Sestavit email</a>
         <a href="/admin/export/csv?type=users" class="btn btn-secondary btn-sm">⬇ CSV</a>
+        <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
     </div>
 </div>
 
 {{if .Flash}}
-<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">{{index .Flash "msg"}}</div>
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else if eq (index .Flash "type") "err"}}alert-error{{else}}alert-info{{end}}"
+     style="margin-bottom:1rem">{{index .Flash "msg" | safeHTML}}</div>
 {{end}}
 
-{{/* Makro: vypíše tabulku uživatelů */}}
-{{define "userTable"}}
-<div style="overflow-x:auto;margin-bottom:1.5rem">
-<table style="width:100%;border-collapse:collapse;font-size:0.85rem">
-    <thead>
-        <tr style="background:var(--bg2)">
-            <th style="text-align:left;padding:.4rem .5rem">Nick</th>
-            <th style="text-align:left;padding:.4rem .5rem">E-mail</th>
-            <th style="text-align:left;padding:.4rem .5rem">Role</th>
-            <th style="text-align:left;padding:.4rem .5rem">Registrace</th>
-            <th style="padding:.4rem .5rem">Akce</th>
-        </tr>
-    </thead>
-    <tbody>
-    {{range .}}
-    <tr {{if .IsBlocked}}style="opacity:.4"{{end}}>
-        <td style="padding:.3rem .5rem;font-weight:600">{{.Username}}{{if .IsHidden}} <span title="Skrytý uživatel">👻</span>{{end}}</td>
-        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">
-            {{if .Email}}{{strVal .Email}}{{else}}—{{end}}
-        </td>
-        <td style="padding:.3rem .5rem">
-            {{if .IsOwner}}<span style="color:#f59e0b">owner</span>
-            {{else if .IsAdmin}}<span style="color:#60a5fa">admin</span>
-            {{else}}<span style="color:var(--muted-d)">user</span>{{end}}
-        </td>
-        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.75rem">
-            {{if not .CreatedAt.IsZero}}{{.CreatedAt.Format "02.01.2006"}}{{else}}—{{end}}
-        </td>
-        <td style="padding:.3rem .5rem;white-space:nowrap">
-            <a href="/admin/users/{{.ID}}/edit" class="btn btn-sm btn-secondary" style="font-size:.75rem;padding:.15rem .4rem">Upravit</a>
-            {{if not .IsApproved}}
-            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/approve">
-                <button class="btn btn-sm btn-primary" style="font-size:.75rem;padding:.15rem .4rem">Schválit</button>
-            </form>
-            {{end}}
-            {{if .IsBlocked}}
-            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/unblock">
-                <button class="btn btn-sm btn-secondary" style="font-size:.75rem;padding:.15rem .4rem">Odblokovat</button>
-            </form>
-            {{else if .IsApproved}}
-            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/block"
-                  onsubmit="return confirm('Blokovat uživatele {{.Username}}?')">
-                <button class="btn btn-sm btn-danger" style="font-size:.75rem;padding:.15rem .4rem">Blokovat</button>
-            </form>
-            {{end}}
-            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/delete"
-                  onsubmit="return confirm('Trvale smazat uživatele {{.Username}}?')">
-                <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem">✕</button>
-            </form>
-        </td>
-    </tr>
-    {{end}}
-    </tbody>
-</table>
+{{/* ── Tab bar ── */}}
+<div class="utab-bar">
+    <button class="utab utab-active active" data-tab="active" onclick="switchTab('active')">
+        👥 Uživatelé <span class="badge">{{len .ActiveUsers}}</span>
+    </button>
+    <button class="utab utab-pending" data-tab="pending" onclick="switchTab('pending')">
+        ⏳ Čekající <span class="badge">{{len .PendingUsers}}</span>
+    </button>
+    <button class="utab utab-blocked" data-tab="blocked" onclick="switchTab('blocked')">
+        🚫 Blokovaní <span class="badge">{{len .BlockedUsers}}</span>
+    </button>
+    <button class="utab utab-inactive" data-tab="inactive" onclick="switchTab('inactive')">
+        💤 Neaktivní <span class="badge">{{len .InactiveUsers}}</span>
+    </button>
 </div>
+
+{{/* ── Bulk action toolbar ── */}}
+<div class="bulk-bar">
+    <span class="bulk-hint">🔑 Označit checkboxem — vyber akci</span>
+    <div class="bulk-sep"></div>
+    <select id="bulk-role" style="min-width:100px">
+        <option value="">— Role —</option>
+        <option value="user">user</option>
+        <option value="admin">admin</option>
+        {{if .User.IsOwner}}<option value="owner">owner</option>{{end}}
+    </select>
+    <button class="btn btn-sm btn-secondary" onclick="bulkAction('set-role')">Změnit roli</button>
+    <div class="bulk-sep"></div>
+    <input type="password" id="bulk-pw" placeholder="Heslo (prázdné = náhodné)" style="width:160px" />
+    <button class="btn btn-sm btn-secondary" onclick="bulkAction('reset-password')">Reset hesla</button>
+    <div class="bulk-sep"></div>
+    <button class="btn btn-sm btn-secondary" onclick="bulkAction('send-welcome')">Welcome email</button>
+    <div class="bulk-sep"></div>
+    <button class="btn btn-sm btn-danger" onclick="bulkAction('delete')">Smazat</button>
+</div>
+
+{{/* ── Helper macro for user table ── */}}
+{{define "urow"}}
+<tr {{if .IsBlocked}}class="is-blocked"{{end}}>
+    <td class="cb-col"><input type="checkbox" class="user-cb" value="{{.ID}}" /></td>
+    <td style="font-weight:600">
+        {{.Username}}
+        {{if .IsHidden}}<span title="Skrytý" style="opacity:.6">👻</span>{{end}}
+    </td>
+    <td style="color:var(--muted-d);font-size:.8rem">
+        {{if .Email}}{{strVal .Email}}{{else}}<span style="opacity:.4">—</span>{{end}}
+    </td>
+    <td>
+        {{if .IsOwner}}<span style="color:#f59e0b;font-weight:700">owner</span>
+        {{else if .IsAdmin}}<span style="color:#60a5fa;font-weight:600">admin</span>
+        {{else}}<span style="color:var(--muted-d)">user</span>{{end}}
+    </td>
+    <td style="color:var(--muted-d);font-size:.78rem;white-space:nowrap">
+        {{if not .CreatedAt.IsZero}}{{.CreatedAt.Format "02.01.2006"}}{{else}}—{{end}}
+    </td>
+    <td style="white-space:nowrap">
+        <a href="/admin/users/{{.ID}}/edit" class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.15rem .4rem">Upravit</a>
+        {{if not .IsApproved}}
+        <form style="display:inline" method="post" action="/admin/users/{{.ID}}/approve">
+            <button class="btn btn-sm btn-primary" style="font-size:.72rem;padding:.15rem .4rem">✅ Schválit</button>
+        </form>
+        {{end}}
+        {{if .IsBlocked}}
+        <form style="display:inline" method="post" action="/admin/users/{{.ID}}/unblock">
+            <button class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.15rem .4rem">Odblokovat</button>
+        </form>
+        {{else if .IsApproved}}
+        <form style="display:inline" method="post" action="/admin/users/{{.ID}}/block"
+              onsubmit="return confirm('Blokovat {{.Username}}?')">
+            <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.15rem .4rem">Blokovat</button>
+        </form>
+        {{end}}
+        <form style="display:inline" method="post" action="/admin/users/{{.ID}}/delete"
+              onsubmit="return confirm('Trvale smazat {{.Username}}?')">
+            <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .3rem">✕</button>
+        </form>
+    </td>
+</tr>
 {{end}}
 
-{{if .PendingUsers}}
-<h2 style="font-size:1rem;margin-bottom:.5rem;color:#f59e0b">⏳ Čekající na schválení ({{len .PendingUsers}})</h2>
-{{template "userTable" .PendingUsers}}
-{{end}}
+{{/* ── Tab panels ── */}}
+<div id="tab-active">
+    {{if .ActiveUsers}}
+    <table class="u-table">
+        <thead>
+            <tr>
+                <th class="cb-col"><input type="checkbox" id="cb-all-active" onclick="toggleAll('active',this)" /></th>
+                <th>Nick</th><th>E-mail</th><th>Role</th><th>Registrace</th><th>Akce</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .ActiveUsers}}{{template "urow" .}}{{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="empty">Žádní aktivní uživatelé.</p>
+    {{end}}
+</div>
 
-{{if .ActiveUsers}}
-<h2 style="font-size:1rem;margin-bottom:.5rem;color:#34d399">✅ Aktivní ({{len .ActiveUsers}})</h2>
-{{template "userTable" .ActiveUsers}}
-{{end}}
+<div id="tab-pending" style="display:none">
+    {{if .PendingUsers}}
+    <table class="u-table">
+        <thead>
+            <tr>
+                <th class="cb-col"><input type="checkbox" id="cb-all-pending" onclick="toggleAll('pending',this)" /></th>
+                <th>Nick</th><th>E-mail</th><th>Role</th><th>Registrace</th><th>Akce</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .PendingUsers}}{{template "urow" .}}{{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="empty" style="padding:1.5rem 0">Žádní uživatelé nečekají na schválení.</p>
+    {{end}}
+</div>
 
-{{if .InactiveUsers}}
-<h2 style="font-size:1rem;margin-bottom:.5rem;color:var(--muted-d)">💤 Neaktivní ({{len .InactiveUsers}})</h2>
-{{template "userTable" .InactiveUsers}}
-{{end}}
+<div id="tab-blocked" style="display:none">
+    {{if .BlockedUsers}}
+    <table class="u-table">
+        <thead>
+            <tr>
+                <th class="cb-col"><input type="checkbox" id="cb-all-blocked" onclick="toggleAll('blocked',this)" /></th>
+                <th>Nick</th><th>E-mail</th><th>Role</th><th>Registrace</th><th>Akce</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .BlockedUsers}}{{template "urow" .}}{{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="empty" style="padding:1.5rem 0">Žádní blokovaní uživatelé.</p>
+    {{end}}
+</div>
 
-{{if .BlockedUsers}}
-<h2 style="font-size:1rem;margin-bottom:.5rem;color:#ef4444">🚫 Blokovaní ({{len .BlockedUsers}})</h2>
-{{template "userTable" .BlockedUsers}}
-{{end}}
+<div id="tab-inactive" style="display:none">
+    {{if .InactiveUsers}}
+    <table class="u-table">
+        <thead>
+            <tr>
+                <th class="cb-col"><input type="checkbox" id="cb-all-inactive" onclick="toggleAll('inactive',this)" /></th>
+                <th>Nick</th><th>E-mail</th><th>Role</th><th>Registrace</th><th>Akce</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .InactiveUsers}}{{template "urow" .}}{{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="empty" style="padding:1.5rem 0">Žádní neaktivní uživatelé.</p>
+    {{end}}
+</div>
 
-{{if and (not .ActiveUsers) (not .PendingUsers) (not .InactiveUsers) (not .BlockedUsers)}}
-<p class="empty">Žádní uživatelé.</p>
-{{end}}
+<script>
+var _curTab = 'active';
+
+function switchTab(name) {
+    ['active','pending','blocked','inactive'].forEach(function(t) {
+        var panel = document.getElementById('tab-' + t);
+        var btn   = document.querySelector('.utab[data-tab="' + t + '"]');
+        if (panel) panel.style.display = (t === name) ? '' : 'none';
+        if (btn)   btn.classList.toggle('active', t === name);
+    });
+    _curTab = name;
+}
+
+function toggleAll(tabName, cb) {
+    var panel = document.getElementById('tab-' + tabName);
+    if (!panel) return;
+    panel.querySelectorAll('.user-cb').forEach(function(c) { c.checked = cb.checked; });
+}
+
+function getChecked() {
+    var panel = document.getElementById('tab-' + _curTab);
+    if (!panel) return [];
+    return Array.from(panel.querySelectorAll('.user-cb:checked')).map(function(c) { return c.value; });
+}
+
+function bulkAction(action) {
+    var ids = getChecked();
+    if (ids.length === 0) {
+        alert('Vyber alespoň jednoho uživatele (zaškrtni checkbox).');
+        return;
+    }
+    if (action === 'delete') {
+        if (!confirm('Trvale smazat ' + ids.length + ' uživatelů?')) return;
+    }
+    var fd = new FormData();
+    fd.append('action', action);
+    ids.forEach(function(id) { fd.append('user_ids', id); });
+    if (action === 'set-role') {
+        var role = document.getElementById('bulk-role').value;
+        if (!role) { alert('Vyber roli.'); return; }
+        fd.append('role', role);
+    }
+    if (action === 'reset-password') {
+        fd.append('new_password', document.getElementById('bulk-pw').value);
+    }
+    var form = document.createElement('form');
+    form.method = 'post';
+    form.action = '/admin/users/bulk-action';
+    fd.forEach(function(val, key) {
+        var inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = key; inp.value = val;
+        form.appendChild(inp);
+    });
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Highlight active tab badge if pending users exist
+(function() {
+    var pendingCount = {{len .PendingUsers}};
+    if (pendingCount > 0) {
+        var pb = document.querySelector('.utab-pending .badge');
+        if (pb) pb.style.background = '#f59e0b';
+    }
+})();
+</script>

@@ -339,6 +339,119 @@ func AdminUsersList(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
+// ─── POST /admin/users/bulk-action ───────────────────────────────────────────
+
+func AdminUsersBulkAction(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	action := r.FormValue("action")
+	userIDs := r.Form["user_ids"]
+	if len(userIDs) == 0 {
+		middleware.SetFlash(w, r, "err", "Nevybral jsi žádné uživatele.")
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+	ctx := context.Background()
+
+	switch action {
+	case "set-role":
+		role := strings.ToLower(r.FormValue("role"))
+		if role == "owner" && !admin.IsOwner {
+			role = "admin"
+		}
+		isOwner := role == "owner"
+		isAdmin := role == "admin" || role == "owner"
+		var count int
+		for _, idStr := range userIDs {
+			uid, _ := strconv.Atoi(idStr)
+			if uid == 0 || uid == admin.ID {
+				continue
+			}
+			switch {
+			case userCols.IsOwner && userCols.IsAdmin:
+				_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_owner=$1, is_admin=$2 WHERE id=$3`, isOwner, isAdmin, uid)
+			case userCols.IsAdmin:
+				_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_admin=$1 WHERE id=$2`, isAdmin, uid)
+			case userCols.IsOwner:
+				_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_owner=$1 WHERE id=$2`, isOwner, uid)
+			}
+			count++
+		}
+		middleware.SetFlash(w, r, "ok", strconv.Itoa(count)+" uživatelů — role změněna na <b>"+role+"</b>.")
+
+	case "reset-password":
+		customPw := strings.TrimSpace(r.FormValue("new_password"))
+		var msgs []string
+		for _, idStr := range userIDs {
+			uid, _ := strconv.Atoi(idStr)
+			if uid == 0 {
+				continue
+			}
+			pw := customPw
+			if pw == "" {
+				pw = genPassword(10)
+			}
+			hash, _ := HashPassword(pw)
+			_, _ = db.Pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, hash, uid)
+			var username string
+			_ = db.Pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, uid).Scan(&username)
+			msgs = append(msgs, "<b>"+username+"</b>: <code>"+pw+"</code>")
+		}
+		if len(msgs) > 0 {
+			middleware.SetFlash(w, r, "info", "Nová hesla: "+strings.Join(msgs, " · "))
+		}
+
+	case "send-welcome":
+		var sent, failed int
+		for _, idStr := range userIDs {
+			uid, _ := strconv.Atoi(idStr)
+			if uid == 0 {
+				continue
+			}
+			var username, email string
+			_ = db.Pool.QueryRow(ctx, `SELECT username, COALESCE(email,'') FROM users WHERE id=$1`, uid).Scan(&username, &email)
+			if email == "" {
+				failed++
+				continue
+			}
+			subject := "Vítej v Tipovačce!"
+			body := "Ahoj " + username + ",\n\nvítej v Tipovačce!\nPřihlásit se můžeš zde: https://tipovacka-3.fly.dev/login\n\nPokud máš dotazy, odpověz na tento email.\n\nHodně štěstí!\nTipovačka"
+			if err := sendEmail(email, subject, body); err != nil {
+				failed++
+			} else {
+				sent++
+			}
+		}
+		msg := "Welcome email odeslán: <b>" + strconv.Itoa(sent) + "</b>"
+		if failed > 0 {
+			msg += ", selhalo: " + strconv.Itoa(failed)
+		}
+		middleware.SetFlash(w, r, "ok", msg)
+
+	case "delete":
+		var count int
+		for _, idStr := range userIDs {
+			uid, _ := strconv.Atoi(idStr)
+			if uid == 0 || uid == admin.ID {
+				continue
+			}
+			_, _ = db.Pool.Exec(ctx, `DELETE FROM users WHERE id=$1`, uid)
+			count++
+		}
+		middleware.SetFlash(w, r, "ok", strconv.Itoa(count)+" uživatelů smazáno.")
+
+	default:
+		middleware.SetFlash(w, r, "err", "Neznámá akce.")
+	}
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
 func lastName(u *models.User) string {
 	if u.LastName != nil {
 		return *u.LastName

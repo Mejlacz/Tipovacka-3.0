@@ -166,6 +166,7 @@ func main() {
 	r.Post("/admin/users/{user_id}/delete", handlers.AdminUserDelete)
 	r.Post("/admin/users/{user_id}/reset-password", handlers.AdminUserResetPassword)
 	r.Post("/admin/users/{user_id}/set-role", handlers.AdminUserSetRole)
+	r.Post("/admin/users/bulk-action", handlers.AdminUsersBulkAction)
 
 	// Admin manual page
 	r.Get("/admin/manual", handlers.AdminManual(tmpl))
