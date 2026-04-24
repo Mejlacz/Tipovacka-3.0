@@ -531,15 +531,20 @@ func StatsExtended(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 		sort.Slice(teamList, func(i, j int) bool { return teamList[i].Avg > teamList[j].Avg })
-		bestTeams := teamList
-		if len(bestTeams) > 5 {
-			bestTeams = bestTeams[:5]
+		bestN := 5
+		if len(teamList) < bestN {
+			bestN = len(teamList)
 		}
+		bestTeams := make([]TeamExtStat, bestN)
+		copy(bestTeams, teamList[:bestN])
+
 		sort.Slice(teamList, func(i, j int) bool { return teamList[i].Avg < teamList[j].Avg })
-		worstTeams := teamList
-		if len(worstTeams) > 5 {
-			worstTeams = worstTeams[:5]
+		worstN := 5
+		if len(teamList) < worstN {
+			worstN = len(teamList)
 		}
+		worstTeams := make([]TeamExtStat, worstN)
+		copy(worstTeams, teamList[:worstN])
 
 		// Série
 		bestStreak, curStreak, currentStreak := 0, 0, 0
