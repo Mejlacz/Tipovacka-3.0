@@ -310,9 +310,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function fixLayout() {
         if (!scrollDiv) return;
         var vw = window.innerWidth;
-        var pl = parseFloat(window.getComputedStyle(scrollDiv.parentElement).paddingLeft) || 0;
+        var parentLeft = scrollDiv.parentElement.getBoundingClientRect().left;
         scrollDiv.style.width = vw + 'px';
-        scrollDiv.style.marginLeft = (-pl) + 'px';
+        scrollDiv.style.marginLeft = (-parentLeft) + 'px';
         scrollDiv.style.marginRight = '0';
     }
 
