@@ -40,7 +40,6 @@
             {{if $u.IsApproved}}<a href="/achievements">{{tr $.Lang "nav_achievements"}}</a>{{end}}
             {{if $u.IsApproved}}<a href="/stats">{{tr $.Lang "nav_stats"}}</a>{{end}}
             {{if $u.IsApproved}}<a href="/archive">{{tr $.Lang "nav_archive"}}</a>{{end}}
-            {{if $u.IsAdmin}}<a href="/admin/email">{{tr $.Lang "nav_email"}}</a>{{end}}
             <a href="/pravidla">{{tr $.Lang "nav_rules"}}</a>
             {{if $u.IsAdmin}}
             <div class="nav-dropdown">
@@ -52,7 +51,10 @@
                     <div class="nav-dropdown-divider"></div>
                     <a href="/admin/unscored">{{tr $.Lang "nav_unscored"}} <span id="unscored-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;font-size:.7rem;font-weight:700;padding:.05rem .4rem;margin-left:.2rem;vertical-align:middle"></span></a>
                     <a href="/admin/teams">{{tr $.Lang "nav_teams"}}</a>
+                    <a href="/admin/roster">🗂️ Roster</a>
                     <a href="/admin/users">{{tr $.Lang "nav_users"}}</a>
+                    <div class="nav-dropdown-divider"></div>
+                    <a href="/admin/email">{{tr $.Lang "nav_email"}}</a>
                     <div class="nav-dropdown-divider"></div>
                     <a href="/admin/history">{{tr $.Lang "nav_history"}}</a>
                     <a href="/admin/audit">{{tr $.Lang "nav_audit"}}</a>

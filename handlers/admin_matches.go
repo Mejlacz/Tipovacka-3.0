@@ -710,3 +710,32 @@ func AdminQuickAddMatchAjax(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"ok":true}`))
 }
+
+// POST /admin/matches/{match_id}/notify-now (AJAX)
+// Resetuje notify_sent a okamžitě spustí notifikaci pro daný zápas.
+func AdminMatchNotifyNow(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	matchID, _ := strconv.Atoi(r.PathValue("match_id"))
+	ctx := context.Background()
+
+	// Zkontroluj zda zápas existuje
+	var exists bool
+	err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM matches WHERE id=$1)`, matchID).Scan(&exists)
+	if err != nil || !exists {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+
+	// Reset notify_sent → spustí notifikaci
+	_, _ = db.Pool.Exec(ctx, `UPDATE matches SET notify_sent = false WHERE id = $1`, matchID)
+
+	// Spusť notifikaci pro tento zápas přímo v goroutině
+	go sendMatchNotificationForID(matchID)
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"ok":true}`))
+}

@@ -1,19 +1,177 @@
 <div class="page-header">
-    <h1>👥 Týmy soutěže: {{.Comp.Name}}</h1>
+    <h1 style="font-size:1.15rem">👥 Týmy soutěže: {{.Comp.Name}} <small style="font-size:.75rem;font-weight:400;color:var(--muted-d)">{{.Comp.Season}}</small></h1>
     <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
 </div>
+<nav style="display:flex;gap:.35rem;margin-bottom:1rem;flex-wrap:wrap">
+    <a href="/admin/teams"  class="btn btn-sm btn-secondary" style="font-size:.78rem">📋 Katalog týmů</a>
+    <a href="/admin/roster" class="btn btn-sm btn-secondary" style="font-size:.78rem">🗂️ Roster (matice)</a>
+    <span class="btn btn-sm btn-primary" style="font-size:.78rem;cursor:default">👥 {{.Comp.Name}}</span>
+</nav>
 
-{{if .Msg}}<div class="alert alert-success" style="margin-bottom:1rem">{{.Msg}}</div>{{end}}
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg"}}
+</div>
+{{end}}
 
-<form method="post" action="/admin/competitions/{{.Comp.ID}}/teams">
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.4rem;margin-bottom:1rem">
-    {{range .Teams}}
-    <label style="display:flex;align-items:center;gap:.4rem;padding:.3rem .5rem;background:var(--bg2);border-radius:6px">
-        <input type="checkbox" name="team_ids" value="{{.ID}}"
-               {{if index $.SelectedIDs .ID}}checked{{end}} />
-        {{.Name}} <span style="font-size:.75rem;color:var(--muted-d)">({{.Sport}})</span>
-    </label>
-    {{end}}
-    </div>
-    <button type="submit" class="btn btn-primary">Uložit</button>
+<style>
+.team-check-card {
+    display:flex;align-items:center;gap:.45rem;
+    padding:.35rem .7rem;border:2px solid var(--border-d);border-radius:8px;
+    cursor:pointer;background:var(--bg2);
+    transition:background .12s,border-color .12s;
+    font-size:.85rem;white-space:nowrap;user-select:none
+}
+.team-check-card.is-selected {
+    border-color:#34d399;background:rgba(52,211,153,.1)
+}
+.team-check-card input[type=checkbox] { cursor:pointer;flex-shrink:0 }
+.grp-header { margin:.9rem 0 .35rem;display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;font-size:.88rem }
+.grp-header .grp-label { font-weight:700;color:var(--text-d) }
+.grp-header .grp-count { color:#34d399;font-size:.78rem;font-weight:600 }
+.grp-header .grp-count-off { color:var(--muted-d);font-size:.78rem }
+.team-row { display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem }
+</style>
+
+<form method="post" action="/admin/competitions/{{.Comp.ID}}/teams" id="roster-form">
+<input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+
+{{/* ── Toolbar ── */}}
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:.6rem;align-items:center">
+    <input type="text" id="team-search" placeholder="🔍 Hledat tým…"
+           oninput="filterTeams()"
+           style="width:200px;background:var(--bg3);color:var(--text-d);border:1px solid var(--border-d);border-radius:6px;padding:.35rem .6rem;font-size:.85rem" />
+    <button type="button" class="btn btn-secondary btn-sm" onclick="selectAll(true)">Vybrat vše</button>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="selectAll(false)">Odznačit vše</button>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="selectVisible(true)">Vybrat viditelné</button>
+    <button type="submit" class="btn btn-primary btn-sm">💾 Uložit roster</button>
+    <span id="count-badge" style="color:var(--muted-d);font-size:.85rem;margin-left:auto"></span>
+</div>
+
+{{/* ── Skupiny podle kategorie ── */}}
+{{if .Groups}}
+{{range .Groups}}
+{{$cat := .Category}}
+<div class="grp-header" data-grp="{{$cat}}">
+    <span class="grp-label">{{if $cat}}{{$cat}}{{else}}Bez kategorie{{end}}</span>
+    <span class="grp-count" id="gc-{{$cat}}"></span>
+    <button type="button" class="btn btn-secondary" style="font-size:.72rem;padding:.1rem .5rem"
+            onclick="selectGroup('{{$cat}}', true)">vše</button>
+    <button type="button" class="btn btn-secondary" style="font-size:.72rem;padding:.1rem .5rem"
+            onclick="selectGroup('{{$cat}}', false)">žádné</button>
+</div>
+<div class="team-row" id="tr-{{$cat}}">
+{{range .Teams}}
+{{$comps := index $.TeamCompNames .ID}}
+<label class="team-check-card{{if index $.SelectedIDs .ID}} is-selected{{end}}"
+       data-name="{{lower .Name}}"
+       data-cat="{{$cat}}"
+       title="{{.Name}}{{if $comps}} — také v: {{range $i,$c := $comps}}{{if $i}}, {{end}}{{$c}}{{end}}{{end}}">
+    <input type="checkbox" name="team_ids" value="{{.ID}}"
+           {{if index $.SelectedIDs .ID}}checked{{end}}
+           onchange="updateCard(this)" />
+    {{if .LogoURL}}<img src="{{strVal .LogoURL}}" alt="" style="width:1.2rem;height:1.2rem;object-fit:contain;flex-shrink:0">{{end}}
+    <span>{{.Name}}</span>
+    <span style="font-size:.7rem;opacity:.45">{{if eq .Sport "hockey"}}🏒{{else if eq .Sport "football"}}⚽{{end}}</span>
+    {{if .Alias}}<small style="color:var(--muted-d)">({{strVal .Alias}})</small>{{end}}
+    {{if $comps}}<span style="font-size:.68rem;background:rgba(99,102,241,.2);color:#a5b4fc;border-radius:4px;padding:1px 5px;white-space:nowrap;flex-shrink:0" title="Také v: {{range $i,$c := $comps}}{{if $i}}, {{end}}{{$c}}{{end}}">{{range $i,$c := $comps}}{{if $i}} · {{end}}{{$c}}{{end}}</span>{{end}}
+</label>
+{{end}}
+</div>
+{{end}}
+{{else}}
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:1.5rem;text-align:center;color:var(--muted-d)">
+    Zatím nejsou žádné týmy. <a href="/admin/teams">Přidat týmy →</a>
+</div>
+{{end}}
+
+{{if .Groups}}
+<div style="margin-top:1.25rem">
+    <button type="submit" class="btn btn-primary">💾 Uložit roster</button>
+</div>
+{{end}}
 </form>
+
+<script>
+(function () {
+    function updateCard(cb) {
+        var label = cb.closest('label');
+        if (cb.checked) {
+            label.classList.add('is-selected');
+        } else {
+            label.classList.remove('is-selected');
+        }
+        updateCount();
+    }
+    window.updateCard = updateCard;
+
+    function updateCount() {
+        var total = document.querySelectorAll('input[name="team_ids"]:checked').length;
+        document.getElementById('count-badge').textContent = total + ' týmů vybráno';
+        // Per-group counts
+        document.querySelectorAll('.team-row').forEach(function(row) {
+            var cat = row.id.replace(/^tr-/, '');
+            var all = row.querySelectorAll('input[name="team_ids"]').length;
+            var sel = row.querySelectorAll('input[name="team_ids"]:checked').length;
+            var badge = document.getElementById('gc-' + cat);
+            if (badge) {
+                if (sel > 0) {
+                    badge.textContent = '✓ ' + sel + '/' + all;
+                    badge.className = 'grp-count';
+                } else {
+                    badge.textContent = '(' + all + ')';
+                    badge.className = 'grp-count-off';
+                }
+            }
+        });
+    }
+
+    window.selectAll = function(state) {
+        document.querySelectorAll('input[name="team_ids"]').forEach(function(cb) {
+            cb.checked = state;
+            updateCard(cb);
+        });
+    };
+
+    window.selectVisible = function(state) {
+        document.querySelectorAll('.team-check-card').forEach(function(label) {
+            if (label.style.display !== 'none') {
+                var cb = label.querySelector('input[name="team_ids"]');
+                if (cb) { cb.checked = state; updateCard(cb); }
+            }
+        });
+    };
+
+    window.selectGroup = function(cat, state) {
+        var row = document.getElementById('tr-' + cat);
+        if (!row) return;
+        row.querySelectorAll('input[name="team_ids"]').forEach(function(cb) {
+            if (cb.closest('label').style.display !== 'none') {
+                cb.checked = state;
+                updateCard(cb);
+            }
+        });
+    };
+
+    window.filterTeams = function() {
+        var q = document.getElementById('team-search').value.toLowerCase().trim();
+        document.querySelectorAll('.team-check-card').forEach(function(label) {
+            var name = label.getAttribute('data-name') || '';
+            label.style.display = (!q || name.includes(q)) ? '' : 'none';
+        });
+        // Skrýt prázdné skupiny
+        document.querySelectorAll('.team-row').forEach(function(row) {
+            var visible = Array.from(row.querySelectorAll('.team-check-card'))
+                .some(function(l) { return l.style.display !== 'none'; });
+            row.style.display = visible ? '' : 'none';
+            var cat = row.id.replace(/^tr-/, '');
+            var hdr = document.querySelector('.grp-header[data-grp="' + CSS.escape(cat) + '"]');
+            if (hdr) hdr.style.display = visible ? '' : 'none';
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        updateCount();
+    });
+}());
+</script>

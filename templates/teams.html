@@ -1,7 +1,14 @@
 <div class="page-header">
-    <h1>⚽ Týmy</h1>
-    <a href="/admin/export/csv?type=teams" class="btn btn-secondary btn-sm">⬇ CSV export</a>
+    <h1 style="font-size:1.15rem">⚽ Týmy</h1>
+    <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+        <a href="/admin/export/csv?type=teams" class="btn btn-secondary btn-sm">⬇ CSV</a>
+        <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+    </div>
 </div>
+<nav style="display:flex;gap:.35rem;margin-bottom:1rem;flex-wrap:wrap">
+    <a href="/admin/teams"  class="btn btn-sm btn-primary"  style="font-size:.78rem">📋 Katalog týmů</a>
+    <a href="/admin/roster" class="btn btn-sm btn-secondary" style="font-size:.78rem">🗂️ Roster (matice)</a>
+</nav>
 
 {{if .Flash}}
 <div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
@@ -17,8 +24,6 @@
     <select name="sport" style="flex:1;min-width:100px">
         <option value="football">⚽ Fotbal</option>
         <option value="hockey">🏒 Hokej</option>
-        <option value="tennis">🎾 Tenis</option>
-        <option value="basketball">🏀 Basketbal</option>
     </select>
     <input type="text" name="display_name" placeholder="Zkrácené jméno" style="flex:1;min-width:100px" />
     <input type="text" name="category" placeholder="Kategorie" style="flex:1;min-width:80px" />
@@ -51,6 +56,9 @@
         <td style="padding:.3rem .5rem;white-space:nowrap">
             <button type="button" class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.1rem .35rem"
                     onclick="toggleTeamEdit({{.ID}})">✏️</button>
+            <button type="button" class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.1rem .35rem"
+                    title="Sloučit do jiného týmu"
+                    onclick="openMergeModal({{.ID}}, '{{.Name}}')">⛓️</button>
             <form style="display:inline" method="post" action="/admin/teams/{{.ID}}/delete"
                   onsubmit="return confirm('Smazat tým {{.Name}}?')">
                 <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem">✕</button>
@@ -83,9 +91,101 @@
 <p class="empty">Žádné týmy.</p>
 {{end}}
 
+{{/* ── Merge modal ── */}}
+<div id="merge-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:2000;align-items:center;justify-content:center">
+    <div style="background:var(--bg2);border:2px solid #f59e0b;border-radius:14px;padding:1.5rem 1.6rem;width:min(440px,94vw);box-shadow:0 8px 40px rgba(0,0,0,.6)">
+        <h3 style="margin:0 0 .3rem;font-size:1rem;color:#f59e0b">⛓️ Sloučit tým</h3>
+        <p style="font-size:.82rem;color:var(--muted-d);margin:.0 0 1rem">
+            Tým <strong id="merge-source-name"></strong> bude trvale odstraněn.<br>
+            Všechny jeho zápasy a soutěže přejdou na cílový tým.
+        </p>
+        <form id="merge-form" method="post">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+            <div style="margin-bottom:.75rem">
+                <label style="font-size:.82rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Sloučit DO tohoto týmu:</label>
+                <select name="target_team_id" id="merge-target" required
+                        style="width:100%;background:var(--bg3);color:var(--text-d);border:1px solid var(--border-d);border-radius:6px;padding:.4rem .6rem;font-size:.85rem"
+                        onchange="updateMergeHint()">
+                    <option value="">— vyber cílový tým —</option>
+                    {{range .Teams}}
+                    <option value="{{.ID}}" data-name="{{.Name}}">{{.Name}} ({{.Sport}}{{if .Category}} · {{.Category}}{{end}})</option>
+                    {{end}}
+                </select>
+            </div>
+            <div style="margin-bottom:1rem">
+                <label style="font-size:.82rem;color:var(--muted-d);display:block;margin-bottom:.3rem">
+                    Pro potvrzení opište <strong>přesný název</strong> cílového týmu:
+                </label>
+                <input type="text" name="confirm_name" id="merge-confirm" required autocomplete="off"
+                       placeholder="Název cílového týmu…"
+                       style="width:100%;box-sizing:border-box;background:var(--bg3);color:var(--text-d);border:1px solid #f59e0b;border-radius:6px;padding:.4rem .6rem;font-size:.9rem" />
+                <div id="merge-hint" style="font-size:.75rem;color:var(--muted-d);margin-top:.25rem"></div>
+            </div>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeMergeModal()">Zrušit</button>
+                <button type="submit" class="btn btn-primary btn-sm" id="merge-submit"
+                        style="background:#f59e0b;border-color:#f59e0b;color:#000;font-weight:700">⛓️ Sloučit</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 function toggleTeamEdit(id) {
     var row = document.getElementById('team-edit-' + id);
     row.style.display = row.style.display === 'none' ? '' : 'none';
 }
+
+var _mergeSourceID = 0;
+
+function openMergeModal(sourceId, sourceName) {
+    _mergeSourceID = sourceId;
+    document.getElementById('merge-source-name').textContent = sourceName;
+    document.getElementById('merge-form').action = '/admin/teams/' + sourceId + '/merge';
+    document.getElementById('merge-confirm').value = '';
+    document.getElementById('merge-hint').textContent = '';
+    // Skryj zdrojový tým z dropdownu
+    var sel = document.getElementById('merge-target');
+    sel.value = '';
+    Array.from(sel.options).forEach(function(opt) {
+        opt.disabled = (opt.value == sourceId);
+        opt.style.display = (opt.value == sourceId) ? 'none' : '';
+    });
+    document.getElementById('merge-modal').style.display = 'flex';
+    setTimeout(function() { sel.focus(); }, 80);
+}
+
+function closeMergeModal() {
+    document.getElementById('merge-modal').style.display = 'none';
+}
+
+function updateMergeHint() {
+    var sel = document.getElementById('merge-target');
+    var opt = sel.options[sel.selectedIndex];
+    var hint = document.getElementById('merge-hint');
+    if (opt && opt.value) {
+        hint.textContent = 'Očekávaný název: „' + opt.getAttribute('data-name') + '"';
+        hint.style.color = '#f59e0b';
+    } else {
+        hint.textContent = '';
+    }
+}
+
+document.getElementById('merge-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeMergeModal();
+});
+
+document.getElementById('merge-form').addEventListener('submit', function(e) {
+    var sel = document.getElementById('merge-target');
+    var opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) { e.preventDefault(); alert('Vyber cílový tým.'); return; }
+    var targetName = opt.getAttribute('data-name');
+    var typed = document.getElementById('merge-confirm').value.trim();
+    if (typed.toLowerCase() !== targetName.toLowerCase()) {
+        e.preventDefault();
+        document.getElementById('merge-confirm').style.borderColor = '#ef4444';
+        document.getElementById('merge-hint').textContent = '✗ Název nesouhlasí — očekáváno: „' + targetName + '"';
+        document.getElementById('merge-hint').style.color = '#ef4444';
+    }
+});
 </script>

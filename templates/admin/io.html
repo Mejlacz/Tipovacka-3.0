@@ -1,19 +1,37 @@
 <style>
+/* ── IO page layout ── */
 .io-card {
     background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;
     padding:1.1rem 1.25rem;display:flex;flex-direction:column;gap:.55rem;
     transition:border-color .15s;
 }
-.io-card:hover { border-color:var(--accent-soft,#e74c3c66); }
-.io-card h3 { margin:0;font-size:1rem; }
+.io-card:hover { border-color:rgba(99,102,241,.45); }
+.io-card h3 { margin:0;font-size:.97rem; }
 .io-card p  { margin:0;font-size:.82rem;color:var(--muted-d);line-height:1.4; }
 .io-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-top:1rem; }
 .io-actions { display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.3rem; }
+
+/* ── Tabs ── */
+.io-tabs { display:flex;gap:0;border-bottom:2px solid var(--border-d);margin-bottom:1.25rem }
+.io-tab {
+    padding:.55rem 1.2rem;font-size:.88rem;font-weight:600;cursor:pointer;
+    border:none;background:none;color:var(--muted-d);border-bottom:2px solid transparent;
+    margin-bottom:-2px;transition:color .12s,border-color .12s;white-space:nowrap;
+}
+.io-tab:hover { color:var(--text-d); }
+.io-tab.active { color:var(--accent,#6366f1);border-bottom-color:var(--accent,#6366f1); }
+.io-panel { display:none; }
+.io-panel.active { display:block; }
+
+/* ── Section header ── */
+.io-section { margin:1.25rem 0 .4rem;font-size:.92rem;font-weight:700;color:var(--text-d);
+    display:flex;align-items:center;gap:.45rem; }
+.io-section-sub { font-size:.8rem;color:var(--muted-d);margin-bottom:.75rem;margin-top:-.15rem }
 </style>
 
 <div class="page-header">
     <h1>📦 Import / Export</h1>
-    <a href="/admin" class="btn btn-secondary">← Admin</a>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
 </div>
 
 {{if .Flash}}
@@ -22,301 +40,406 @@
 </div>
 {{end}}
 
-<h2 style="margin-bottom:.5rem">Export dat (Excel .xlsx)</h2>
-<p style="color:var(--muted-d);font-size:.85rem;margin-bottom:.75rem">XLSX soubory pro přímé otevření v Excelu / LibreOffice. Filtry jsou nepovinné.</p>
-<div class="io-grid">
-
-    <div class="io-card">
-        <h3>🏆 Tipy (XLSX)</h3>
-        <p>Kompletní export tipů s uživateli, zápasy a body.</p>
-        <div class="io-actions">
-            <a href="/admin/export/xlsx?type=tips" class="btn btn-sm btn-primary">Všechny tipy</a>
-            {{if .Competitions}}
-            <select id="exp-xlsx-tips-comp" style="font-size:.8rem">
-                <option value="">Bez filtru</option>
-                {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-            </select>
-            <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-xlsx-tips-comp').value;location.href='/admin/export/xlsx?type=tips'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
-            {{end}}
-        </div>
-    </div>
-
-    <div class="io-card">
-        <h3>⚽ Zápasy (XLSX)</h3>
-        <p>Export zápasů se skóre, datumem a výsledky.</p>
-        <div class="io-actions">
-            <a href="/admin/export/xlsx?type=matches" class="btn btn-sm btn-primary">Export</a>
-            <a href="/admin/export/xlsx?type=matches&only_finished=1" class="btn btn-sm btn-secondary">Jen odehrané</a>
-        </div>
-    </div>
-
-    <div class="io-card">
-        <h3>👤 Uživatelé (XLSX)</h3>
-        <p>Export uživatelů se jmény, emaily a rolemi.</p>
-        <div class="io-actions">
-            <a href="/admin/export/xlsx?type=users" class="btn btn-sm btn-primary">Export</a>
-        </div>
-    </div>
-
-    <div class="io-card">
-        <h3>📊 Žebříček (XLSX)</h3>
-        <p>Export žebříčku s body a přesnými tipy.</p>
-        <div class="io-actions">
-            <a href="/admin/export/xlsx?type=leaderboard" class="btn btn-sm btn-primary">Celkový</a>
-            {{if .Competitions}}
-            <select id="exp-xlsx-lb-comp" style="font-size:.8rem">
-                <option value="">Bez filtru</option>
-                {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-            </select>
-            <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-xlsx-lb-comp').value;location.href='/admin/export/xlsx?type=leaderboard'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
-            {{end}}
-        </div>
-    </div>
-
+{{/* ── Tab nav ── */}}
+<div class="io-tabs">
+    <button class="io-tab" data-tab="export">📤 Export</button>
+    <button class="io-tab" data-tab="import">📥 Import</button>
+    <button class="io-tab" data-tab="admin">🛠️ Admin nástroje</button>
 </div>
 
-<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Export dat (CSV)</h2>
-<p style="color:var(--muted-d);font-size:.85rem;margin-bottom:.75rem">CSV soubory lze otevřít v Excelu (UTF-8 s BOM). Filtry jsou nepovinné.</p>
-<div class="io-grid">
+{{/* ════════════════════════════════════════════════════════════
+     TAB: EXPORT
+═════════════════════════════════════════════════════════════ */}}
+<div class="io-panel" id="tab-export">
 
-    <div class="io-card">
-        <h3>🎯 Tipy soutěže</h3>
-        <p>Export tipů (záloha/obnova) pro vybranou soutěž.</p>
-        <div class="io-actions">
-            {{range .Competitions}}
-            <a href="/admin/tips/{{.ID}}/export" class="btn btn-sm btn-primary">{{.Name}}</a>
-            {{end}}
-        </div>
-    </div>
+    <div class="io-section">📊 Excel (.xlsx)</div>
+    <p class="io-section-sub">Soubory se přímo otevřou v Excelu / LibreOffice se správným formátováním. Filtry jsou nepovinné.</p>
+    <div class="io-grid">
 
-    <div class="io-card">
-        <h3>🏆 Tipy — všechny soutěže (CSV)</h3>
-        <p>Kompletní export tipů, volitelně filtrováno po soutěži a pouze odehrané zápasy.</p>
-        <div class="io-actions">
-            <a href="/admin/export/csv?type=tips" class="btn btn-sm btn-primary">Všechny tipy</a>
-            {{if .Competitions}}
-            <select id="exp-tips-comp" style="font-size:.8rem">
-                <option value="">Bez filtru</option>
-                {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-            </select>
-            <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-tips-comp').value;location.href='/admin/export/csv?type=tips'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
-            {{end}}
-        </div>
-    </div>
-
-    <div class="io-card">
-        <h3>⚽ Zápasy (CSV)</h3>
-        <p>Export všech zápasů se skóre, datumem a výsledky.</p>
-        <div class="io-actions">
-            <a href="/admin/export/csv?type=matches" class="btn btn-sm btn-primary">Export</a>
-            <a href="/admin/export/csv?type=matches&only_finished=1" class="btn btn-sm btn-secondary">Jen odehrané</a>
-        </div>
-    </div>
-
-    <div class="io-card">
-        <h3>👥 Týmy (CSV)</h3>
-        <p>Export všech týmů s aliasy a přiřazenými soutěžemi.</p>
-        <div class="io-actions">
-            <a href="/admin/export/csv?type=teams" class="btn btn-sm btn-primary">Export</a>
-        </div>
-    </div>
-
-    <div class="io-card">
-        <h3>👤 Uživatelé (CSV)</h3>
-        <p>Export uživatelů se jmény, emaily a rolemi.</p>
-        <div class="io-actions">
-            <a href="/admin/export/csv?type=users" class="btn btn-sm btn-primary">Export</a>
-        </div>
-    </div>
-
-    <div class="io-card">
-        <h3>📊 Žebříček (CSV)</h3>
-        <p>Export žebříčku s body, přesnými tipy a výhrou správného výsledku.</p>
-        <div class="io-actions">
-            <a href="/admin/export/csv?type=leaderboard" class="btn btn-sm btn-primary">Celkový</a>
-            {{if .Competitions}}
-            <select id="exp-lb-comp" style="font-size:.8rem">
-                <option value="">Bez filtru</option>
-                {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-            </select>
-            <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-lb-comp').value;location.href='/admin/export/csv?type=leaderboard'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
-            {{end}}
-        </div>
-    </div>
-
-    <div class="io-card">
-        <h3>🎯 Extra otázky (CSV)</h3>
-        <p>Export otázek a odpovědí pro vybranou soutěž.</p>
-        <div class="io-actions">
-            {{range .Competitions}}
-            <a href="/admin/extra/{{.ID}}/export" class="btn btn-sm btn-primary">{{.Name}}</a>
-            {{end}}
-        </div>
-    </div>
-
-</div>
-
-<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Import dat</h2>
-<div class="io-grid">
-
-    <div class="io-card">
-        <h3>📋 Import výsledků — vložení textu</h3>
-        <p>Zkopíruj výsledky z Flashscore nebo jiného zdroje a vlož je do textareu. Funguje bez jakékoliv instalace.</p>
-        <div class="io-actions">
-            <a href="/admin/ocr" class="btn btn-sm btn-primary">Otevřít</a>
-        </div>
-    </div>
-
-    {{/* ── API import zápasů ── */}}
-    <div class="io-card" style="grid-column:1/-1">
-        <h3>⚽ Import zápasů z football-data.org API</h3>
-        <p>Stáhne zápasy přímo z API do zvoleného kola. Potřebuje nastavenou env proměnnou <code>FOOTBALL_API_KEY</code>.</p>
-
-        <form id="api-import-form" method="post" action="/admin/api/import" style="display:flex;flex-direction:column;gap:.65rem;margin-top:.3rem">
-
-            <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
-                {{/* Výběr soutěže */}}
-                <div style="flex:1;min-width:180px">
-                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Soutěž</label>
-                    <select name="competition_id" id="api-comp" required style="width:100%">
-                        <option value="">— vyber soutěž —</option>
-                        {{range .Competitions}}
-                        <option value="{{.ID}}">{{.Name}}{{if .Season}} — {{.Season}}{{end}}</option>
-                        {{end}}
-                    </select>
-                </div>
-                {{/* Výběr kola */}}
-                <div style="flex:1;min-width:180px">
-                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo (nebo nové)</label>
-                    <select name="round_id" id="api-round" style="width:100%">
-                        <option value="0">➕ Vytvořit nové kolo</option>
-                    </select>
-                </div>
-            </div>
-
-            <div id="api-new-round-row" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
-                <div style="flex:1;min-width:200px">
-                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Název nového kola</label>
-                    <input type="text" name="new_round_name" id="api-round-name" placeholder="např. Skupina A - kolo 3" style="width:100%" />
-                </div>
-            </div>
-
-            <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
-                {{/* Kód soutěže v API */}}
-                <div style="flex:1;min-width:120px">
-                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kód API soutěže</label>
-                    <input type="text" name="fd_code" id="api-fd-code" placeholder="CL, PL, BL1…" style="width:100%;text-transform:uppercase" maxlength="10" />
-                </div>
-                {{/* Číslo kola v API */}}
-                <div style="min-width:80px">
-                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo v API (nepovinné)</label>
-                    <input type="number" name="matchday" id="api-matchday" min="1" max="99" placeholder="—" style="width:100%" />
-                </div>
-                {{/* Sport */}}
-                <div style="min-width:110px">
-                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Sport</label>
-                    <select name="sport" style="width:100%">
-                        <option value="football">⚽ Fotbal</option>
-                        <option value="hockey">🏒 Hokej</option>
-                    </select>
-                </div>
-                {{/* Skip finished */}}
-                <label style="font-size:.82rem;display:flex;align-items:center;gap:.35rem;cursor:pointer;white-space:nowrap;padding-bottom:.15rem">
-                    <input type="checkbox" name="skip_finished" value="1" />
-                    Přeskočit odehrané
-                </label>
-            </div>
-
-            <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-                <button type="button" class="btn btn-sm btn-secondary" onclick="apiPreview()">🔍 Náhled</button>
-                <button type="submit" class="btn btn-sm btn-primary">📥 Importovat</button>
-                <span id="api-preview-status" style="font-size:.8rem;color:var(--muted-d)"></span>
-            </div>
-        </form>
-
-        {{/* Preview tabulka */}}
-        <div id="api-preview-box" style="display:none;margin-top:.75rem;overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:.8rem">
-                <thead>
-                    <tr style="background:var(--bg3)">
-                        <th style="padding:.3rem .5rem;text-align:left">Domácí</th>
-                        <th style="padding:.3rem .5rem;text-align:left">Hosté</th>
-                        <th style="padding:.3rem .5rem;text-align:left">Datum</th>
-                        <th style="padding:.3rem .5rem;text-align:left">Stav</th>
-                        <th style="padding:.3rem .5rem;text-align:center">Skóre</th>
-                    </tr>
-                </thead>
-                <tbody id="api-preview-tbody"></tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="io-card">
-        <h3>👥 Import týmů (CSV)</h3>
-        <p>CSV sloupce: name, sport, display_name, alias, category. Existující týmy (stejný name+sport) se aktualizují.</p>
-        <form method="post" action="/admin/teams/import-csv" enctype="multipart/form-data">
+        <div class="io-card">
+            <h3>🏆 Tipy (XLSX)</h3>
+            <p>Kompletní export tipů s uživateli, zápasy a body.</p>
             <div class="io-actions">
-                <input type="file" name="csv_file" accept=".csv" required style="font-size:.82rem" />
-                <button type="submit" class="btn btn-sm btn-primary">📥 Importovat</button>
+                <a href="/admin/export/xlsx?type=tips" class="btn btn-sm btn-primary">Všechny tipy</a>
+                {{if .Competitions}}
+                <select id="exp-xlsx-tips-comp" style="font-size:.8rem">
+                    <option value="">Bez filtru</option>
+                    {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+                </select>
+                <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-xlsx-tips-comp').value;location.href='/admin/export/xlsx?type=tips'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
+                {{end}}
             </div>
-        </form>
-    </div>
-</div>
+        </div>
 
-<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Správa skupin a uživatelů</h2>
-<div class="io-grid">
-    <div class="io-card">
-        <h3>👥 Skupiny uživatelů</h3>
-        <p>Přiřazovat speciální oprávnění vybraným uživatelům (pouze Owner).</p>
-        <div class="io-actions">
-            <a href="/admin/groups" class="btn btn-primary btn-sm">Otevřít</a>
+        <div class="io-card">
+            <h3>⚽ Zápasy (XLSX)</h3>
+            <p>Export zápasů se skóre, datumem a výsledky.</p>
+            <div class="io-actions">
+                <a href="/admin/export/xlsx?type=matches" class="btn btn-sm btn-primary">Export</a>
+                <a href="/admin/export/xlsx?type=matches&only_finished=1" class="btn btn-sm btn-secondary">Jen odehrané</a>
+            </div>
         </div>
-    </div>
-    <div class="io-card">
-        <h3>🔀 Sloučení uživatelů</h3>
-        <p>Sloučí tipy a extra odpovědi z jednoho účtu do druhého (např. duplicity).</p>
-        <div class="io-actions">
-            <a href="/admin/users/merge" class="btn btn-primary btn-sm">Otevřít</a>
-        </div>
-    </div>
-    <div class="io-card">
-        <h3>📥 Import uživatelů</h3>
-        <p>Hromadný import uživatelů ze CSV souboru.</p>
-        <div class="io-actions">
-            <a href="/admin/users/import" class="btn btn-primary btn-sm">Otevřít</a>
-        </div>
-    </div>
-</div>
 
-<h2 style="margin-top:1.5rem;margin-bottom:.5rem">Systémová správa</h2>
-<div class="io-grid">
-    <div class="io-card">
-        <h3>💓 Keep Alive</h3>
-        <p>Automatické pingování serveru aby Koyeb/Render nepozastavil instanci.</p>
-        <div class="io-actions">
-            <a href="/admin/keepalive" class="btn btn-primary btn-sm">Otevřít</a>
+        <div class="io-card">
+            <h3>👤 Uživatelé (XLSX)</h3>
+            <p>Export uživatelů se jmény, emaily a rolemi.</p>
+            <div class="io-actions">
+                <a href="/admin/export/xlsx?type=users" class="btn btn-sm btn-primary">Export</a>
+            </div>
         </div>
-    </div>
-    <div class="io-card">
-        <h3>☁️ Neon Sync</h3>
-        <p>Synchronizace dat s Neon záložní databází. Konfigurace a spuštění sync.</p>
-        <div class="io-actions">
-            <a href="/admin/neon-sync" class="btn btn-primary btn-sm">Otevřít</a>
+
+        <div class="io-card">
+            <h3>📊 Žebříček (XLSX)</h3>
+            <p>Export žebříčku s body a přesnými tipy.</p>
+            <div class="io-actions">
+                <a href="/admin/export/xlsx?type=leaderboard" class="btn btn-sm btn-primary">Celkový</a>
+                {{if .Competitions}}
+                <select id="exp-xlsx-lb-comp" style="font-size:.8rem">
+                    <option value="">Bez filtru</option>
+                    {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+                </select>
+                <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-xlsx-lb-comp').value;location.href='/admin/export/xlsx?type=leaderboard'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
+                {{end}}
+            </div>
         </div>
+
     </div>
-    <div class="io-card">
-        <h3>📧 Hromadný email</h3>
-        <p>Odeslání emailu všem nebo vybraným uživatelům aplikace.</p>
-        <div class="io-actions">
-            <a href="/admin/email" class="btn btn-primary btn-sm">Otevřít</a>
+
+    <div class="io-section" style="margin-top:1.75rem">📄 CSV</div>
+    <p class="io-section-sub">CSV soubory lze otevřít v Excelu (UTF-8 s BOM). Vhodné pro zálohy a reimport dat zpět do aplikace.</p>
+    <div class="io-grid">
+
+        <div class="io-card">
+            <h3>🎯 Tipy soutěže (CSV)</h3>
+            <p>Export tipů pro vybranou soutěž — záloha nebo reimport.</p>
+            <div class="io-actions">
+                {{range .Competitions}}
+                <a href="/admin/tips/{{.ID}}/export" class="btn btn-sm btn-primary">{{.Name}}</a>
+                {{end}}
+            </div>
         </div>
+
+        <div class="io-card">
+            <h3>🏆 Tipy — všechny soutěže (CSV)</h3>
+            <p>Kompletní export tipů, volitelně filtrováno po soutěži.</p>
+            <div class="io-actions">
+                <a href="/admin/export/csv?type=tips" class="btn btn-sm btn-primary">Všechny tipy</a>
+                {{if .Competitions}}
+                <select id="exp-tips-comp" style="font-size:.8rem">
+                    <option value="">Bez filtru</option>
+                    {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+                </select>
+                <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-tips-comp').value;location.href='/admin/export/csv?type=tips'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>⚽ Zápasy (CSV)</h3>
+            <p>Export všech zápasů se skóre, datumem a výsledky.</p>
+            <div class="io-actions">
+                <a href="/admin/export/csv?type=matches" class="btn btn-sm btn-primary">Export</a>
+                <a href="/admin/export/csv?type=matches&only_finished=1" class="btn btn-sm btn-secondary">Jen odehrané</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>👥 Týmy (CSV)</h3>
+            <p>Export všech týmů s aliasy a přiřazenými soutěžemi.</p>
+            <div class="io-actions">
+                <a href="/admin/export/csv?type=teams" class="btn btn-sm btn-primary">Export</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>👤 Uživatelé (CSV)</h3>
+            <p>Export uživatelů se jmény, emaily a rolemi.</p>
+            <div class="io-actions">
+                <a href="/admin/export/csv?type=users" class="btn btn-sm btn-primary">Export</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>📊 Žebříček (CSV)</h3>
+            <p>Export žebříčku s body, přesnými tipy a výhrou správného výsledku.</p>
+            <div class="io-actions">
+                <a href="/admin/export/csv?type=leaderboard" class="btn btn-sm btn-primary">Celkový</a>
+                {{if .Competitions}}
+                <select id="exp-lb-comp" style="font-size:.8rem">
+                    <option value="">Bez filtru</option>
+                    {{range .Competitions}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+                </select>
+                <button class="btn btn-sm btn-secondary" onclick="(function(){var c=document.getElementById('exp-lb-comp').value;location.href='/admin/export/csv?type=leaderboard'+(c?'&competition_id='+c:'');})()">Filtrovat</button>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>🎯 Extra otázky (CSV)</h3>
+            <p>Export otázek a odpovědí pro vybranou soutěž.</p>
+            <div class="io-actions">
+                {{range .Competitions}}
+                <a href="/admin/extra/{{.ID}}/export" class="btn btn-sm btn-primary">{{.Name}}</a>
+                {{end}}
+            </div>
+        </div>
+
     </div>
-</div>
+</div>{{/* /tab-export */}}
+
+{{/* ════════════════════════════════════════════════════════════
+     TAB: IMPORT
+═════════════════════════════════════════════════════════════ */}}
+<div class="io-panel" id="tab-import">
+
+    <div class="io-section">📋 Zápasy</div>
+    <p class="io-section-sub">Import výsledků a zápasů z různých zdrojů.</p>
+    <div class="io-grid">
+
+        <div class="io-card">
+            <h3>📋 OCR — photo / screenshot</h3>
+            <p>Vyfoť nebo pořiď screenshot rozpisu zápasů a systém ho automaticky zparsuje přes OCR.</p>
+            <div class="io-actions">
+                <a href="/admin/ocr" class="btn btn-sm btn-primary">Otevřít stránku →</a>
+            </div>
+        </div>
+
+        {{/* ── API import zápasů ── */}}
+        <div class="io-card" style="grid-column:1/-1">
+            <h3>🌐 API — football-data.org / TheSportsDB</h3>
+            <p>Načti aktuální zápasy nebo výsledky přímo z externích API pro fotbal a hokej.</p>
+
+            <form id="api-import-form" method="post" action="/admin/api/import" style="display:flex;flex-direction:column;gap:.65rem;margin-top:.3rem">
+
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                    <div style="flex:1;min-width:180px">
+                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Soutěž</label>
+                        <select name="competition_id" id="api-comp" required style="width:100%">
+                            <option value="">— vyber soutěž —</option>
+                            {{range .Competitions}}
+                            <option value="{{.ID}}">{{.Name}}{{if .Season}} — {{.Season}}{{end}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div style="flex:1;min-width:180px">
+                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo (nebo nové)</label>
+                        <select name="round_id" id="api-round" style="width:100%">
+                            <option value="0">➕ Vytvořit nové kolo</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="api-new-round-row" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                    <div style="flex:1;min-width:200px">
+                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Název nového kola</label>
+                        <input type="text" name="new_round_name" id="api-round-name" placeholder="např. Skupina A - kolo 3" style="width:100%" />
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                    <div style="flex:1;min-width:120px">
+                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kód API soutěže</label>
+                        <input type="text" name="fd_code" id="api-fd-code" placeholder="CL, PL, BL1…" style="width:100%;text-transform:uppercase" maxlength="10" />
+                    </div>
+                    <div style="min-width:80px">
+                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo v API (nepovinné)</label>
+                        <input type="number" name="matchday" id="api-matchday" min="1" max="99" placeholder="—" style="width:100%" />
+                    </div>
+                    <div style="min-width:110px">
+                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Sport</label>
+                        <select name="sport" style="width:100%">
+                            <option value="football">⚽ Fotbal</option>
+                            <option value="hockey">🏒 Hokej</option>
+                        </select>
+                    </div>
+                    <label style="font-size:.82rem;display:flex;align-items:center;gap:.35rem;cursor:pointer;white-space:nowrap;padding-bottom:.15rem">
+                        <input type="checkbox" name="skip_finished" value="1" />
+                        Přeskočit odehrané
+                    </label>
+                </div>
+
+                <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="apiPreview()">🔍 Náhled</button>
+                    <button type="submit" class="btn btn-sm btn-primary">📥 Importovat</button>
+                    <span id="api-preview-status" style="font-size:.8rem;color:var(--muted-d)"></span>
+                </div>
+            </form>
+
+            <div id="api-preview-box" style="display:none;margin-top:.75rem;overflow-x:auto">
+                <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+                    <thead>
+                        <tr style="background:var(--bg3)">
+                            <th style="padding:.3rem .5rem;text-align:left">Domácí</th>
+                            <th style="padding:.3rem .5rem;text-align:left">Hosté</th>
+                            <th style="padding:.3rem .5rem;text-align:left">Datum</th>
+                            <th style="padding:.3rem .5rem;text-align:left">Stav</th>
+                            <th style="padding:.3rem .5rem;text-align:center">Skóre</th>
+                        </tr>
+                    </thead>
+                    <tbody id="api-preview-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="io-section" style="margin-top:1.75rem">👥 Týmy a uživatelé</div>
+    <p class="io-section-sub">Import ze souboru. Podporované formáty: <strong>CSV</strong> (UTF-8 s nebo bez BOM) a <strong>XLSX</strong> (Excel). Staré <code>.xls</code> není podporováno — ulož jako .xlsx nebo .csv.</p>
+    <div class="io-grid">
+
+        <div class="io-card">
+            <h3>👥 Import týmů (CSV)</h3>
+            <p>Sloupce: <code>name, sport, display_name, alias, category</code>. Existující týmy (stejný name+sport) se aktualizují.</p>
+            <form method="post" action="/admin/teams/import-csv" enctype="multipart/form-data">
+                <div class="io-actions">
+                    <input type="file" name="csv_file" accept=".csv" required style="font-size:.82rem" />
+                    <button type="submit" class="btn btn-sm btn-primary">📥 Importovat CSV</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="io-card">
+            <h3>📊 Import týmů (XLSX)</h3>
+            <p>Stejná struktura jako CSV — sloupce A–E: <code>name, sport, display_name, alias, category</code>. První řádek může být záhlaví. Existující týmy se aktualizují.</p>
+            <form method="post" action="/admin/teams/import-xlsx" enctype="multipart/form-data">
+                <div class="io-actions">
+                    <input type="file" name="xlsx_file" accept=".xlsx" required style="font-size:.82rem" />
+                    <button type="submit" class="btn btn-sm btn-primary">📥 Importovat XLSX</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="io-card">
+            <h3>📥 Import uživatelů (CSV)</h3>
+            <p>Hromadný import uživatelů ze CSV souboru.</p>
+            <div class="io-actions">
+                <a href="/admin/users/import" class="btn btn-primary btn-sm">Otevřít stránku →</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>🎯 Import tipů soutěže (CSV)</h3>
+            <p>Reimport tipů ze zálohy — stejný formát jako export tipů soutěže.</p>
+            <div class="io-actions">
+                {{range .Competitions}}
+                <a href="/admin/tips/{{.ID}}/import" class="btn btn-sm btn-secondary">{{.Name}}</a>
+                {{end}}
+                {{if not .Competitions}}<span style="color:var(--muted-d);font-size:.82rem">Žádné aktivní soutěže.</span>{{end}}
+            </div>
+        </div>
+
+    </div>
+</div>{{/* /tab-import */}}
+
+{{/* ════════════════════════════════════════════════════════════
+     TAB: ADMIN NÁSTROJE
+═════════════════════════════════════════════════════════════ */}}
+<div class="io-panel" id="tab-admin">
+
+    <div class="io-section">👥 Uživatelé a skupiny</div>
+    <div class="io-grid">
+
+        <div class="io-card">
+            <h3>👥 Skupiny uživatelů</h3>
+            <p>Přiřazovat speciální oprávnění vybraným uživatelům (pouze Owner).</p>
+            <div class="io-actions">
+                <a href="/admin/groups" class="btn btn-primary btn-sm">Otevřít</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>🔀 Sloučení uživatelů</h3>
+            <p>Sloučí tipy a extra odpovědi z jednoho účtu do druhého — pro případ duplicit.</p>
+            <div class="io-actions">
+                <a href="/admin/users/merge" class="btn btn-primary btn-sm">Otevřít</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>📋 Správa uživatelů</h3>
+            <p>Přehled a editace všech účtů, schvalování nových uživatelů.</p>
+            <div class="io-actions">
+                <a href="/admin/users" class="btn btn-primary btn-sm">Otevřít</a>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="io-section" style="margin-top:1.75rem">⚙️ Systém</div>
+    <div class="io-grid">
+
+        <div class="io-card">
+            <h3>💓 Keep Alive</h3>
+            <p>Automatické pingování serveru aby Fly.io / Koyeb nepozastavil instanci.</p>
+            <div class="io-actions">
+                <a href="/admin/keepalive" class="btn btn-primary btn-sm">Otevřít</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>☁️ Neon Sync</h3>
+            <p>Synchronizace dat s Neon záložní databází. Konfigurace a ruční spuštění syncu.</p>
+            <div class="io-actions">
+                <a href="/admin/neon-sync" class="btn btn-primary btn-sm">Otevřít</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>📧 Hromadný email</h3>
+            <p>Odeslání emailu všem nebo vybraným uživatelům aplikace.</p>
+            <div class="io-actions">
+                <a href="/admin/email" class="btn btn-primary btn-sm">Otevřít</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>📜 Historie změn</h3>
+            <p>Log všech admin akcí — kdo co změnil a kdy.</p>
+            <div class="io-actions">
+                <a href="/admin/history" class="btn btn-primary btn-sm">Otevřít</a>
+            </div>
+        </div>
+
+        <div class="io-card">
+            <h3>🔍 Audit log</h3>
+            <p>Detailní audit přihlášení, odmítnutých akcí a bezpečnostních událostí.</p>
+            <div class="io-actions">
+                <a href="/admin/audit" class="btn btn-primary btn-sm">Otevřít</a>
+            </div>
+        </div>
+
+    </div>
+
+</div>{{/* /tab-admin */}}
 
 <script>
 (function(){
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Tab switching ────────────────────────────────────────────────────────────
+
+var tabs   = document.querySelectorAll('.io-tab');
+var panels = document.querySelectorAll('.io-panel');
+
+function showTab(name) {
+    tabs.forEach(function(t){
+        t.classList.toggle('active', t.dataset.tab === name);
+    });
+    panels.forEach(function(p){
+        p.classList.toggle('active', p.id === 'tab-' + name);
+    });
+    try { history.replaceState(null, '', location.pathname + '#' + name); } catch(e){}
+}
+
+tabs.forEach(function(t){
+    t.addEventListener('click', function(){ showTab(t.dataset.tab); });
+});
+
+// Restore tab from hash or default to 'export'
+var hash = (location.hash || '').replace('#','');
+var valid = ['export','import','admin'];
+showTab(valid.indexOf(hash) >= 0 ? hash : 'export');
+
+// ── API import helpers ───────────────────────────────────────────────────────
 
 function qs(sel){ return document.querySelector(sel); }
 
@@ -324,20 +447,16 @@ var compSel  = qs('#api-comp');
 var roundSel = qs('#api-round');
 var newRow   = qs('#api-new-round-row');
 
-// Zobrazit/skrýt řádek pro název nového kola
 function syncNewRow(){
     if(!roundSel || !newRow) return;
     newRow.style.display = roundSel.value === '0' ? 'flex' : 'none';
 }
 
-// Načíst kola pro vybranou soutěž
 function loadRounds(compID){
     if(!roundSel) return;
-    // Reset
     roundSel.innerHTML = '<option value="0">➕ Vytvořit nové kolo</option>';
     syncNewRow();
     if(!compID) return;
-
     fetch('/admin/api/rounds?competition_id=' + compID)
         .then(function(r){ return r.json(); })
         .then(function(data){
@@ -352,20 +471,18 @@ function loadRounds(compID){
         .catch(function(){});
 }
 
-// Náhled zápasů z API
 window.apiPreview = function(){
-    var fdCode    = (qs('#api-fd-code') || {}).value || '';
-    var matchday  = (qs('#api-matchday') || {}).value || '';
-    var statusEl  = qs('#api-preview-status');
-    var box       = qs('#api-preview-box');
-    var tbody     = qs('#api-preview-tbody');
+    var fdCode   = (qs('#api-fd-code') || {}).value || '';
+    var matchday = (qs('#api-matchday') || {}).value || '';
+    var statusEl = qs('#api-preview-status');
+    var box      = qs('#api-preview-box');
+    var tbody    = qs('#api-preview-tbody');
 
     fdCode = fdCode.trim().toUpperCase();
     if(!fdCode){
         if(statusEl) statusEl.textContent = '⚠ Zadejte kód API soutěže.';
         return;
     }
-
     if(statusEl) statusEl.textContent = '⏳ Načítám…';
     if(box)      box.style.display = 'none';
 
@@ -406,11 +523,8 @@ function esc(s){
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── Inicializace ──────────────────────────────────────────────────────────────
-
 if(compSel){
     compSel.addEventListener('change', function(){ loadRounds(this.value); });
-    // Pokud je soutěž už vybraná (reload po chybě), načíst kola ihned
     if(compSel.value) loadRounds(compSel.value);
 }
 if(roundSel){

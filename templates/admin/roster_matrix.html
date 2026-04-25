@@ -1,0 +1,208 @@
+<style>
+main.container { margin-left:0!important;max-width:100%!important;width:100%!important }
+
+.roster-wrap { overflow-x:auto;position:relative }
+.roster-table { border-collapse:collapse;font-size:.8rem;min-width:100% }
+
+/* Sticky header row — sticks below the navbar (52px) */
+.roster-table thead th { position:sticky;top:52px;z-index:30;background:var(--bg2);border-bottom:2px solid var(--border-d) }
+
+/* Sticky first col */
+.roster-table .col-team { position:sticky;left:0;z-index:20;background:var(--bg2);min-width:170px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis }
+.roster-table thead .col-team { z-index:40 }
+
+/* Category header rows */
+.roster-table .row-cat td { background:var(--bg3);color:var(--muted-d);font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:.25rem .7rem;border-top:2px solid var(--border-d) }
+.roster-table .row-cat .col-team { background:var(--bg3);z-index:20 }
+
+/* Data cells */
+.roster-table td, .roster-table th { padding:.22rem .35rem;border:1px solid rgba(255,255,255,.06);text-align:center;vertical-align:middle }
+.roster-table .col-team { text-align:left;padding:.22rem .6rem }
+
+/* Checkbox */
+.roster-cb { width:1.1rem;height:1.1rem;accent-color:#10b981;cursor:pointer }
+
+/* Row hover */
+.roster-table tbody tr:hover td { background:rgba(255,255,255,.035) }
+.roster-table tbody tr:hover .col-team { background:var(--bg2) }
+
+/* Team name */
+.t-name { font-weight:500;color:var(--text-d) }
+.t-alias { font-size:.68rem;color:var(--muted-d);margin-left:.25rem }
+.t-logo { width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:.3rem }
+
+/* Comp header vertical text */
+.comp-hdr { writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);white-space:nowrap;font-size:.72rem;padding:.6rem .2rem;max-height:120px;overflow:hidden;text-overflow:ellipsis;cursor:default }
+.comp-hdr small { display:block;color:var(--muted-d);font-size:.62rem }
+
+/* Count badge */
+.col-count { font-size:.72rem;color:var(--muted-d);min-width:30px }
+
+/* Saving indicator */
+.saving { opacity:.4;pointer-events:none }
+</style>
+
+<div class="page-header">
+    <h1 style="font-size:1.15rem">🗂️ Roster — týmy × soutěže</h1>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
+        <input type="text" id="team-search" placeholder="🔍 Hledat tým…"
+               oninput="filterRoster()"
+               style="width:180px;background:var(--bg3);color:var(--text-d);border:1px solid var(--border-d);border-radius:6px;padding:.3rem .55rem;font-size:.82rem" />
+        <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+    </div>
+</div>
+<nav style="display:flex;gap:.35rem;margin-bottom:1rem;flex-wrap:wrap">
+    <a href="/admin/teams"  class="btn btn-sm btn-secondary" style="font-size:.78rem">📋 Katalog týmů</a>
+    <a href="/admin/roster" class="btn btn-sm btn-primary"   style="font-size:.78rem">🗂️ Roster (matice)</a>
+</nav>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:.75rem">
+    {{index .Flash "msg"}}
+</div>
+{{end}}
+
+{{if not .Comps}}
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:1.5rem;color:var(--muted-d)">
+    Žádné aktivní soutěže. <a href="/admin/competitions">Přidat soutěž →</a>
+</div>
+{{else if not .Groups}}
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:1.5rem;color:var(--muted-d)">
+    Žádné týmy. <a href="/admin/teams">Přidat týmy →</a>
+</div>
+{{else}}
+
+<meta name="csrf-token" content="{{.CSRFToken}}">
+<div id="save-status" style="display:none;position:fixed;bottom:1rem;right:1rem;background:#1e293b;border:1px solid var(--border-d);border-radius:8px;padding:.5rem 1rem;font-size:.82rem;color:#94a3b8;z-index:1000">
+    💾 Ukládám…
+</div>
+
+<div class="roster-wrap">
+<table class="roster-table" id="roster-tbl">
+<thead>
+    <tr>
+        <th class="col-team" style="font-size:.75rem;color:var(--muted-d);font-weight:600">Tým</th>
+        {{range .Comps}}
+        <th title="{{.Name}} {{.Season}}">
+            <div class="comp-hdr">{{.Name}}<small>{{.Season}}</small></div>
+        </th>
+        {{end}}
+        <th class="col-count" title="Počet přiřazení">#</th>
+    </tr>
+</thead>
+<tbody>
+{{range .Groups}}
+{{$cat := .Category}}
+<tr class="row-cat" data-cat="{{$cat}}">
+    <td class="col-team">{{if $cat}}{{$cat}}{{else}}Bez kategorie{{end}}</td>
+    {{range $.Comps}}<td></td>{{end}}
+    <td></td>
+</tr>
+{{range .Teams}}
+{{$team := .}}
+<tr data-name="{{lower .Name}}" data-cat="{{$cat}}">
+    <td class="col-team" title="{{.Name}} ({{.Sport}})">
+        {{if .LogoURL}}<img src="{{strVal .LogoURL}}" class="t-logo" alt="">{{end}}
+        <span class="t-name">{{.Name}}</span>
+        {{if .Alias}}<span class="t-alias">({{strVal .Alias}})</span>{{end}}
+        <span style="font-size:.7rem;opacity:.5;margin-left:.2rem">{{if eq .Sport "hockey"}}🏒{{else if eq .Sport "football"}}⚽{{else}}{{.Sport}}{{end}}</span>
+    </td>
+    {{range $.Comps}}
+    <td>
+        <input type="checkbox" class="roster-cb"
+               data-team="{{$team.ID}}"
+               data-comp="{{.ID}}"
+               {{if index $team.Assigned .ID}}checked{{end}} />
+    </td>
+    {{end}}
+    <td class="col-count row-count" id="rc-{{.ID}}"></td>
+</tr>
+{{end}}
+{{end}}
+</tbody>
+</table>
+</div>
+
+<script>
+(function() {
+    var saveTimer = null;
+    var saveStatus = document.getElementById('save-status');
+    var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+
+    // Inicializuj počítadla
+    function updateRowCount(teamId) {
+        var row = document.querySelector('tr[data-name] td.row-count#rc-' + teamId);
+        if (!row) return;
+        var tr = row.closest('tr');
+        var n = tr.querySelectorAll('.roster-cb:checked').length;
+        row.textContent = n > 0 ? n : '';
+        row.style.color = n > 0 ? '#34d399' : 'var(--muted-d)';
+    }
+
+    // Inicializuj všechna počítadla při načtení
+    document.querySelectorAll('tr[data-name]').forEach(function(tr) {
+        var rc = tr.querySelector('.row-count');
+        if (!rc) return;
+        var teamId = rc.id.replace('rc-', '');
+        updateRowCount(teamId);
+    });
+
+    // Toggle handler
+    document.querySelectorAll('.roster-cb').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            var teamId = cb.dataset.team;
+            var compId = cb.dataset.comp;
+            var checked = cb.checked ? '1' : '0';
+
+            // Okamžitě aktualizuj počítadlo
+            updateRowCount(teamId);
+
+            // Ukaž indikátor ukládání
+            if (saveTimer) clearTimeout(saveTimer);
+            saveStatus.style.display = 'block';
+
+            var fd = new FormData();
+            fd.append('team_id', teamId);
+            fd.append('comp_id', compId);
+            fd.append('checked', checked);
+            fd.append('_csrf', csrfToken);
+
+            fetch('/admin/roster/toggle', { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.ok) {
+                        cb.checked = !cb.checked;
+                        updateRowCount(teamId);
+                        alert('Chyba ukládání');
+                    }
+                    saveTimer = setTimeout(function() { saveStatus.style.display = 'none'; }, 1200);
+                })
+                .catch(function() {
+                    cb.checked = !cb.checked;
+                    updateRowCount(teamId);
+                    saveStatus.style.display = 'none';
+                    alert('Chyba spojení');
+                });
+        });
+    });
+
+    // Vyhledávání
+    window.filterRoster = function() {
+        var q = document.getElementById('team-search').value.toLowerCase().trim();
+        var catRows = {};
+        document.querySelectorAll('#roster-tbl tbody tr[data-name]').forEach(function(tr) {
+            var name = tr.getAttribute('data-name') || '';
+            var cat  = tr.getAttribute('data-cat') || '';
+            var show = !q || name.includes(q);
+            tr.style.display = show ? '' : 'none';
+            if (show) catRows[cat] = true;
+        });
+        // Skrýt/zobrazit category header rows
+        document.querySelectorAll('#roster-tbl tbody tr.row-cat').forEach(function(tr) {
+            var cat = tr.getAttribute('data-cat') || '';
+            tr.style.display = (!q || catRows[cat]) ? '' : 'none';
+        });
+    };
+}());
+</script>
+{{end}}

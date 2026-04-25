@@ -154,10 +154,15 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                     {{end}}
                     <span style="color:var(--muted-d);opacity:.35"> · </span>
                     {{end}}
-                    {{call $.Abbrev $htName}}-{{call $.Abbrev $atName}}
+                    {{if .HomeTeam.LogoURL}}<img src="{{strVal .HomeTeam.LogoURL}}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;background:#fff;border-radius:50%;padding:1px"> {{end}}{{call $.Abbrev $htName}}-{{call $.Abbrev $atName}}{{if .AwayTeam.LogoURL}} <img src="{{strVal .AwayTeam.LogoURL}}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;background:#fff;border-radius:50%;padding:1px">{{end}}
                 </div>
                 {{if and $.User.IsAdmin (not .IsFinished)}}
                 <div style="display:flex;justify-content:center;align-items:center;gap:3px;margin-top:2px">
+                    <button class="match-notify-btn"
+                            data-match-id="{{.ID}}"
+                            title="Poslat notifikaci teď ({{if .NotifySent}}již odesláno{{else}}ještě neodesláno{{end}})"
+                            style="background:none;border:none;cursor:pointer;font-size:0.75rem;padding:0 2px;line-height:1;opacity:{{if .NotifySent}}.4{{else}}.8{{end}}"
+                            onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='{{if .NotifySent}}0.4{{else}}0.8{{end}}'">🔔</button>
                     <button class="match-delete-btn"
                             data-match-id="{{.ID}}"
                             data-label="{{.HomeTeam.Name}} – {{.AwayTeam.Name}}"
@@ -450,6 +455,30 @@ document.addEventListener('DOMContentLoaded', function () {
             inp.addEventListener('keydown', function(e) { if (e.key==='Enter') save(); if (e.key==='Escape') cancel(); });
             function outsideClick(e) { if (!cell.contains(e.target)) { document.removeEventListener('click', outsideClick); save(); } }
             setTimeout(function() { document.addEventListener('click', outsideClick); }, 10);
+        });
+    });
+
+    // ── Ruční notifikace (admin) ──
+    table.querySelectorAll('.match-notify-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var matchId = btn.dataset.matchId;
+            btn.textContent = '⏳';
+            btn.disabled = true;
+            fetch('/admin/matches/' + matchId + '/notify-now', { method: 'POST' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    btn.disabled = false;
+                    if (data.ok) {
+                        btn.textContent = '✅';
+                        btn.style.opacity = '1';
+                        setTimeout(function() { btn.textContent = '🔔'; btn.style.opacity = '.4'; }, 3000);
+                    } else {
+                        btn.textContent = '🔔';
+                        alert('Chyba: ' + (data.error || 'neznámá'));
+                    }
+                })
+                .catch(function() { btn.disabled = false; btn.textContent = '🔔'; alert('Chyba spojení.'); });
         });
     });
 

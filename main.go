@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -31,10 +32,28 @@ func init() {
 	gob.Register(map[string]interface{}{})
 }
 
+// migrateSchema přidá chybějící sloupce do tabulky users (idempotentní).
+func migrateSchema() {
+	stmts := []string{
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT true`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_inactive BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS notify_sent BOOLEAN NOT NULL DEFAULT false`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
+			log.Printf("[migrate] %s: %v", s, err)
+		}
+	}
+	log.Println("[migrate] schema OK")
+}
+
 func main() {
 	// Connect to DB (config loads via init() automatically)
 	db.Init()
 	defer db.Close()
+
+	// Migrate schema — add columns that might be missing in older DBs
+	migrateSchema()
 
 	// Detect which optional columns exist in the users table at runtime
 	handlers.InitUserSchema()
@@ -166,6 +185,7 @@ func main() {
 	r.Post("/admin/users/{user_id}/delete", handlers.AdminUserDelete)
 	r.Post("/admin/users/{user_id}/reset-password", handlers.AdminUserResetPassword)
 	r.Post("/admin/users/{user_id}/set-role", handlers.AdminUserSetRole)
+	r.Post("/admin/users/{user_id}/send-welcome", handlers.AdminUserSendWelcome)
 	r.Post("/admin/users/bulk-action", handlers.AdminUsersBulkAction)
 
 	// Admin manual page
@@ -186,6 +206,7 @@ func main() {
 	r.Post("/admin/matches/{match_id}/clear-result", handlers.AdminMatchClearResult)
 	r.Post("/admin/matches/{match_id}/delete", handlers.AdminMatchDelete)
 	r.Post("/admin/matches/{match_id}/set-date", handlers.AdminMatchSetDate)
+	r.Post("/admin/matches/{match_id}/notify-now", handlers.AdminMatchNotifyNow)
 	r.Post("/admin/matches/{match_id}/set-tip", handlers.AdminSetTip)
 	r.Post("/admin/tips/set-ajax", handlers.AdminSetTip) // alias (Python URL)
 	r.Get("/admin/unscored", handlers.AdminUnscored(tmpl))
@@ -202,9 +223,13 @@ func main() {
 	r.Post("/admin/teams/new", handlers.AdminTeamCreate)
 	r.Post("/admin/teams/{team_id}/edit", handlers.AdminTeamEdit)
 	r.Post("/admin/teams/{team_id}/delete", handlers.AdminTeamDelete)
+	r.Post("/admin/teams/{team_id}/merge", handlers.AdminTeamMerge)
 	r.Post("/admin/teams/import-csv", handlers.AdminTeamsImportCSV)
+	r.Post("/admin/teams/import-xlsx", handlers.AdminTeamsImportXLSX)
 	r.Get("/admin/competitions/{competition_id}/teams", handlers.AdminCompetitionTeamsForm(tmpl))
 	r.Post("/admin/competitions/{competition_id}/teams", handlers.AdminCompetitionTeamsSave)
+	r.Get("/admin/roster", handlers.AdminRosterMatrix(tmpl))
+	r.Post("/admin/roster/toggle", handlers.AdminRosterToggle)
 
 	// Admin OCR (text paste import)
 	r.Get("/admin/ocr", handlers.AdminOCRForm(tmpl))
@@ -406,6 +431,8 @@ func templateFuncs() template.FuncMap {
 		"tr": func(lang, key string) string {
 			return i18n.Tr(lang, key)
 		},
+		// lower converts string to lowercase (for data-name search)
+		"lower": strings.ToLower,
 	}
 }
 
