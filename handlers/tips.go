@@ -16,6 +16,15 @@ import (
 
 // ─── GET / ────────────────────────────────────────────────────────────────────
 
+// IndexMatchCtx drží data pro jedno tipovatelné utkání na hlavní stránce.
+type IndexMatchCtx struct {
+	Match     *models.Match
+	Tip       *models.Tip
+	CompName  string
+	CompID    int
+	RoundName string
+}
+
 func Index(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		u := RequireLogin(w, r)
@@ -26,7 +35,7 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 		ctx := context.Background()
 		rows, err := db.Pool.Query(ctx,
 			`SELECT id, name, season, is_active, sport, sort_order
-			   FROM competitions WHERE is_active = true ORDER BY id DESC`)
+			   FROM competitions WHERE is_active = true ORDER BY COALESCE(sort_order,9999) ASC, id DESC`)
 		if err != nil {
 			http.Error(w, "DB error", http.StatusInternalServerError)
 			return
@@ -44,9 +53,107 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
+		// Načti tipovatelné zápasy ze všech aktivních soutěží
+		var openMatches []IndexMatchCtx
+		if len(comps) > 0 {
+			compIDs := make([]int, len(comps))
+			compByID := map[int]*models.Competition{}
+			for i, c := range comps {
+				compIDs[i] = c.ID
+				compByID[c.ID] = c
+			}
+
+			// Aktivní kola
+			type roundRow struct {
+				ID       int
+				CompID   int
+				Name     string
+				Deadline *time.Time
+			}
+			rndByID := map[int]roundRow{}
+			rndRows, _ := db.Pool.Query(ctx,
+				`SELECT id, competition_id, name, deadline FROM rounds
+				  WHERE competition_id = ANY($1) AND is_active = true`, compIDs)
+			for rndRows.Next() {
+				var rr roundRow
+				_ = rndRows.Scan(&rr.ID, &rr.CompID, &rr.Name, &rr.Deadline)
+				rndByID[rr.ID] = rr
+			}
+			rndRows.Close()
+
+			if len(rndByID) > 0 {
+				rndIDs := make([]int, 0, len(rndByID))
+				for id := range rndByID {
+					rndIDs = append(rndIDs, id)
+				}
+
+				// Otevřené zápasy
+				mRows, _ := db.Pool.Query(ctx,
+					`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
+					        m.home_score, m.away_score, m.match_date, m.is_finished,
+					        ht.id, ht.name, ht.display_name,
+					        at.id, at.name, at.display_name
+					   FROM matches m
+					   JOIN teams ht ON ht.id = m.home_team_id
+					   JOIN teams at ON at.id = m.away_team_id
+					  WHERE m.round_id = ANY($1) AND m.is_finished = false
+					  ORDER BY m.match_date ASC NULLS LAST`, rndIDs)
+
+				var matchIDs []int
+				var pendingMatches []*models.Match
+				for mRows.Next() {
+					m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}}
+					_ = mRows.Scan(
+						&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
+						&m.HomeScore, &m.AwayScore, &m.MatchDate, &m.IsFinished,
+						&m.HomeTeam.ID, &m.HomeTeam.Name, &m.HomeTeam.DisplayName,
+						&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName)
+					rr := rndByID[m.RoundID]
+					// Filtruj: musí mít otevřenou uzávěrku
+					rndModel := &models.Round{ID: rr.ID, CompetitionID: rr.CompID, Name: rr.Name, Deadline: rr.Deadline}
+					if IsBeforeDeadline(rndModel, m) {
+						pendingMatches = append(pendingMatches, m)
+						matchIDs = append(matchIDs, m.ID)
+					}
+				}
+				mRows.Close()
+
+				// Tipy uživatele
+				tipMap := map[int]*models.Tip{}
+				if len(matchIDs) > 0 {
+					tRows, _ := db.Pool.Query(ctx,
+						`SELECT id, user_id, match_id, home_score, away_score, points, created_at
+						   FROM tips WHERE user_id = $1 AND match_id = ANY($2)`,
+						u.ID, matchIDs)
+					for tRows.Next() {
+						t := &models.Tip{}
+						_ = tRows.Scan(&t.ID, &t.UserID, &t.MatchID, &t.HomeScore, &t.AwayScore, &t.Points, &t.CreatedAt)
+						tipMap[t.MatchID] = t
+					}
+					tRows.Close()
+				}
+
+				for _, m := range pendingMatches {
+					rr := rndByID[m.RoundID]
+					comp := compByID[rr.CompID]
+					ctx2 := IndexMatchCtx{
+						Match:     m,
+						Tip:       tipMap[m.ID],
+						RoundName: rr.Name,
+					}
+					if comp != nil {
+						ctx2.CompName = comp.Name
+						ctx2.CompID = comp.ID
+					}
+					openMatches = append(openMatches, ctx2)
+				}
+			}
+		}
+
 		RenderTemplate(w, r, tmpl, "index.html", TemplateData{
 			"User":         u,
 			"Competitions": comps,
+			"OpenMatches":  openMatches,
 		})
 	}
 }

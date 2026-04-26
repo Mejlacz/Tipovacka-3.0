@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"regexp"
@@ -506,5 +507,171 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 			"CompTeams":             compTeams,
 			"NextRoundName":         nextRoundName,
 		})
+	}
+}
+
+// ─── GET /leaderboard/chart-data ─────────────────────────────────────────────
+// Vrátí JSON s body hráčů po jednotlivých kolech (pro Chart.js).
+
+func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
+	type roundInfo struct {
+		ID   int
+		Name string
+	}
+	type dataset struct {
+		Label string `json:"label"`
+		IsMe  bool   `json:"isMe"`
+		Data  []int  `json:"data"`
+	}
+	type chartResp struct {
+		Labels   []string  `json:"labels"`
+		Datasets []dataset `json:"datasets"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		u := RequireLogin(w, r)
+		if u == nil {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+
+		compID, err := strconv.Atoi(r.URL.Query().Get("competition_id"))
+		if err != nil || compID == 0 {
+			w.Write([]byte(`{"labels":[],"datasets":[]}`))
+			return
+		}
+
+		ctx := context.Background()
+
+		// Kola s alespoň jedním dokončeným zápasem, seřazená
+		var rounds []roundInfo
+		rrows, _ := db.Pool.Query(ctx,
+			`SELECT DISTINCT r.id, r.name
+			   FROM rounds r
+			   JOIN matches m ON m.round_id = r.id
+			  WHERE r.competition_id = $1 AND m.is_finished = true
+			  ORDER BY r.id`, compID)
+		for rrows.Next() {
+			var ri roundInfo
+			_ = rrows.Scan(&ri.ID, &ri.Name)
+			rounds = append(rounds, ri)
+		}
+		rrows.Close()
+
+		if len(rounds) == 0 {
+			w.Write([]byte(`{"labels":[],"datasets":[]}`))
+			return
+		}
+
+		roundIDs := make([]int, len(rounds))
+		for i, ri := range rounds {
+			roundIDs[i] = ri.ID
+		}
+
+		// Body per user per round
+		type ptsRow struct {
+			RoundID int
+			UserID  int
+			Pts     int
+		}
+		var ptsRows []ptsRow
+		ptrows, _ := db.Pool.Query(ctx,
+			`SELECT m.round_id, t.user_id, COALESCE(SUM(t.points), 0)::int
+			   FROM tips t
+			   JOIN matches m ON m.id = t.match_id
+			  WHERE m.round_id = ANY($1) AND m.is_finished = true AND t.points IS NOT NULL
+			  GROUP BY m.round_id, t.user_id`, roundIDs)
+		for ptrows.Next() {
+			var pr ptsRow
+			_ = ptrows.Scan(&pr.RoundID, &pr.UserID, &pr.Pts)
+			ptsRows = append(ptsRows, pr)
+		}
+		ptrows.Close()
+
+		// Indexy kol
+		roundIdx := map[int]int{}
+		for i, ri := range rounds {
+			roundIdx[ri.ID] = i
+		}
+
+		// Kumulativní body per user
+		type userCum struct {
+			Name string
+			Pts  []int
+		}
+		userMap := map[int]*userCum{}
+
+		// Inicializuj nulami
+		addUser := func(uid int, name string) *userCum {
+			if uc, ok := userMap[uid]; ok {
+				return uc
+			}
+			uc := &userCum{Name: name, Pts: make([]int, len(rounds))}
+			userMap[uid] = uc
+			return uc
+		}
+
+		// Načti jména uživatelů
+		unames := map[int]string{}
+		unameRows, _ := db.Pool.Query(ctx,
+			`SELECT id, username FROM users WHERE is_blocked = false AND is_inactive = false`)
+		for unameRows.Next() {
+			var uid int
+			var uname string
+			_ = unameRows.Scan(&uid, &uname)
+			unames[uid] = uname
+		}
+		unameRows.Close()
+
+		// Naplň body
+		for _, pr := range ptsRows {
+			name, ok := unames[pr.UserID]
+			if !ok {
+				continue
+			}
+			uc := addUser(pr.UserID, name)
+			if idx, ok2 := roundIdx[pr.RoundID]; ok2 {
+				uc.Pts[idx] = pr.Pts
+			}
+		}
+
+		// Kumulativní součet
+		for _, uc := range userMap {
+			for i := 1; i < len(uc.Pts); i++ {
+				uc.Pts[i] += uc.Pts[i-1]
+			}
+		}
+
+		// Seřaď podle celkových bodů sestupně
+		type userEntry struct {
+			uid int
+			uc  *userCum
+		}
+		var entries []userEntry
+		for uid, uc := range userMap {
+			entries = append(entries, userEntry{uid, uc})
+		}
+		sort.Slice(entries, func(i, j int) bool {
+			si := entries[i].uc.Pts[len(rounds)-1]
+			sj := entries[j].uc.Pts[len(rounds)-1]
+			return si > sj
+		})
+
+		labels := make([]string, len(rounds))
+		for i, ri := range rounds {
+			labels[i] = ri.Name
+		}
+
+		var datasets []dataset
+		for _, e := range entries {
+			datasets = append(datasets, dataset{
+				Label: e.uc.Name,
+				IsMe:  e.uid == u.ID,
+				Data:  e.uc.Pts,
+			})
+		}
+
+		enc := json.NewEncoder(w)
+		_ = enc.Encode(chartResp{Labels: labels, Datasets: datasets})
 	}
 }

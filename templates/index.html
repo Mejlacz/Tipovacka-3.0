@@ -1,4 +1,51 @@
 <h1>{{tr .Lang "tips_title"}}</h1>
+
+{{/* ── Otevřená tipování ── */}}
+{{if .OpenMatches}}
+<div style="margin-bottom:1.5rem">
+    <h2 style="font-size:.88rem;font-weight:700;color:var(--muted-d);margin:0 0 .6rem;text-transform:uppercase;letter-spacing:.05em">
+        ⚡ Otevřená tipování
+    </h2>
+    <div style="display:flex;flex-direction:column;gap:.35rem">
+    {{$prevComp := ""}}
+    {{range .OpenMatches}}
+        {{if ne .CompName $prevComp}}
+            {{if $prevComp}}</div>{{end}}
+            <div style="font-size:.72rem;font-weight:700;color:var(--accent);letter-spacing:.05em;padding:.5rem 0 .2rem;border-top:{{if $prevComp}}1px solid var(--border-d){{else}}none{{end}};margin-top:{{if $prevComp}}.4rem{{else}}0{{end}}">
+                {{.CompName}} · {{.RoundName}}
+            </div>
+            <div class="qt-group">
+            {{$prevComp = .CompName}}
+        {{end}}
+        <form method="post" action="/tip/submit" class="qt-row" data-match-id="{{.Match.ID}}">
+            <input type="hidden" name="match_id" value="{{.Match.ID}}" />
+            <span class="qt-teams">
+                {{coalesce .Match.HomeTeam.DisplayName .Match.HomeTeam.Name}}
+                <span style="color:var(--muted-d);margin:0 .25rem">vs</span>
+                {{coalesce .Match.AwayTeam.DisplayName .Match.AwayTeam.Name}}
+            </span>
+            {{if .Match.MatchDate}}
+            <span class="qt-date">{{.Match.MatchDate.Format "02.01. 15:04"}}</span>
+            {{end}}
+            <div class="qt-inputs">
+                <input type="number" name="home_score" min="0" max="99"
+                       value="{{if .Tip}}{{.Tip.HomeScore}}{{end}}"
+                       placeholder="–" class="qt-score" required />
+                <span class="qt-colon">:</span>
+                <input type="number" name="away_score" min="0" max="99"
+                       value="{{if .Tip}}{{.Tip.AwayScore}}{{end}}"
+                       placeholder="–" class="qt-score" required />
+                <button type="submit" class="qt-btn {{if .Tip}}qt-btn-edit{{else}}qt-btn-new{{end}}">
+                    {{if .Tip}}✏️{{else}}➤{{end}}
+                </button>
+            </div>
+        </form>
+    {{end}}
+    </div>
+</div>
+{{end}}
+
+{{/* ── Přehled soutěží ── */}}
 {{if .Competitions}}
 <div class="card-list">
 {{range .Competitions}}
@@ -11,3 +58,56 @@
 {{else}}
 <p class="empty">{{tr .Lang "tips_no_comps"}}</p>
 {{end}}
+
+<style>
+.qt-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .35rem .6rem;
+    background: var(--bg2);
+    border: 1px solid var(--border-d);
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+.qt-row:hover { border-color: var(--accent); }
+.qt-teams { flex: 1; font-size: .88rem; font-weight: 600; min-width: 150px; }
+.qt-date { font-size: .75rem; color: var(--muted-d); white-space: nowrap; }
+.qt-inputs { display: flex; align-items: center; gap: .3rem; margin-left: auto; }
+.qt-score {
+    width: 3rem; text-align: center; padding: .25rem .2rem;
+    background: var(--bg3); border: 1px solid var(--border-d); border-radius: 6px;
+    color: inherit; font-size: .95rem; font-weight: 700;
+    -moz-appearance: textfield;
+}
+.qt-score::-webkit-inner-spin-button,
+.qt-score::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.qt-score:focus { outline: none; border-color: var(--accent); }
+.qt-colon { font-weight: 700; color: var(--muted-d); }
+.qt-btn {
+    border: none; border-radius: 6px; cursor: pointer;
+    font-size: .85rem; padding: .28rem .6rem; line-height: 1;
+    transition: background .12s;
+}
+.qt-btn-new { background: var(--accent); color: #fff; }
+.qt-btn-new:hover { filter: brightness(1.15); }
+.qt-btn-edit { background: rgba(251,191,36,.18); color: #fbbf24; border: 1px solid rgba(251,191,36,.3); }
+.qt-btn-edit:hover { background: rgba(251,191,36,.3); }
+</style>
+
+<script>
+(function() {
+    document.querySelectorAll('.qt-row').forEach(function(form) {
+        var inputs = form.querySelectorAll('.qt-score');
+        if (inputs.length < 2) return;
+        inputs[0].addEventListener('focus', function() { inputs[0].select(); });
+        inputs[1].addEventListener('focus', function() { inputs[1].select(); });
+        inputs[0].addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); inputs[1].focus(); inputs[1].select(); }
+        });
+        inputs[1].addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }
+        });
+    });
+})();
+</script>

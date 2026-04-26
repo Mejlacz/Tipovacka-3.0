@@ -120,6 +120,7 @@ func main() {
 
 	// ── Leaderboard ───────────────────────────────────────────────────────────
 	r.Get("/leaderboard", handlers.Leaderboard(tmpl))
+	r.Get("/leaderboard/chart-data", handlers.LeaderboardChartData(tmpl))
 	r.Get("/leaderboard/{competition_id}", func(w http.ResponseWriter, r *http.Request) {
 		compID := chi.URLParam(r, "competition_id")
 		http.Redirect(w, r, "/leaderboard?competition_id="+compID, http.StatusMovedPermanently)
