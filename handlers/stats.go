@@ -311,7 +311,7 @@ func roundF(f float64, decimals int) float64 {
 
 // GET /stats  — redirect to latest competition
 func StatsRedirect(w http.ResponseWriter, r *http.Request) {
-	user := RequireLogin(w, r)
+	user := RequireApproved(w, r)
 	if user == nil {
 		return
 	}
@@ -335,7 +335,7 @@ func StatsRedirect(w http.ResponseWriter, r *http.Request) {
 // GET /stats/{competition_id}
 func StatsDetail(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := RequireLogin(w, r)
+		user := RequireApproved(w, r)
 		if user == nil {
 			return
 		}
@@ -416,7 +416,7 @@ func StatsDetail(tmpl *template.Template) http.HandlerFunc {
 // Parametr: ?user_id=N (volitelný — výchozí je přihlášený uživatel)
 func StatsExtended(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		currentUser := RequireLogin(w, r)
+		currentUser := RequireApproved(w, r)
 		if currentUser == nil {
 			return
 		}
@@ -670,7 +670,7 @@ func pct(won, total int) string {
 // GET /stats/{competition_id}/vs/{other_user_id}
 func StatsVs(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := RequireLogin(w, r)
+		user := RequireApproved(w, r)
 		if user == nil {
 			return
 		}

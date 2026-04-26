@@ -5,7 +5,17 @@
 
 {{if .Error}}<div class="alert alert-error" style="margin-bottom:1rem">{{.Error}}</div>{{end}}
 
-<form method="post" action="/admin/users/{{.Edited.ID}}/edit" style="max-width:480px">
+<form method="post" action="/admin/users/{{.Edited.ID}}/edit" style="max-width:520px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group" style="margin-bottom:0">
+            <label>Jméno</label>
+            <input type="text" name="first_name" value="{{strVal .Edited.FirstName}}" placeholder="Nepovinné" />
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+            <label>Příjmení</label>
+            <input type="text" name="last_name" value="{{strVal .Edited.LastName}}" placeholder="Nepovinné" />
+        </div>
+    </div>
     <div class="form-group">
         <label>Nick</label>
         <input type="text" name="username" value="{{.Edited.Username}}" required />
@@ -13,6 +23,13 @@
     <div class="form-group">
         <label>E-mail</label>
         <input type="email" name="email" value="{{strVal .Edited.Email}}" />
+    </div>
+    <div class="form-group">
+        <label>Jazyk</label>
+        <select name="lang" style="width:100%;padding:.45rem .6rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:inherit">
+            <option value="cs" {{if eq .Edited.Lang "cs"}}selected{{end}}>🇨🇿 Čeština</option>
+            <option value="en" {{if eq .Edited.Lang "en"}}selected{{end}}>🇬🇧 English</option>
+        </select>
     </div>
     <div class="form-group">
         <label>Role</label>

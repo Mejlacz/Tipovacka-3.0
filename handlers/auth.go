@@ -93,6 +93,7 @@ func RegisterSubmit(tmpl *template.Template) http.HandlerFunc {
 			{Col: "email", Val: email, Include: userCols.Email && email != ""},
 			{Col: "lang", Val: "cs", Include: userCols.Lang},
 			{Col: "created_at", Val: time.Now().UTC(), Include: userCols.CreatedAt},
+			{Col: "is_approved", Val: false, Include: userCols.IsApproved},
 		})
 		var userID int
 		err = db.Pool.QueryRow(ctx, sql, vals...).Scan(&userID)

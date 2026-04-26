@@ -16,7 +16,7 @@ import (
 // GET /archive
 func ArchiveIndex(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := RequireLogin(w, r)
+		user := RequireApproved(w, r)
 		if user == nil {
 			return
 		}
@@ -66,7 +66,7 @@ func ArchiveIndex(tmpl *template.Template) http.HandlerFunc {
 // GET /archive/competition/{competition_id}
 func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := RequireLogin(w, r)
+		user := RequireApproved(w, r)
 		if user == nil {
 			return
 		}

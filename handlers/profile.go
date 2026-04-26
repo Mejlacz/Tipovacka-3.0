@@ -23,7 +23,7 @@ import (
 // GET /profile
 func ProfilePage(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := RequireLogin(w, r)
+		user := RequireApproved(w, r)
 		if user == nil {
 			return
 		}
@@ -183,7 +183,7 @@ func ProfilePage(tmpl *template.Template) http.HandlerFunc {
 
 // POST /profile/update
 func ProfileUpdate(w http.ResponseWriter, r *http.Request) {
-	user := RequireLogin(w, r)
+	user := RequireApproved(w, r)
 	if user == nil {
 		return
 	}
@@ -191,19 +191,23 @@ func ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	// first_name, last_name not in Neon backup schema — only update email
-	_ = strings.TrimSpace(r.FormValue("first_name"))  // parsed but not stored
-	_ = strings.TrimSpace(r.FormValue("last_name"))
+	firstName := strings.TrimSpace(r.FormValue("first_name"))
+	lastName := strings.TrimSpace(r.FormValue("last_name"))
 	email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
+	lang := r.FormValue("lang")
+	if lang != "cs" && lang != "en" {
+		lang = "cs"
+	}
 
 	ctx := context.Background()
-	// Check email uniqueness — jen pokud sloupec existuje
+	// Check email uniqueness
 	if email != "" && userCols.Email {
 		var conflict int
 		_ = db.Pool.QueryRow(ctx,
 			`SELECT COUNT(*) FROM users WHERE email=$1 AND id!=$2`, email, user.ID).Scan(&conflict)
 		if conflict > 0 {
-			http.Redirect(w, r, "/profile?error=profile_email_used", http.StatusSeeOther)
+			middleware.SetFlash(w, r, "err", "Tento email je již používán.")
+			http.Redirect(w, r, "/profile", http.StatusSeeOther)
 			return
 		}
 	}
@@ -213,12 +217,24 @@ func ProfileUpdate(w http.ResponseWriter, r *http.Request) {
 			`UPDATE users SET email=$1 WHERE id=$2`,
 			PtrStr(email), user.ID)
 	}
-	http.Redirect(w, r, "/profile?msg=profile_data_saved", http.StatusSeeOther)
+	if userCols.Lang {
+		_, _ = db.Pool.Exec(ctx, `UPDATE users SET lang=$1 WHERE id=$2`, lang, user.ID)
+	}
+	if userCols.FirstName {
+		fn := PtrStr(firstName)
+		_, _ = db.Pool.Exec(ctx, `UPDATE users SET first_name=$1 WHERE id=$2`, fn, user.ID)
+	}
+	if userCols.LastName {
+		ln := PtrStr(lastName)
+		_, _ = db.Pool.Exec(ctx, `UPDATE users SET last_name=$1 WHERE id=$2`, ln, user.ID)
+	}
+	middleware.SetFlash(w, r, "ok", "Údaje uloženy.")
+	http.Redirect(w, r, "/profile", http.StatusSeeOther)
 }
 
 // POST /profile/password
 func ProfilePassword(w http.ResponseWriter, r *http.Request) {
-	user := RequireLogin(w, r)
+	user := RequireApproved(w, r)
 	if user == nil {
 		return
 	}
@@ -254,7 +270,7 @@ func ProfilePassword(w http.ResponseWriter, r *http.Request) {
 
 // POST /profile/notifications
 func ProfileNotifications(w http.ResponseWriter, r *http.Request) {
-	user := RequireLogin(w, r)
+	user := RequireApproved(w, r)
 	if user == nil {
 		return
 	}
@@ -391,7 +407,7 @@ func ProfilePushDelete(w http.ResponseWriter, r *http.Request) {
 
 // POST /profile/avatar — nahrání profilové fotky
 func ProfileAvatarUpload(w http.ResponseWriter, r *http.Request) {
-	user := RequireLogin(w, r)
+	user := RequireApproved(w, r)
 	if user == nil {
 		return
 	}
@@ -453,7 +469,7 @@ func ProfileAvatarUpload(w http.ResponseWriter, r *http.Request) {
 
 // POST /profile/avatar/delete — smazání profilové fotky
 func ProfileAvatarDelete(w http.ResponseWriter, r *http.Request) {
-	user := RequireLogin(w, r)
+	user := RequireApproved(w, r)
 	if user == nil {
 		return
 	}

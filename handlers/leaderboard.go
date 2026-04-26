@@ -94,12 +94,8 @@ func loadAllUsers(ctx context.Context) []*models.User {
 // GET /leaderboard
 func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		u := RequireLogin(w, r)
+		u := RequireApproved(w, r)
 		if u == nil {
-			return
-		}
-		if !u.IsApproved && !u.IsAdmin {
-			http.Redirect(w, r, "/pending", http.StatusSeeOther)
 			return
 		}
 
@@ -143,8 +139,9 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 			matchRows, _ := db.Pool.Query(ctx,
 				`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
 				        m.home_score, m.away_score, m.match_date, m.is_finished,
-				        ht.id, ht.name, ht.display_name,
-				        at.id, at.name, at.display_name,
+				        COALESCE(m.notify_sent, false),
+				        ht.id, ht.name, ht.display_name, ht.logo_url,
+				        at.id, at.name, at.display_name, at.logo_url,
 				        r.id, r.name, r.deadline, r.competition_id
 				   FROM matches m
 				   JOIN rounds r ON r.id = m.round_id
@@ -157,8 +154,9 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 				_ = matchRows.Scan(
 					&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
 					&m.HomeScore, &m.AwayScore, &m.MatchDate, &m.IsFinished,
-					&m.HomeTeam.ID, &m.HomeTeam.Name, &m.HomeTeam.DisplayName,
-					&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName,
+					&m.NotifySent,
+					&m.HomeTeam.ID, &m.HomeTeam.Name, &m.HomeTeam.DisplayName, &m.HomeTeam.LogoURL,
+					&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName, &m.AwayTeam.LogoURL,
 					&m.Round.ID, &m.Round.Name, &m.Round.Deadline, &m.Round.CompetitionID)
 				matches = append(matches, m)
 			}

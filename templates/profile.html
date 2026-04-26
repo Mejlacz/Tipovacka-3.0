@@ -48,13 +48,30 @@
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
     <h2 style="margin:0 0 1rem;font-size:1rem">{{tr .Lang "profile_personal"}}</h2>
     <form method="post" action="/profile/update">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+            <div class="form-group" style="margin-bottom:0">
+                <label>Jméno</label>
+                <input type="text" name="first_name" value="{{if .User.FirstName}}{{strVal .User.FirstName}}{{end}}" placeholder="Nepovinné" />
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+                <label>Příjmení</label>
+                <input type="text" name="last_name" value="{{if .User.LastName}}{{strVal .User.LastName}}{{end}}" placeholder="Nepovinné" />
+            </div>
+        </div>
         <div class="form-group">
             <label>{{tr .Lang "profile_nickname"}}</label>
             <input type="text" name="username" value="{{.User.Username}}" disabled style="opacity:.6" />
         </div>
         <div class="form-group">
             <label>{{tr .Lang "profile_email"}}</label>
-            <input type="email" name="email" value="{{if .User.Email}}{{.User.Email}}{{end}}" />
+            <input type="email" name="email" value="{{if .User.Email}}{{strVal .User.Email}}{{end}}" />
+        </div>
+        <div class="form-group">
+            <label>Jazyk</label>
+            <select name="lang" style="width:100%;padding:.45rem .6rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.9rem">
+                <option value="cs" {{if eq .User.Lang "cs"}}selected{{end}}>🇨🇿 Čeština</option>
+                <option value="en" {{if eq .User.Lang "en"}}selected{{end}}>🇬🇧 English</option>
+            </select>
         </div>
         <button type="submit" class="btn btn-primary btn-sm">{{tr .Lang "profile_save"}}</button>
     </form>

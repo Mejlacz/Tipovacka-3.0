@@ -22,13 +22,17 @@ import (
 
 // userCols obsahuje info o tom, které sloupce tabulky users v DB existují.
 var userCols struct {
-	Email     bool
-	IsAdmin   bool
-	IsOwner   bool
-	IsBlocked bool
-	IsHidden  bool
-	Lang      bool
-	CreatedAt bool
+	Email      bool
+	IsAdmin    bool
+	IsOwner    bool
+	IsBlocked  bool
+	IsHidden   bool
+	IsApproved bool
+	IsInactive bool
+	Lang       bool
+	CreatedAt  bool
+	FirstName  bool
+	LastName   bool
 }
 
 // InitUserSchema zjistí dostupné sloupce tabulky users jednou při startu.
@@ -46,17 +50,21 @@ func InitUserSchema() {
 		var col string
 		_ = rows.Scan(&col)
 		switch col {
-		case "email":      userCols.Email = true
-		case "is_admin":   userCols.IsAdmin = true
-		case "is_owner":   userCols.IsOwner = true
-		case "is_blocked": userCols.IsBlocked = true
-		case "is_hidden":  userCols.IsHidden = true
-		case "lang":       userCols.Lang = true
-		case "created_at": userCols.CreatedAt = true
+		case "email":        userCols.Email = true
+		case "is_admin":     userCols.IsAdmin = true
+		case "is_owner":     userCols.IsOwner = true
+		case "is_blocked":   userCols.IsBlocked = true
+		case "is_hidden":    userCols.IsHidden = true
+		case "is_approved":  userCols.IsApproved = true
+		case "is_inactive":  userCols.IsInactive = true
+		case "lang":         userCols.Lang = true
+		case "created_at":   userCols.CreatedAt = true
+		case "first_name":   userCols.FirstName = true
+		case "last_name":    userCols.LastName = true
 		}
 	}
-	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v is_hidden=%v lang=%v created_at=%v",
-		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.Lang, userCols.CreatedAt)
+	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v is_hidden=%v is_approved=%v is_inactive=%v lang=%v created_at=%v first_name=%v last_name=%v",
+		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.IsApproved, userCols.IsInactive, userCols.Lang, userCols.CreatedAt, userCols.FirstName, userCols.LastName)
 }
 
 // buildUserSelect vrátí SELECT sloupců + jejich scan cíle pro daného uživatele.
@@ -80,11 +88,23 @@ func buildUserSelect() (cols string, scanInto func(u *models.User) []interface{}
 	if userCols.IsHidden {
 		names = append(names, "is_hidden")
 	}
+	if userCols.IsApproved {
+		names = append(names, "is_approved")
+	}
+	if userCols.IsInactive {
+		names = append(names, "is_inactive")
+	}
 	if userCols.Lang {
 		names = append(names, "lang")
 	}
 	if userCols.CreatedAt {
 		names = append(names, "created_at")
+	}
+	if userCols.FirstName {
+		names = append(names, "first_name")
+	}
+	if userCols.LastName {
+		names = append(names, "last_name")
 	}
 
 	cols = strings.Join(names, ", ")
@@ -109,8 +129,12 @@ func buildUserSelect() (cols string, scanInto func(u *models.User) []interface{}
 		if userCols.CreatedAt {
 			ptrs = append(ptrs, &u.CreatedAt)
 		}
-		// post-scan hook — uloží email a doplní výchozí hodnoty
-		// (volá se po Scan, viz scanUser)
+		if userCols.FirstName {
+			ptrs = append(ptrs, &u.FirstName)
+		}
+		if userCols.LastName {
+			ptrs = append(ptrs, &u.LastName)
+		}
 		_ = email // closure capture
 		return ptrs
 	}
@@ -122,7 +146,7 @@ func scanUser(u *models.User, row interface {
 	Scan(...interface{}) error
 }) error {
 	var email *string
-	var isAdmin, isOwner, isBlocked, isHidden bool
+	var isAdmin, isOwner, isBlocked, isHidden, isApproved, isInactive bool
 	var lang string
 	var createdAt time.Time
 
@@ -142,11 +166,24 @@ func scanUser(u *models.User, row interface {
 	if userCols.IsHidden {
 		ptrs = append(ptrs, &isHidden)
 	}
+	if userCols.IsApproved {
+		ptrs = append(ptrs, &isApproved)
+	}
+	if userCols.IsInactive {
+		ptrs = append(ptrs, &isInactive)
+	}
 	if userCols.Lang {
 		ptrs = append(ptrs, &lang)
 	}
 	if userCols.CreatedAt {
 		ptrs = append(ptrs, &createdAt)
+	}
+	var firstName, lastName *string
+	if userCols.FirstName {
+		ptrs = append(ptrs, &firstName)
+	}
+	if userCols.LastName {
+		ptrs = append(ptrs, &lastName)
 	}
 
 	if err := row.Scan(ptrs...); err != nil {
@@ -158,7 +195,9 @@ func scanUser(u *models.User, row interface {
 	u.IsOwner = isOwner || (config.AdminUsername != "" && u.Username == config.AdminUsername)
 	u.IsBlocked = isBlocked
 	u.IsHidden = isHidden
-	u.IsApproved = true
+	// is_approved: pokud sloupec neexistuje, fallback = true (backward compat)
+	u.IsApproved = isApproved || !userCols.IsApproved
+	u.IsInactive = isInactive
 	if lang != "" {
 		u.Lang = lang
 	} else {
@@ -169,6 +208,8 @@ func scanUser(u *models.User, row interface {
 	} else {
 		u.CreatedAt = createdAt
 	}
+	u.FirstName = firstName
+	u.LastName = lastName
 	return nil
 }
 
@@ -190,6 +231,22 @@ func GetCurrentUser(r *http.Request) *models.User {
 	return u
 }
 
+// autoBlockIfExpired zablokuje čekajícího uživatele staršího 7 dní.
+// Vrátí true pokud byl uživatel zablokován.
+func autoBlockIfExpired(u *models.User) bool {
+	if u.IsApproved || u.IsBlocked || u.IsAdmin || !userCols.CreatedAt || !userCols.IsBlocked {
+		return false
+	}
+	if u.CreatedAt.IsZero() || time.Since(u.CreatedAt) <= 7*24*time.Hour {
+		return false
+	}
+	_, _ = db.Pool.Exec(context.Background(),
+		`UPDATE users SET is_blocked = true WHERE id = $1`, u.ID)
+	u.IsBlocked = true
+	log.Printf("[auto-block] uživatel %s (%d) zablokován — čekal déle než 7 dní", u.Username, u.ID)
+	return true
+}
+
 // RequireAdmin vrátí admina nebo nil + přesměruje na /.
 func RequireAdmin(w http.ResponseWriter, r *http.Request) *models.User {
 	u := GetCurrentUser(r)
@@ -200,11 +257,36 @@ func RequireAdmin(w http.ResponseWriter, r *http.Request) *models.User {
 	return u
 }
 
-// RequireLogin přesměruje na /login pokud není přihlášen.
+// RequireLogin přesměruje na /login pokud není přihlášen nebo je blokován.
 func RequireLogin(w http.ResponseWriter, r *http.Request) *models.User {
 	u := GetCurrentUser(r)
 	if u == nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil
+	}
+	if autoBlockIfExpired(u) || u.IsBlocked {
+		middleware.ClearSession(w, r)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil
+	}
+	return u
+}
+
+// RequireApproved přesměruje na /login nebo /pending pokud uživatel není schválený.
+// Pending uživatelé starší 7 dní jsou automaticky blokováni.
+func RequireApproved(w http.ResponseWriter, r *http.Request) *models.User {
+	u := GetCurrentUser(r)
+	if u == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil
+	}
+	if autoBlockIfExpired(u) || u.IsBlocked {
+		middleware.ClearSession(w, r)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return nil
+	}
+	if !u.IsApproved && !u.IsAdmin {
+		http.Redirect(w, r, "/pending", http.StatusSeeOther)
 		return nil
 	}
 	return u

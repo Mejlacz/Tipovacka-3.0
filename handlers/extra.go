@@ -19,7 +19,7 @@ import (
 // GET /extra
 func ExtraView(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := RequireLogin(w, r)
+		user := RequireApproved(w, r)
 		if user == nil {
 			return
 		}

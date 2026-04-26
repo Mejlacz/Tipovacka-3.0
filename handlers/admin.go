@@ -319,9 +319,7 @@ func AdminUsersList(tmpl *template.Template) http.HandlerFunc {
 			if ri != rj {
 				return ri < rj
 			}
-			li := strings.ToLower(lastName(active[i])) + strings.ToLower(active[i].Username)
-			lj := strings.ToLower(lastName(active[j])) + strings.ToLower(active[j].Username)
-			return li < lj
+			return strings.ToLower(active[i].Username) < strings.ToLower(active[j].Username)
 		})
 		sortByName(blocked)
 		sortByName(pending)
@@ -488,7 +486,9 @@ func AdminUserApprove(w http.ResponseWriter, r *http.Request) {
 	var username string
 	err := db.Pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, userID).Scan(&username)
 	if err == nil {
-		// is_approved column not in Neon schema — just log and flash success
+		if userCols.IsApproved {
+			_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_approved=true WHERE id=$1`, userID)
+		}
 		newVal := `{"is_approved":true}`
 		LogAction(&admin.ID, admin.Username, "user_approve", "user", &userID, "Uživatel "+username+" schválen", nil, &newVal)
 		middleware.SetFlash(w, r, "ok", "Uživatel <b>"+username+"</b> byl schválen.")
@@ -613,8 +613,11 @@ func AdminUserToggleInactive(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
 	}
-	// is_inactive column not in Neon backup schema — skip operation
-	_ = userID
+	if userCols.IsInactive {
+		var cur bool
+		_ = db.Pool.QueryRow(context.Background(), `SELECT is_inactive FROM users WHERE id=$1`, userID).Scan(&cur)
+		_, _ = db.Pool.Exec(context.Background(), `UPDATE users SET is_inactive=$1 WHERE id=$2`, !cur, userID)
+	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
 
@@ -938,16 +941,20 @@ func AdminUserEditSubmit(tmpl *template.Template) http.HandlerFunc {
 		isAdmin := role == "admin" || role == "owner"
 		isHidden := r.FormValue("is_hidden") == "on"
 
-		// first_name, last_name not in Neon backup schema — suppress unused
-		_ = firstName
-		_ = lastName
+		lang := r.FormValue("lang")
+		if lang != "cs" && lang != "en" {
+			lang = "cs"
+		}
 		// Build UPDATE dynamically — jen existující sloupce
 		usql, uvals := buildUserUpdateSQL(userID, []UserUpdateField{
-			{Col: "username", Val: username, Include: true},
-			{Col: "email", Val: PtrStr(email), Include: userCols.Email},
-			{Col: "is_owner", Val: isOwner, Include: userCols.IsOwner},
-			{Col: "is_admin", Val: isAdmin, Include: userCols.IsAdmin},
-			{Col: "is_hidden", Val: isHidden, Include: userCols.IsHidden && admin.IsOwner},
+			{Col: "username",   Val: username,          Include: true},
+			{Col: "email",      Val: PtrStr(email),     Include: userCols.Email},
+			{Col: "is_owner",   Val: isOwner,           Include: userCols.IsOwner},
+			{Col: "is_admin",   Val: isAdmin,           Include: userCols.IsAdmin},
+			{Col: "is_hidden",  Val: isHidden,          Include: userCols.IsHidden && admin.IsOwner},
+			{Col: "lang",       Val: lang,              Include: userCols.Lang},
+			{Col: "first_name", Val: PtrStr(firstName), Include: userCols.FirstName},
+			{Col: "last_name",  Val: PtrStr(lastName),  Include: userCols.LastName},
 		})
 		_, _ = db.Pool.Exec(ctx, usql, uvals...)
 
@@ -1051,6 +1058,33 @@ func AdminIO(tmpl *template.Template) http.HandlerFunc {
 			"Competitions": competitions,
 		})
 	}
+}
+
+// ─── POST /admin/users/{id}/send-welcome ─────────────────────────────────────
+
+func AdminUserSendWelcome(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	userID, _ := strconv.Atoi(r.PathValue("user_id"))
+	ctx := context.Background()
+	var username, email string
+	_ = db.Pool.QueryRow(ctx, `SELECT username, COALESCE(email,'') FROM users WHERE id=$1`, userID).
+		Scan(&username, &email)
+	if email == "" {
+		middleware.SetFlash(w, r, "err", "Uživatel <b>"+username+"</b> nemá email.")
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+	subject := "Vítej v Tipovačce!"
+	body := "Ahoj " + username + ",\n\nvítej v Tipovačce!\nPřihlásit se můžeš zde: https://tipovacka-3.fly.dev/login\n\nPokud máš dotazy, odpověz na tento email.\n\nHodně štěstí!\nTipovačka"
+	if err := sendEmail(email, subject, body); err != nil {
+		middleware.SetFlash(w, r, "err", "Chyba při odesílání emailu: "+err.Error())
+	} else {
+		middleware.SetFlash(w, r, "ok", "Welcome email odeslán na <b>"+email+"</b>.")
+	}
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

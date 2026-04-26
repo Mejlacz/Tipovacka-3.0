@@ -1,64 +1,191 @@
-<style>
-.em-card { background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.1rem 1.25rem;margin-bottom:1rem; }
-.em-card h2 { margin:0 0 .75rem;font-size:.95rem;color:var(--muted-d);text-transform:uppercase;letter-spacing:.05em; }
-.form-group { margin-bottom:.85rem; }
-.form-group label { display:block;font-size:.85rem;color:var(--muted-d);margin-bottom:.3rem; }
-.form-group input[type=text], .form-group select, .form-group textarea {
-    width:100%;padding:.45rem .6rem;background:var(--bg3);border:1px solid var(--border-d);
-    border-radius:6px;color:var(--text);font-size:.88rem;box-sizing:border-box;
-}
-.form-group textarea { resize:vertical; }
-</style>
-
 <div class="page-header">
-    <h1>✉️ Hromadný email</h1>
-    <a href="/admin" class="btn btn-secondary">← Admin</a>
+    <h1>{{tr .Lang "email_title"}}</h1>
+    <a href="/admin/users" class="btn btn-secondary btn-sm">{{tr .Lang "email_back"}}</a>
 </div>
 
 {{if .Flash}}
-<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-danger{{end}}" style="margin-bottom:1rem">
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
     {{index .Flash "msg" | safeHTML}}
 </div>
 {{end}}
 
 {{if not .SMTPEnabled}}
-<div class="alert alert-danger" style="margin-bottom:1rem">
-    ⚠️ SMTP není nakonfigurováno. Nastav proměnné MAIL_SERVER (nebo SMTP_HOST), MAIL_USERNAME, MAIL_PASSWORD.
+<div class="alert alert-error" style="margin-bottom:1rem">
+    {{tr .Lang "email_smtp_error"}}
 </div>
 {{end}}
 
-<div class="em-card">
-    <h2>Sestavit zprávu</h2>
-    <p style="font-size:.85rem;color:var(--muted-d);margin-bottom:.75rem">
-        Příjemci: <strong>{{.RecipientCount}}</strong> uživatelů s emailem
-        {{if gt .RecipientCount 0}}(volitelně filtruj níže podle soutěže){{end}}
-    </p>
+<style>
+.email-wrap { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; max-width:1100px }
+@media(max-width:700px){ .email-wrap { grid-template-columns:1fr } }
+.email-panel { background:var(--bg2); border:1px solid var(--border-d); border-radius:10px; padding:1.1rem 1.2rem }
+.email-panel h2 { margin:0 0 .75rem; font-size:.85rem; font-weight:700; color:var(--muted-d); text-transform:uppercase; letter-spacing:.05em }
+.recip-toolbar { display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem; flex-wrap:wrap }
+.recip-filter { flex:1; min-width:140px; padding:.35rem .55rem; background:var(--bg3); border:1px solid var(--border-d); border-radius:6px; color:inherit; font-size:.82rem }
+.recip-list { max-height:340px; overflow-y:auto; border:1px solid var(--border-d); border-radius:6px; background:var(--bg3) }
+.recip-row { display:flex; align-items:center; gap:.55rem; padding:.3rem .6rem; border-bottom:1px solid var(--border-d); font-size:.82rem; cursor:pointer }
+.recip-row:last-child { border-bottom:none }
+.recip-row:hover { background:var(--bg2) }
+.recip-row input[type=checkbox] { accent-color:#e74c3c; flex-shrink:0 }
+.recip-nick { font-weight:600; color:#e2e8f0; min-width:80px }
+.recip-email { color:var(--muted-d); word-break:break-all }
+.recip-count { font-size:.8rem; color:var(--muted-d); margin-top:.4rem }
+.form-group { margin-bottom:.85rem }
+.form-group label { display:block; font-size:.85rem; color:var(--muted-d); margin-bottom:.3rem }
+.form-group input, .form-group textarea {
+    width:100%; padding:.45rem .6rem; background:var(--bg3);
+    border:1px solid var(--border-d); border-radius:6px;
+    color:inherit; font-size:.88rem; box-sizing:border-box
+}
+.form-group textarea { resize:vertical }
+.tbtn { padding:.25rem .65rem; font-size:.78rem; font-weight:600; border-radius:5px; border:1px solid var(--border-d); background:var(--bg3); color:#cbd5e1; cursor:pointer }
+.tbtn:hover { background:var(--bg2) }
+</style>
 
-    <form method="post" action="/admin/email/send">
-        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+<form method="post" action="/admin/email/send" id="email-form">
+<input type="hidden" name="_csrf" value="{{.CSRFToken}}">
 
-        <div class="form-group">
-            <label>Filtr — jen uživatelé z vybrané soutěže (nepovinné)</label>
-            <select name="competition_id">
-                <option value="">— Všichni uživatelé s emailem —</option>
-                {{range .Competitions}}
-                <option value="{{.ID}}">{{.Name}} {{.Season}}</option>
-                {{end}}
-            </select>
+<div class="email-wrap">
+
+{{/* ── Příjemci ── */}}
+<div class="email-panel">
+    <h2>{{tr .Lang "email_recipients"}}</h2>
+
+    <div class="recip-toolbar">
+        <select class="recip-filter" id="comp-filter">
+            <option value="">{{tr .Lang "email_all_comps"}}</option>
+            {{range .Competitions}}
+            <option value="{{.ID}}">{{.Name}} {{.Season}}</option>
+            {{end}}
+        </select>
+        <button type="button" class="tbtn" onclick="selectAll()">{{tr .Lang "email_select_all"}}</button>
+        <button type="button" class="tbtn" onclick="clearAll()">{{tr .Lang "email_clear_sel"}}</button>
+        <button type="button" class="tbtn" id="btn-inactive" onclick="toggleInactive()" style="opacity:.6" title="{{tr .Lang "email_show_inactive"}}">{{tr .Lang "email_hide_inactive"}}</button>
+    </div>
+
+    <div class="recip-list" id="recip-list">
+    {{range .Users}}
+    <label class="recip-row{{if .IsInactive}} recip-inactive{{end}}" data-comps="{{.CompIDs}}" data-inactive="{{if .IsInactive}}1{{else}}0{{end}}" {{if .IsInactive}}style="display:none"{{end}}>
+        <input type="checkbox" name="to" value="{{.Email}}" {{if not .IsInactive}}checked{{end}}>
+        <span class="recip-nick">{{.Username}}{{if .IsInactive}}<span style="font-size:.7rem;opacity:.55;margin-left:.3rem">💤</span>{{end}}</span>
+        <span class="recip-email">{{.Email}}</span>
+    </label>
+    {{end}}
+    </div>
+
+    <div class="recip-count" id="recip-count"></div>
+
+    <div style="margin-top:.75rem">
+        <div style="font-size:.82rem;color:var(--muted-d);margin-bottom:.3rem">
+            {{tr .Lang "email_manual_hint"}}
         </div>
-
-        <div class="form-group">
-            <label>Předmět *</label>
-            <input type="text" name="subject" required placeholder="Předmět emailu">
-        </div>
-
-        <div class="form-group">
-            <label>Tělo zprávy *</label>
-            <textarea name="body" rows="10" required placeholder="Text emailu…"></textarea>
-        </div>
-
-        <button type="submit" class="btn btn-primary" {{if not .SMTPEnabled}}disabled{{end}}>
-            📨 Odeslat všem příjemcům
-        </button>
-    </form>
+        <input type="text" name="manual_emails" id="manual-emails"
+               placeholder="jan@example.com, petr@example.com"
+               style="width:100%;padding:.4rem .55rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.82rem;box-sizing:border-box" />
+    </div>
 </div>
+
+{{/* ── Zpráva ── */}}
+<div class="email-panel">
+    <h2>{{tr .Lang "email_message"}}</h2>
+
+    <div class="form-group">
+        <label>{{tr .Lang "email_subject"}}</label>
+        <input type="text" name="subject" required placeholder="{{tr .Lang "email_subject_ph"}}">
+    </div>
+    <div class="form-group">
+        <label>{{tr .Lang "email_body"}}</label>
+        <textarea name="body" rows="12" required placeholder="{{tr .Lang "email_body_ph"}}"></textarea>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-top:.5rem">
+        <button type="submit" class="btn btn-primary" {{if not .SMTPEnabled}}disabled{{end}}
+                onclick="return confirmSend()">
+            {{tr .Lang "email_send_btn"}}
+        </button>
+        <label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;color:var(--muted-d);cursor:pointer;user-select:none">
+            <input type="checkbox" name="translate_en" value="1" style="width:1rem;height:1rem;flex-shrink:0">
+            {{tr .Lang "email_translate_en"}}
+        </label>
+    </div>
+</div>
+
+</div>{{/* .email-wrap */}}
+</form>
+
+<script>
+(function() {
+    var _t = {
+        countSel:    {{printf "%q" (tr .Lang "email_count_sel")}},
+        countOf:     {{printf "%q" (tr .Lang "email_count_of")}},
+        countVis:    {{printf "%q" (tr .Lang "email_count_vis")}},
+        countTotal:  {{printf "%q" (tr .Lang "email_count_total")}},
+        noRecip:     {{printf "%q" (tr .Lang "email_no_recip")}},
+        confirmPre:  {{printf "%q" (tr .Lang "email_confirm_pre")}},
+        confirmSuf:  {{printf "%q" (tr .Lang "email_confirm_suf")}},
+        manualPlus:  {{printf "%q" (tr .Lang "email_manual_plus")}},
+        hideInactive: {{printf "%q" (tr .Lang "email_hide_inactive")}},
+        showInactive: {{printf "%q" (tr .Lang "email_show_inactive")}},
+    };
+
+    var compFilter = document.getElementById('comp-filter');
+    var rows = Array.from(document.querySelectorAll('#recip-list .recip-row'));
+    var showInactive = false;
+
+    function updateCount() {
+        var checked = document.querySelectorAll('#recip-list input[type=checkbox]:checked').length;
+        var visible = rows.filter(function(r){ return r.style.display !== 'none'; }).length;
+        document.getElementById('recip-count').textContent =
+            _t.countSel + ' ' + checked + ' ' + _t.countOf + ' ' + visible + ' ' + _t.countVis + ' (' + rows.length + ' ' + _t.countTotal + ')';
+    }
+
+    function filterRows() {
+        var cid = compFilter.value;
+        rows.forEach(function(row) {
+            var inactive = row.dataset.inactive === '1';
+            if (inactive && !showInactive) { row.style.display = 'none'; return; }
+            if (!cid) {
+                row.style.display = '';
+            } else {
+                var comps = JSON.parse(row.dataset.comps || '[]');
+                row.style.display = comps.indexOf(parseInt(cid)) >= 0 ? '' : 'none';
+            }
+        });
+        updateCount();
+    }
+
+    window.toggleInactive = function() {
+        showInactive = !showInactive;
+        var btn = document.getElementById('btn-inactive');
+        btn.textContent = showInactive ? _t.hideInactive : _t.showInactive;
+        btn.style.opacity = showInactive ? '1' : '.6';
+        filterRows();
+    };
+    window.selectAll = function() {
+        rows.forEach(function(row) {
+            if (row.style.display !== 'none') {
+                row.querySelector('input').checked = true;
+            }
+        });
+        updateCount();
+    };
+    window.clearAll = function() {
+        rows.forEach(function(r){ r.querySelector('input').checked = false; });
+        updateCount();
+    };
+    window.confirmSend = function() {
+        var checked = document.querySelectorAll('#recip-list input[type=checkbox]:checked').length;
+        var manual = document.getElementById('manual-emails').value.trim();
+        var total = checked + (manual ? 1 : 0);
+        if (total === 0) { alert(_t.noRecip); return false; }
+        return confirm(_t.confirmPre + ' ' + checked + ' ' + _t.confirmSuf + (manual ? ' ' + _t.manualPlus : '') + '?');
+    };
+
+    compFilter.addEventListener('change', filterRows);
+    document.querySelectorAll('#recip-list input[type=checkbox]').forEach(function(cb) {
+        cb.addEventListener('change', updateCount);
+    });
+
+    filterRows();
+}());
+</script>
