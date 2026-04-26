@@ -48,3 +48,33 @@
 {{else}}
 <div class="alert alert-success" style="max-width:420px">Všechny zápasy mají výsledky! 🎉</div>
 {{end}}
+
+<script>
+(function() {
+    /* Collect all score inputs in DOM order */
+    var inputs = Array.from(document.querySelectorAll('input[name="home_score"], input[name="away_score"]'));
+    if (!inputs.length) return;
+
+    inputs.forEach(function(inp, idx) {
+        /* Auto-select on focus for quick overwrite */
+        inp.addEventListener('focus', function() { inp.select(); });
+
+        inp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                /* If this is home_score → move to away_score of same row */
+                if (inp.name === 'home_score') {
+                    var next = inputs[idx + 1];
+                    if (next) { next.focus(); next.select(); }
+                } else {
+                    /* away_score → submit this row's form */
+                    inp.closest('form').requestSubmit();
+                }
+            }
+            if (e.key === 'Tab' && !e.shiftKey && idx === inputs.length - 1) {
+                /* Last input, let default Tab behavior happen */
+            }
+        });
+    });
+})();
+</script>

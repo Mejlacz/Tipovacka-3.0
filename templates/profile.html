@@ -34,13 +34,36 @@
     <div>
     {{end}}
         <form method="post" action="/profile/avatar" enctype="multipart/form-data">
-            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-                <input type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp" required
-                       style="font-size:.82rem" />
-                <button type="submit" class="btn btn-sm btn-primary">Nahrát fotku</button>
+            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+                <img id="avatar-preview" src="" alt=""
+                     style="display:none;width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--accent)" />
+                <div style="display:flex;flex-direction:column;gap:.4rem">
+                    <input type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp" required
+                           id="avatar-input" style="font-size:.82rem" />
+                    <button type="submit" class="btn btn-sm btn-primary" id="avatar-upload-btn" style="display:none">⬆️ Nahrát fotku</button>
+                </div>
             </div>
             <p style="color:var(--muted-d);font-size:.78rem;margin:.4rem 0 0">Max 5 MB, formáty: JPG, PNG, WEBP.</p>
         </form>
+        <script>
+        (function() {
+            var inp = document.getElementById('avatar-input');
+            var prev = document.getElementById('avatar-preview');
+            var btn = document.getElementById('avatar-upload-btn');
+            if (!inp) return;
+            inp.addEventListener('change', function() {
+                var file = inp.files && inp.files[0];
+                if (!file) { prev.style.display='none'; btn.style.display='none'; return; }
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    prev.src = e.target.result;
+                    prev.style.display = 'block';
+                    btn.style.display = 'inline-flex';
+                };
+                reader.readAsDataURL(file);
+            });
+        })();
+        </script>
     </div>
 </section>
 
