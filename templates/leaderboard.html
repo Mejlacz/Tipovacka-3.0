@@ -6,7 +6,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
     <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
         <form method="get" action="/leaderboard" class="filter-form" style="margin:0">
             <select name="competition_id" onchange="this.form.submit()">
-                <option value="">Všechny soutěže</option>
                 {{range .Competitions}}
                 <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
                     {{.Name}} {{.Season}}
