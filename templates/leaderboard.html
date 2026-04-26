@@ -228,10 +228,8 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
     {{range $_, $row := .UserRows}}
     {{$isMe := and $.User (eq $row.User.ID $.User.ID)}}
     <tr {{if $isMe}}class="highlight"{{end}}>
-        <td class="col-place">{{$row.Place}}.
-            {{if gt $row.Trend 0}}<span class="trend-up" title="↑{{$row.Trend}}" style="color:#22c55e;font-size:0.75rem">↑<sup>{{$row.Trend}}</sup></span>
-            {{else if lt $row.Trend 0}}<span class="trend-dn" title="↓{{absInt $row.Trend}}" style="color:#ef4444;font-size:0.75rem">↓<sup>{{absInt $row.Trend}}</sup></span>
-            {{end}}
+        <td class="col-place">
+            <span class="rank-num">{{$row.Place}}.</span><span class="rank-trend">{{if gt $row.Trend 0}}<span class="trend-up" title="o {{$row.Trend}} míst výš">↑{{$row.Trend}}</span>{{else if lt $row.Trend 0}}<span class="trend-dn" title="o {{absInt $row.Trend}} míst níž">↓{{absInt $row.Trend}}</span>{{end}}</span>
         </td>
         <td class="col-user">
             {{$accStr := "—"}}{{if $row.Accuracy}}{{$accStr = printf "%d %%" (intVal $row.Accuracy)}}{{end}}
@@ -335,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!place || !user || !pts) return;
         var leftUser = place.offsetWidth;
         var leftPts  = place.offsetWidth + user.offsetWidth;
-        table.querySelectorAll('.col-place').forEach(function(el) { el.style.left = '0px'; });
+        table.querySelectorAll('.col-place').forEach(function(el) { el.style.left = '0'; });
         table.querySelectorAll('.col-user').forEach(function(el)  { el.style.left = leftUser + 'px'; });
         table.querySelectorAll('.col-pts').forEach(function(el)   { el.style.left = leftPts  + 'px'; });
     }

@@ -631,22 +631,27 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
 
 /* Sticky sloupce — CSS position:sticky */
 .leaderboard-matrix .col-place {
-    width: 2.5rem;
+    width: 4rem;
     position: sticky; left: 0; z-index: 3;
     background: var(--bg2);
     font-weight: 700;
 }
+/* Rank number + trend arrow — always same horizontal position */
+.rank-num  { display:inline-block; min-width:1.8rem; text-align:right; }
+.rank-trend{ display:inline-block; width:1.5rem; text-align:left; padding-left:.2rem; font-size:.7rem; vertical-align:middle; font-weight:600; }
+.trend-up  { color:#22c55e; }
+.trend-dn  { color:#ef4444; }
 .leaderboard-matrix .col-user {
     width: 9rem;
     text-align: left;
-    position: sticky; left: 2.5rem; z-index: 3;
+    position: sticky; left: 4rem; z-index: 3;
     background: var(--bg2);
     color: var(--text-d);
 }
 .leaderboard-matrix .col-pts {
     width: 4rem;
     font-weight: 700;
-    position: sticky; left: 11.5rem; z-index: 3;
+    position: sticky; left: 13rem; z-index: 3;
     background: var(--bg2);
     box-shadow: 3px 0 10px -2px rgba(0,0,0,0.3);
     color: var(--text-d);
