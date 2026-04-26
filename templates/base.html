@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>(function(){var t=localStorage.getItem('tipovacka-theme');if(t==='classic')document.getElementById('html-root').setAttribute('data-theme','classic');})()</script>
+    <script>(function(){var t=localStorage.getItem('tipovacka-theme');var v=['classic','midnight','ocean','forest','sunset','neon','light'];if(t&&v.indexOf(t)>=0)document.getElementById('html-root').setAttribute('data-theme',t);})()</script>
     <title>{{if .Title}}{{.Title}} — {{end}}Tipovačka 3.0</title>
     <link rel="stylesheet" href="/static/css/style.css?v=20260424a" />
+    <link rel="stylesheet" href="/static/css/themes.css?v=20260426a" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#131f2e" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -22,7 +23,7 @@
 
 <nav class="navbar">
     <a class="navbar-brand" href="/">Tipovačka 3.0 <span id="navbar-clock" style="font-size:0.72rem;font-weight:400;opacity:0.65;margin-left:0.5rem"></span></a>
-    <button class="theme-toggle" id="theme-toggle" title="{{tr .Lang "nav_theme_title"}}" aria-label="{{tr .Lang "nav_theme_title"}}">🌙</button>
+    <button class="theme-toggle" id="theme-toggle" title="Změnit téma" aria-label="Změnit téma">🎨</button>
     <button class="navbar-burger" id="navbar-burger" aria-label="Menu" aria-expanded="false">☰</button>
     <div class="navbar-links" id="navbar-links">
         {{if .User}}
@@ -99,6 +100,19 @@
     <small>Tipovačka 3.0</small>
 </footer>
 
+{{/* ── Theme Picker Modal ── */}}
+<div class="theme-picker-overlay" id="theme-picker-overlay">
+<div class="theme-picker-box">
+    <div class="theme-picker-head">
+        <span class="theme-picker-title">🎨 Vybrat téma</span>
+        <button class="theme-picker-close" id="theme-picker-close" aria-label="Zavřít">✕</button>
+    </div>
+    <div class="theme-grid" id="theme-grid">
+        <!-- generováno JavaScriptem -->
+    </div>
+</div>
+</div>
+
 <meta name="csrf-token" content="{{.CSRFToken}}">
 <script>
 (function () {
@@ -136,21 +150,157 @@ if ('serviceWorker' in navigator) {
     }
     tick(); setInterval(tick, 1000);
 })();
+
+/* ── Theme Picker ─────────────────────────────────────────────────────── */
 (function() {
-    var html = document.getElementById('html-root');
-    var btn  = document.getElementById('theme-toggle');
-    if (!btn || !html) return;
-    function applyTheme(t) {
-        if (t === 'classic') { html.setAttribute('data-theme','classic'); btn.textContent='☀️'; }
-        else { html.removeAttribute('data-theme'); btn.textContent='🌙'; }
+    var THEMES = [
+        {
+            id: 'dark',
+            name: '🌑 Dark',
+            desc: 'Výchozí tmavé téma',
+            nav:  '#0d2137',
+            body: '#131f2e',
+            accent: '#10b981',
+            dot1: '#1a2d42', dot2: '#7ea0c4'
+        },
+        {
+            id: 'classic',
+            name: '🏛️ Classic',
+            desc: 'Retro červený styl',
+            nav:  '#cc0000',
+            body: '#d8d8d8',
+            accent: '#cc0000',
+            dot1: '#ebebeb', dot2: '#64748b'
+        },
+        {
+            id: 'midnight',
+            name: '🌌 Midnight',
+            desc: 'Hluboká fialová záře',
+            nav:  '#17113a',
+            body: '#0e0921',
+            accent: '#a855f7',
+            dot1: '#1e184d', dot2: '#9d85d4'
+        },
+        {
+            id: 'ocean',
+            name: '🌊 Ocean',
+            desc: 'Tmavý oceán, teal akcent',
+            nav:  '#071c2e',
+            body: '#041019',
+            accent: '#0ea5e9',
+            dot1: '#0a2540', dot2: '#5090b5'
+        },
+        {
+            id: 'forest',
+            name: '🌲 Forest',
+            desc: 'Temný les, zaoblené tvary',
+            nav:  '#0d2b14',
+            body: '#061a0c',
+            accent: '#22c55e',
+            dot1: '#133a1c', dot2: '#5ea86e'
+        },
+        {
+            id: 'sunset',
+            name: '🌅 Sunset',
+            desc: 'Teplá jantarová záře',
+            nav:  '#281a0e',
+            body: '#18100a',
+            accent: '#f59e0b',
+            dot1: '#362213', dot2: '#c8935a'
+        },
+        {
+            id: 'neon',
+            name: '⚡ Neon',
+            desc: 'Kyberpunk, neonová záře',
+            nav:  '#08091e',
+            body: '#04050f',
+            accent: '#00ffcc',
+            dot1: '#0c0e2a', dot2: '#4895bf'
+        },
+        {
+            id: 'light',
+            name: '☀️ Light',
+            desc: 'Čistý denní vzhled',
+            nav:  '#2563eb',
+            body: '#f1f5f9',
+            accent: '#3b82f6',
+            dot1: '#ffffff', dot2: '#64748b'
+        }
+    ];
+
+    var html    = document.getElementById('html-root');
+    var btn     = document.getElementById('theme-toggle');
+    var overlay = document.getElementById('theme-picker-overlay');
+    var grid    = document.getElementById('theme-grid');
+    var closeBtn = document.getElementById('theme-picker-close');
+
+    function currentTheme() {
+        return localStorage.getItem('tipovacka-theme') || 'dark';
     }
-    applyTheme(localStorage.getItem('tipovacka-theme') || 'dark');
-    btn.addEventListener('click', function() {
-        var next = html.getAttribute('data-theme') === 'classic' ? 'dark' : 'classic';
-        localStorage.setItem('tipovacka-theme', next);
-        applyTheme(next);
+
+    function applyTheme(id) {
+        if (id === 'dark' || !id) {
+            html.removeAttribute('data-theme');
+        } else {
+            html.setAttribute('data-theme', id);
+        }
+        localStorage.setItem('tipovacka-theme', id);
+        renderCards();
+    }
+
+    function renderCards() {
+        var cur = currentTheme();
+        grid.innerHTML = '';
+        THEMES.forEach(function(t) {
+            var active = (t.id === cur) || (t.id === 'dark' && (cur === 'dark' || !cur));
+            var card = document.createElement('div');
+            card.className = 'theme-card' + (active ? ' active' : '');
+            card.setAttribute('data-theme-id', t.id);
+            card.innerHTML =
+                '<div class="tc-preview">' +
+                    '<div class="tc-nav" style="background:' + t.nav + '"></div>' +
+                    '<div class="tc-body" style="background:' + t.body + '">' +
+                        '<div class="tc-stripe" style="background:' + t.accent + '"></div>' +
+                        '<div class="tc-dots">' +
+                            '<div class="tc-dot" style="background:' + t.dot1 + '"></div>' +
+                            '<div class="tc-dot" style="background:' + t.dot2 + '"></div>' +
+                            '<div class="tc-dot" style="background:' + t.accent + '"></div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="tc-info">' +
+                    '<div class="tc-name">' + t.name + (active ? '<span class="tc-check">✓</span>' : '') + '</div>' +
+                    '<div class="tc-desc">' + t.desc + '</div>' +
+                '</div>';
+            card.addEventListener('click', function() {
+                applyTheme(t.id);
+                setTimeout(function() { closePicker(); }, 280);
+            });
+            grid.appendChild(card);
+        });
+    }
+
+    function openPicker() {
+        renderCards();
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closePicker() {
+        overlay.classList.remove('open');
+        document.body.style.overflow = '';
+    }
+
+    if (btn) btn.addEventListener('click', openPicker);
+    if (closeBtn) closeBtn.addEventListener('click', closePicker);
+    if (overlay) overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) closePicker();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closePicker();
     });
 })();
+
 (function() {
     var badge = document.getElementById('unscored-badge');
     if (!badge) return;
