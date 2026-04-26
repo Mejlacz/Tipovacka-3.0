@@ -9,31 +9,134 @@
 </div>
 {{end}}
 
+<style>
+main.container { max-width:100% !important; width:100% !important }
+.comp-table { width:100%; border-collapse:collapse; font-size:.85rem }
+.comp-table th { background:var(--bg2); padding:.45rem .6rem; text-align:left; font-size:.75rem; font-weight:600; color:var(--muted-d); text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; position:sticky; top:52px; z-index:10 }
+.comp-table td { padding:.45rem .6rem; border-bottom:1px solid var(--border-d); vertical-align:middle }
+.comp-table tr:last-child td { border-bottom:none }
+.comp-table tr:hover td { background:rgba(255,255,255,.03) }
+.comp-id { font-size:.72rem; color:var(--muted-d); font-weight:600 }
+.comp-name { font-weight:600; color:#e2e8f0 }
+.badge-active { display:inline-block; padding:.15rem .55rem; border-radius:99px; font-size:.72rem; font-weight:700; background:rgba(52,211,153,.15); color:#34d399 }
+.badge-archiv { display:inline-block; padding:.15rem .55rem; border-radius:99px; font-size:.72rem; font-weight:700; background:rgba(156,163,175,.1); color:#9ca3af }
+.comp-stat { text-align:center; color:#e2e8f0; font-weight:600 }
+.cact { display:flex; gap:.3rem; align-items:center; flex-wrap:nowrap }
+.cact a, .cact button { white-space:nowrap }
+.cact form { display:inline-flex }
+.cbtn { display:inline-flex; align-items:center; gap:.25rem; justify-content:center; padding:.25rem .55rem; border-radius:5px; font-size:.78rem; font-weight:600; border:none; cursor:pointer; text-decoration:none; line-height:1; transition:background .12s }
+.cbtn-gray { background:var(--bg3); color:#cbd5e1; border:1px solid var(--border-d) }
+.cbtn-gray:hover { background:var(--navy); color:#e2e8f0 }
+.cbtn-green { background:rgba(52,211,153,.18); color:#34d399; border:1px solid rgba(52,211,153,.3) }
+.cbtn-green:hover { background:rgba(52,211,153,.28) }
+.cbtn-yellow { background:rgba(251,191,36,.15); color:#fbbf24; border:1px solid rgba(251,191,36,.25) }
+.cbtn-yellow:hover { background:rgba(251,191,36,.25) }
+.cbtn-red { background:rgba(239,68,68,.18); color:#f87171; border:1px solid rgba(239,68,68,.25) }
+.cbtn-red:hover { background:rgba(239,68,68,.28) }
+</style>
+
 {{if .CompData}}
-<div class="card-list">
-{{range .CompData}}
-    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap">
-        <div>
-            <div class="card-title">
-                {{.Comp.Name}}{{if .Comp.Season}} <span style="font-weight:400;color:var(--muted-d);font-size:.9rem">{{.Comp.Season}}</span>{{end}}
+<div style="overflow-x:auto;border:1px solid var(--border-d);border-radius:10px">
+<table class="comp-table">
+    <thead>
+        <tr>
+            <th>NÁZEV</th>
+            <th>SEZÓNA</th>
+            <th>SPORT</th>
+            <th>STAV</th>
+            <th style="text-align:center" title="Pořadí v dropdownech">POŘADÍ</th>
+            <th style="text-align:center">KOL</th>
+            <th style="text-align:center">ZÁPASŮ</th>
+            <th style="text-align:center">TÝMŮ</th>
+            <th style="text-align:center">TIPŮ</th>
+            <th>AKCE</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .CompData}}
+    <tr>
+        <td>
+            <div class="comp-id">#{{.Comp.ID}}</div>
+            <div class="comp-name">{{.Comp.Name}}</div>
+        </td>
+        <td style="color:var(--muted-d);white-space:nowrap">{{.Comp.Season}}</td>
+        <td style="white-space:nowrap">{{.SportLabel}}</td>
+        <td>
+            {{if .Comp.IsActive}}
+            <span class="badge-active">Aktivní</span>
+            {{else}}
+            <span class="badge-archiv">Archiv</span>
+            {{end}}
+        </td>
+        <td style="text-align:center">
+            <input type="number" class="sort-input" data-id="{{.Comp.ID}}"
+                   value="{{if .Comp.SortOrder}}{{intVal .Comp.SortOrder}}{{end}}"
+                   placeholder="—" min="0" max="9999"
+                   style="width:52px;text-align:center;padding:.2rem .3rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;font-size:.82rem" />
+        </td>
+        <td class="comp-stat">{{.RoundsCount}}</td>
+        <td class="comp-stat">{{.MatchesCount}}</td>
+        <td class="comp-stat">{{.TeamsCount}}</td>
+        <td class="comp-stat">{{.TipsCount}}</td>
+        <td>
+            <div class="cact">
+                <a href="/admin/competitions/{{.Comp.ID}}/edit" class="cbtn cbtn-gray" title="Upravit">✏️</a>
+                <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="cbtn cbtn-gray" title="Kola">📋 Kola</a>
+                <a href="/admin/competitions/{{.Comp.ID}}/teams" class="cbtn cbtn-gray" title="Týmy">👥</a>
+                <a href="/admin/extra/{{.Comp.ID}}/answers" class="cbtn cbtn-gray" title="Extra otázky">🎯</a>
+                <a href="/admin/tips/{{.Comp.ID}}/import" class="cbtn cbtn-gray" title="Import tipů">⬆️</a>
+                <form method="post" action="/admin/competitions/{{.Comp.ID}}/toggle">
+                    {{if .Comp.IsActive}}
+                    <button class="cbtn cbtn-yellow" title="Deaktivovat">🔒 Deaktiv.</button>
+                    {{else}}
+                    <button class="cbtn cbtn-green" title="Aktivovat">✅ Aktivovat</button>
+                    {{end}}
+                </form>
+                {{if not .Comp.IsActive}}
+                <form method="post" action="/admin/competitions/{{.Comp.ID}}/delete"
+                      onsubmit="return confirm('Smazat soutěž {{.Comp.Name}}? Tato akce je nevratná.')">
+                    <button class="cbtn cbtn-red" title="Smazat">✕</button>
+                </form>
+                {{end}}
             </div>
-            <div class="card-sub">
-                {{.SportLabel}} ·
-                {{if .Comp.IsActive}}<span style="color:#34d399">aktivní</span>{{else}}<span style="color:var(--muted-d)">neaktivní</span>{{end}}
-                · {{.RoundsCount}} kol · {{.MatchesCount}} zápasů · {{.TeamsCount}} týmů
-            </div>
-        </div>
-        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
-            <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-sm btn-secondary">Kola</a>
-            <a href="/admin/competitions/{{.Comp.ID}}/teams" class="btn btn-sm btn-secondary">Týmy</a>
-            <a href="/admin/competitions/{{.Comp.ID}}/edit" class="btn btn-sm btn-secondary">✏️</a>
-            <form style="display:inline" method="post" action="/admin/competitions/{{.Comp.ID}}/toggle">
-                <button class="btn btn-sm btn-secondary">{{if .Comp.IsActive}}Deaktivovat{{else}}Aktivovat{{end}}</button>
-            </form>
-        </div>
-    </div>
-{{end}}
+        </td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
 </div>
 {{else}}
 <p class="empty">Žádné soutěže.</p>
 {{end}}
+
+<script>
+(function() {
+    function saveSortOrder(input) {
+        var id = input.dataset.id;
+        var val = input.value.trim();
+        var body = new URLSearchParams();
+        body.append('sort_order', val);
+        fetch('/admin/competitions/' + id + '/sort-order', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: body.toString()
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.ok) {
+                input.style.borderColor = '#34d399';
+                setTimeout(function() { input.style.borderColor = ''; }, 1200);
+            } else {
+                input.style.borderColor = '#f87171';
+            }
+        }).catch(function() { input.style.borderColor = '#f87171'; });
+    }
+    document.querySelectorAll('.sort-input').forEach(function(inp) {
+        var orig = inp.value;
+        inp.addEventListener('blur', function() {
+            if (inp.value !== orig) { orig = inp.value; saveSortOrder(inp); }
+        });
+        inp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+        });
+    });
+}());
+</script>
