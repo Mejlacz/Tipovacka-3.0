@@ -511,12 +511,13 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 }
 
 // ─── GET /leaderboard/chart-data ─────────────────────────────────────────────
-// Vrátí JSON s body hráčů po jednotlivých kolech (pro Chart.js).
+// Vrátí JSON s kumulativními body hráčů po jednotlivých zápasech (pro Chart.js).
+// X-osa = zápasy seřazené podle data; Y-osa = součet bodů do daného zápasu.
 
 func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
-	type roundInfo struct {
-		ID   int
-		Name string
+	type matchInfo struct {
+		ID    int
+		Label string // "DD.MM."
 	}
 	type dataset struct {
 		Label string `json:"label"`
@@ -543,75 +544,53 @@ func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
 
 		ctx := context.Background()
 
-		// Kola s alespoň jedním dokončeným zápasem, seřazená
-		var rounds []roundInfo
-		rrows, _ := db.Pool.Query(ctx,
-			`SELECT DISTINCT r.id, r.name
-			   FROM rounds r
-			   JOIN matches m ON m.round_id = r.id
+		// Všechny dokončené zápasy seřazené podle data
+		var matchList []matchInfo
+		mrows, _ := db.Pool.Query(ctx,
+			`SELECT m.id,
+			        COALESCE(TO_CHAR(m.match_date AT TIME ZONE 'Europe/Prague', 'DD.MM.'), '#' || m.id::text)
+			   FROM matches m
+			   JOIN rounds r ON r.id = m.round_id
 			  WHERE r.competition_id = $1 AND m.is_finished = true
-			  ORDER BY r.id`, compID)
-		for rrows.Next() {
-			var ri roundInfo
-			_ = rrows.Scan(&ri.ID, &ri.Name)
-			rounds = append(rounds, ri)
+			  ORDER BY m.match_date ASC NULLS LAST, m.id ASC`, compID)
+		for mrows.Next() {
+			var mi matchInfo
+			_ = mrows.Scan(&mi.ID, &mi.Label)
+			matchList = append(matchList, mi)
 		}
-		rrows.Close()
+		mrows.Close()
 
-		if len(rounds) == 0 {
+		if len(matchList) == 0 {
 			w.Write([]byte(`{"labels":[],"datasets":[]}`))
 			return
 		}
 
-		roundIDs := make([]int, len(rounds))
-		for i, ri := range rounds {
-			roundIDs[i] = ri.ID
+		matchIDs := make([]int, len(matchList))
+		matchIdx := map[int]int{}
+		for i, mi := range matchList {
+			matchIDs[i] = mi.ID
+			matchIdx[mi.ID] = i
 		}
 
-		// Body per user per round
-		type ptsRow struct {
-			RoundID int
+		// Tipy s body pro tyto zápasy
+		type tipRow struct {
+			MatchID int
 			UserID  int
 			Pts     int
 		}
-		var ptsRows []ptsRow
-		ptrows, _ := db.Pool.Query(ctx,
-			`SELECT m.round_id, t.user_id, COALESCE(SUM(t.points), 0)::int
+		var tipRows []tipRow
+		trows, _ := db.Pool.Query(ctx,
+			`SELECT t.match_id, t.user_id, COALESCE(t.points, 0)::int
 			   FROM tips t
-			   JOIN matches m ON m.id = t.match_id
-			  WHERE m.round_id = ANY($1) AND m.is_finished = true AND t.points IS NOT NULL
-			  GROUP BY m.round_id, t.user_id`, roundIDs)
-		for ptrows.Next() {
-			var pr ptsRow
-			_ = ptrows.Scan(&pr.RoundID, &pr.UserID, &pr.Pts)
-			ptsRows = append(ptsRows, pr)
+			  WHERE t.match_id = ANY($1) AND t.points IS NOT NULL`, matchIDs)
+		for trows.Next() {
+			var tr tipRow
+			_ = trows.Scan(&tr.MatchID, &tr.UserID, &tr.Pts)
+			tipRows = append(tipRows, tr)
 		}
-		ptrows.Close()
+		trows.Close()
 
-		// Indexy kol
-		roundIdx := map[int]int{}
-		for i, ri := range rounds {
-			roundIdx[ri.ID] = i
-		}
-
-		// Kumulativní body per user
-		type userCum struct {
-			Name string
-			Pts  []int
-		}
-		userMap := map[int]*userCum{}
-
-		// Inicializuj nulami
-		addUser := func(uid int, name string) *userCum {
-			if uc, ok := userMap[uid]; ok {
-				return uc
-			}
-			uc := &userCum{Name: name, Pts: make([]int, len(rounds))}
-			userMap[uid] = uc
-			return uc
-		}
-
-		// Načti jména uživatelů
+		// Jména uživatelů
 		unames := map[int]string{}
 		unameRows, _ := db.Pool.Query(ctx,
 			`SELECT id, username FROM users WHERE is_blocked = false AND is_inactive = false`)
@@ -623,15 +602,32 @@ func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
 		}
 		unameRows.Close()
 
-		// Naplň body
-		for _, pr := range ptsRows {
-			name, ok := unames[pr.UserID]
-			if !ok {
+		// Body[matchIdx] per user
+		type userCum struct {
+			Name string
+			Pts  []int
+		}
+		userMap := map[int]*userCum{}
+		getUser := func(uid int) *userCum {
+			if uc, ok := userMap[uid]; ok {
+				return uc
+			}
+			name := unames[uid]
+			if name == "" {
+				return nil
+			}
+			uc := &userCum{Name: name, Pts: make([]int, len(matchList))}
+			userMap[uid] = uc
+			return uc
+		}
+
+		for _, tr := range tipRows {
+			uc := getUser(tr.UserID)
+			if uc == nil {
 				continue
 			}
-			uc := addUser(pr.UserID, name)
-			if idx, ok2 := roundIdx[pr.RoundID]; ok2 {
-				uc.Pts[idx] = pr.Pts
+			if idx, ok := matchIdx[tr.MatchID]; ok {
+				uc.Pts[idx] = tr.Pts
 			}
 		}
 
@@ -642,7 +638,7 @@ func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
-		// Seřaď podle celkových bodů sestupně
+		// Seřaď podle celkových bodů
 		type userEntry struct {
 			uid int
 			uc  *userCum
@@ -652,14 +648,13 @@ func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
 			entries = append(entries, userEntry{uid, uc})
 		}
 		sort.Slice(entries, func(i, j int) bool {
-			si := entries[i].uc.Pts[len(rounds)-1]
-			sj := entries[j].uc.Pts[len(rounds)-1]
-			return si > sj
+			n := len(matchList) - 1
+			return entries[i].uc.Pts[n] > entries[j].uc.Pts[n]
 		})
 
-		labels := make([]string, len(rounds))
-		for i, ri := range rounds {
-			labels[i] = ri.Name
+		labels := make([]string, len(matchList))
+		for i, mi := range matchList {
+			labels[i] = mi.Label
 		}
 
 		var datasets []dataset
