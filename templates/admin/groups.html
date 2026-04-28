@@ -58,10 +58,18 @@
         </span>
         {{end}}
 
-        {{/* Přepnout oprávnění */}}
+        {{/* Přepnout oprávnění — vidí skryté */}}
         <form method="post" action="/admin/groups/{{.ID}}/toggle-hidden" style="margin:0">
             <button type="submit" class="btn" style="font-size:0.8rem;padding:0.25rem 0.6rem">
-                {{if .CanSeeHidden}}🔒 Odebrat{{else}}🔓 Přidat{{end}}
+                {{if .CanSeeHidden}}🔒 Odebrat skryté{{else}}🔓 Přidat skryté{{end}}
+            </button>
+        </form>
+
+        {{/* Přepnout oprávnění — vidí deadline alert */}}
+        <form method="post" action="/admin/groups/{{.ID}}/toggle-deadline" style="margin:0">
+            <button type="submit" class="btn" style="font-size:0.8rem;padding:0.25rem 0.6rem;{{if .CanSeeDeadline}}background:rgba(245,158,11,.18);color:#fbbf24;border:1px solid rgba(245,158,11,.3){{end}}"
+                    title="Skupina vidí upozornění na blížící se uzávěrku tipování">
+                {{if .CanSeeDeadline}}⚠️ Deadline ON{{else}}⚠️ Deadline OFF{{end}}
             </button>
         </form>
 

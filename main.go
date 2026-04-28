@@ -38,6 +38,7 @@ func migrateSchema() {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT true`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_inactive BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS notify_sent BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS can_see_deadline BOOLEAN NOT NULL DEFAULT false`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
@@ -313,6 +314,7 @@ func main() {
 	r.Post("/admin/groups/new", handlers.AdminGroupsNew)
 	r.Post("/admin/groups/{group_id}/delete", handlers.AdminGroupsDelete)
 	r.Post("/admin/groups/{group_id}/toggle-hidden", handlers.AdminGroupsToggleHidden)
+	r.Post("/admin/groups/{group_id}/toggle-deadline", handlers.AdminGroupsToggleDeadline)
 	r.Post("/admin/groups/{group_id}/add-member", handlers.AdminGroupsAddMember)
 	r.Post("/admin/groups/{group_id}/remove-member/{user_id}", handlers.AdminGroupsRemoveMember)
 

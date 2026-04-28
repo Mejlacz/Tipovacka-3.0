@@ -83,9 +83,10 @@ func AdminDashboard(tmpl *template.Template) http.HandlerFunc {
 
 		flash := middleware.GetFlash(w, r)
 		RenderTemplate(w, r, tmpl, "dashboard.html", TemplateData{
-			"User":      admin,
-			"CompData":  compDataList,
-			"Flash":     flash,
+			"User":              admin,
+			"CompData":          compDataList,
+			"Flash":             flash,
+			"ShowDeadlineAlert": UserCanSeeDeadline(admin.ID, admin.IsOwner),
 		})
 	}
 }
