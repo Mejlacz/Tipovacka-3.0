@@ -101,6 +101,32 @@
     <small>Tipovačka 3.0</small>
 </footer>
 
+{{/* ── Mobile Bottom Navigation Bar ── */}}
+{{if and .User .User.IsApproved}}
+<nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Hlavní navigace">
+    <a href="/" class="mbn-item" data-path="/">
+        <span class="mbn-icon">🏠</span>
+        <span class="mbn-label">Zápasy</span>
+    </a>
+    <a href="/leaderboard" class="mbn-item" data-path="/leaderboard">
+        <span class="mbn-icon">🏆</span>
+        <span class="mbn-label">Žebříček</span>
+    </a>
+    <a href="/stats" class="mbn-item" data-path="/stats">
+        <span class="mbn-icon">📊</span>
+        <span class="mbn-label">Statistiky</span>
+    </a>
+    <a href="/extra" class="mbn-item" data-path="/extra">
+        <span class="mbn-icon">⭐</span>
+        <span class="mbn-label">Extra</span>
+    </a>
+    <a href="/profile" class="mbn-item" data-path="/profile">
+        <span class="mbn-icon">👤</span>
+        <span class="mbn-label">Profil</span>
+    </a>
+</nav>
+{{end}}
+
 {{/* ── Theme Picker Modal ── */}}
 <div class="theme-picker-overlay" id="theme-picker-overlay">
 <div class="theme-picker-box">
@@ -365,6 +391,106 @@ if ('serviceWorker' in navigator) {
         chip.textContent = d.place + '. · ' + d.points + ' b';
         el.appendChild(chip);
     }).catch(function(){});
+})();
+
+/* ── Mobile Bottom Nav — zvýraznit aktivní položku ── */
+(function() {
+    var nav = document.getElementById('mobile-bottom-nav');
+    if (!nav) return;
+    /* přidat padding-bottom body přes třídu */
+    document.body.classList.add('has-bottom-nav');
+    var path = window.location.pathname;
+    nav.querySelectorAll('.mbn-item').forEach(function(item) {
+        var dp = item.getAttribute('data-path');
+        if (!dp) return;
+        var active = (dp === '/') ? (path === '/') : path.startsWith(dp);
+        if (active) item.classList.add('mbn-active');
+    });
+})();
+
+/* ── iOS PWA — standalone navigation fix ──────────────────────────────────
+   iOS Safari v standalone módu otevírá každý klik na odkaz v Safari.
+   Zachytíme klik a provedeme navigaci nativně. ── */
+(function() {
+    if (!window.navigator.standalone) return;
+    document.addEventListener('click', function(e) {
+        var a = e.target.closest('a');
+        if (!a || !a.href || a.target === '_blank') return;
+        try {
+            var url = new URL(a.href);
+            if (url.origin === window.location.origin) {
+                e.preventDefault();
+                window.location.href = a.href;
+            }
+        } catch(ex) {}
+    }, false);
+})();
+
+/* ── PWA Install Prompt (Android + iOS) ────────────────────────────────── */
+(function() {
+    var DISMISSED_KEY = 'pwa-install-dismissed';
+    if (localStorage.getItem(DISMISSED_KEY)) return;
+
+    var deferredPrompt = null;
+
+    function showBanner(type) {
+        /* Zobrazit max 1× */
+        if (document.getElementById('pwa-install-banner')) return;
+        var banner = document.createElement('div');
+        banner.id = 'pwa-install-banner';
+        banner.className = 'pwa-install-banner';
+        if (type === 'ios') {
+            banner.innerHTML =
+                '<span>📲 <strong>Přidat na plochu:</strong> stiskni Sdílet (⬆️) → <em>Přidat na plochu</em></span>' +
+                '<button class="pwa-install-close" aria-label="Zavřít">✕</button>';
+        } else {
+            banner.innerHTML =
+                '<span>📲 Nainstalovat Tipovačku jako aplikaci</span>' +
+                '<button id="pwa-install-btn" class="btn btn-primary btn-sm" style="white-space:nowrap;font-size:.8rem;padding:.3rem .7rem">Instalovat</button>' +
+                '<button class="pwa-install-close" aria-label="Zavřít">✕</button>';
+        }
+        document.body.appendChild(banner);
+
+        banner.querySelector('.pwa-install-close').addEventListener('click', function() {
+            localStorage.setItem(DISMISSED_KEY, '1');
+            banner.remove();
+        });
+
+        var btn = banner.querySelector('#pwa-install-btn');
+        if (btn && deferredPrompt) {
+            btn.addEventListener('click', function() {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(function(choice) {
+                    if (choice.outcome === 'accepted') {
+                        localStorage.setItem(DISMISSED_KEY, '1');
+                    }
+                    banner.remove();
+                    deferredPrompt = null;
+                });
+            });
+        }
+    }
+
+    /* Android */
+    window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        setTimeout(function() { showBanner('android'); }, 3000);
+    });
+
+    /* iOS — detekce: je iOS a NENÍ v standalone */
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    var isStandalone = window.navigator.standalone === true;
+    if (isIOS && !isStandalone) {
+        setTimeout(function() { showBanner('ios'); }, 5000);
+    }
+
+    /* Pokud už je nainstalováno */
+    window.addEventListener('appinstalled', function() {
+        var b = document.getElementById('pwa-install-banner');
+        if (b) b.remove();
+        localStorage.setItem(DISMISSED_KEY, '1');
+    });
 })();
 </script>
 </body>

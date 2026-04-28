@@ -60,6 +60,8 @@
             {{else}}
             <div class="match-tip muted">{{tr $.Lang "tips_not_tipped"}}</div>
             {{end}}
+            <div class="tip-dist-wrap" data-match-id="{{.Match.ID}}"
+                 data-home="{{$htName}}" data-away="{{$atName}}"></div>
         {{else if .CanTip}}
             <form method="post" action="/tip/submit" class="tip-form" data-match-id="{{.Match.ID}}">
                 <input type="hidden" name="match_id" value="{{.Match.ID}}" />
@@ -77,6 +79,8 @@
         {{else}}
             {{if .Tip}}
             <div class="match-tip muted">{{tr $.Lang "tips_your_tip"}} {{.Tip.HomeScore}}:{{.Tip.AwayScore}} {{tr $.Lang "tips_locked"}}</div>
+            <div class="tip-dist-wrap" data-match-id="{{.Match.ID}}"
+                 data-home="{{$htName}}" data-away="{{$atName}}"></div>
             {{else}}
             <div class="match-tip muted">{{tr $.Lang "tips_deadline"}}</div>
             {{end}}
@@ -88,6 +92,45 @@
 </div>
 
 <script>
+/* ── Tip Distribution — "Jak tipovali ostatní" ──────────────────────── */
+(function () {
+    var wraps = document.querySelectorAll('.tip-dist-wrap[data-match-id]');
+    if (!wraps.length) return;
+    wraps.forEach(function (el) {
+        fetch('/api/match/' + el.dataset.matchId + '/tip-distribution')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.hidden || !d.total) return;
+                var home = el.dataset.home;
+                var away = el.dataset.away;
+                el.innerHTML = buildDist(d, home, away);
+            }).catch(function () {});
+    });
+    function pct(n, t) { return Math.round(n * 100 / t); }
+    function seg(cls, w, title) {
+        return w > 0 ? '<div class="tds tds-' + cls + '" style="width:' + w + '%" title="' + title + '"></div>' : '';
+    }
+    function buildDist(d, home, away) {
+        var hp = pct(d.home_wins, d.total);
+        var dp = pct(d.draws, d.total);
+        var ap = 100 - hp - dp;
+        var html = '<div class="tip-dist">';
+        html += '<div class="tip-dist-bar">';
+        html += seg('h', hp, home + ': ' + d.home_wins + ' (' + hp + '%)');
+        html += seg('d', dp, 'Remíza: ' + d.draws + ' (' + dp + '%)');
+        html += seg('a', ap, away + ': ' + d.away_wins + ' (' + ap + '%)');
+        html += '</div>';
+        html += '<div class="tip-dist-labels">';
+        if (hp >= 8) html += '<span class="tdl-h">' + hp + '%</span>';
+        if (dp >= 8) html += '<span class="tdl-d">' + dp + '% X</span>';
+        if (ap >= 8) html += '<span class="tdl-a">' + ap + '%</span>';
+        html += '</div>';
+        html += '<div class="tip-dist-meta">' + d.total + ' tipů</div>';
+        html += '</div>';
+        return html;
+    }
+}());
+
 var LANG_STARTING = 'Právě začíná!';
 (function () {
     var els = document.querySelectorAll('.match-countdown[data-countdown]');

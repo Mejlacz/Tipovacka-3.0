@@ -119,6 +119,9 @@ func main() {
 	r.Post("/tip/submit", handlers.SubmitTip)
 	r.Post("/tip/submit-ajax", handlers.SubmitTipAjax)
 
+	// ── Match API ─────────────────────────────────────────────────────────────
+	r.Get("/api/match/{match_id}/tip-distribution", handlers.MatchTipDistribution)
+
 	// ── Leaderboard ───────────────────────────────────────────────────────────
 	r.Get("/leaderboard", handlers.Leaderboard(tmpl))
 	r.Get("/leaderboard/chart-data", handlers.LeaderboardChartData(tmpl))
