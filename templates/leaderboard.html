@@ -245,7 +245,9 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         <td class="col-user">
             {{$accStr := "—"}}{{if $row.Accuracy}}{{$accStr = printf "%d %%" (intVal $row.Accuracy)}}{{end}}
             {{$tipData := printf "🎯 Přesnost: %s\n✅ Přesné: %d\n☑️ Vítěz: %d\n❌ Minul: %d\n📊 Tipy: %s" $accStr $row.Exact $row.Winner $row.Miss $row.TipRatio}}
-            <span class="player-tip" data-tip="{{$tipData}}" style="cursor:pointer" {{if not $isMe}}data-vs-url="/stats/{{$.SelectedCompetitionID}}/vs/{{$row.User.ID}}"{{end}}>{{if $isMe}}<em>{{$row.User.Username}}</em>{{else}}{{$row.User.Username}}{{end}}</span>
+            <span class="player-tip" data-tip="{{$tipData}}" style="cursor:pointer"
+                  {{if not $isMe}}data-vs-url="/stats/{{$.SelectedCompetitionID}}/vs/{{$row.User.ID}}"
+                  data-stats-url="/stats/{{$.SelectedCompetitionID}}/extended?user_id={{$row.User.ID}}"{{end}}>{{if $isMe}}<em>{{$row.User.Username}}</em>{{else}}{{$row.User.Username}}{{end}}</span>
             {{if $isMe}}<span class="badge-you" style="font-size:0.72rem;margin-left:0.2rem">ty</span>{{end}}
             {{if ge $row.Streak 3}}<span title="{{$row.Streak}}× přesný tip v řadě" style="font-size:.7rem;margin-left:.25rem;cursor:default">🔥{{$row.Streak}}</span>{{end}}
         </td>
@@ -617,7 +619,12 @@ document.addEventListener('DOMContentLoaded', function () {
             html += '</div>';
             html += '<div style="display:flex;align-items:center;justify-content:center;gap:.5rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:10px;padding:.45rem .5rem"><span style="font-size:.75rem;color:var(--muted-d)">Tipy:</span><span style="font-weight:700;color:var(--text-d);font-size:.95rem">' + ratio + '</span></div>';
             if (nameEl.dataset.vsUrl) {
-                html += '<a href="' + nameEl.dataset.vsUrl + '" style="display:block;text-align:center;margin-top:.5rem;font-size:.78rem;color:var(--accent);text-decoration:none">📊 H2H srovnání →</a>';
+                html += '<div style="display:flex;gap:.4rem;margin-top:.6rem">';
+                html += '<a href="' + nameEl.dataset.vsUrl + '" style="flex:1;display:block;text-align:center;padding:.35rem .5rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:8px;font-size:.78rem;color:var(--accent);text-decoration:none">⚔️ H2H srovnání</a>';
+                if (nameEl.dataset.statsUrl) {
+                    html += '<a href="' + nameEl.dataset.statsUrl + '" style="flex:1;display:block;text-align:center;padding:.35rem .5rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:8px;font-size:.78rem;color:var(--muted-d);text-decoration:none">📋 Plné statistiky</a>';
+                }
+                html += '</div>';
             }
             document.getElementById('tipster-modal-body').innerHTML = html;
             modal.style.display = 'flex';

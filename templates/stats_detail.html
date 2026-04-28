@@ -66,9 +66,111 @@
 {{end}}
 
 {{if .S}}
-<div style="margin-bottom:1.5rem">
+<div style="margin-bottom:1.5rem;display:flex;gap:.4rem;flex-wrap:wrap">
     <a href="/stats/{{.CompID}}/extended" class="btn btn-sm btn-secondary">📊 Rozšířené statistiky</a>
+    <button id="pr-chart-toggle" class="btn btn-sm btn-secondary" onclick="togglePrChart()">📈 Přesnost per kolo</button>
 </div>
+<div id="pr-chart-wrap" style="display:none;background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem;margin-bottom:1.5rem">
+    <canvas id="pr-chart" style="max-height:280px"></canvas>
+    <div id="pr-chart-loading" style="text-align:center;color:var(--muted-d);font-size:.85rem;padding:2rem 0">Načítám…</div>
+</div>
+<script>
+var _prLoaded = false;
+function togglePrChart() {
+    var wrap = document.getElementById('pr-chart-wrap');
+    var btn  = document.getElementById('pr-chart-toggle');
+    var open = wrap.style.display === 'none';
+    wrap.style.display = open ? 'block' : 'none';
+    btn.textContent = open ? '📉 Skrýt graf' : '📈 Přesnost per kolo';
+    if (open && !_prLoaded) { _prLoaded = true; loadPrChart(); }
+}
+function loadPrChart() {
+    var compId = {{.CompID}};
+    if (window.Chart) { renderPrChart(compId); return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
+    s.onload = function() { renderPrChart(compId); };
+    document.head.appendChild(s);
+}
+function renderPrChart(compId) {
+    fetch('/api/stats/' + compId + '/per-round')
+        .then(function(r){return r.json();})
+        .then(function(data){
+            document.getElementById('pr-chart-loading').style.display = 'none';
+            if (!data.rounds || data.rounds.length === 0) {
+                document.getElementById('pr-chart-loading').style.display = 'block';
+                document.getElementById('pr-chart-loading').textContent = 'Zatím žádná data.';
+                return;
+            }
+            var labels = data.rounds.map(function(r){return r.name;});
+            var exactPct = data.rounds.map(function(r){return r.exact_pct;});
+            var pts     = data.rounds.map(function(r){return r.pts;});
+            var textColor = '#94a3b8';
+            var gridColor = 'rgba(255,255,255,.08)';
+            new Chart(document.getElementById('pr-chart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '% přesných tipů',
+                            data: exactPct,
+                            backgroundColor: 'rgba(52,211,153,.7)',
+                            borderColor: '#34d399',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'yPct'
+                        },
+                        {
+                            label: 'Body',
+                            data: pts,
+                            type: 'line',
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245,158,11,.12)',
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            tension: 0.3,
+                            yAxisID: 'yPts',
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: textColor, font: { size: 11 }, boxWidth: 12 } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    if (ctx.datasetIndex === 0) return ctx.dataset.label + ': ' + ctx.parsed.y + '%';
+                                    return ctx.dataset.label + ': ' + ctx.parsed.y;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+                        yPct: {
+                            position: 'left',
+                            min: 0, max: 100,
+                            ticks: { color: '#34d399', font: { size: 10 }, callback: function(v){return v+'%';} },
+                            grid: { color: gridColor }
+                        },
+                        yPts: {
+                            position: 'right',
+                            ticks: { color: '#f59e0b', font: { size: 10 } },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
+        }).catch(function(){
+            document.getElementById('pr-chart-loading').textContent = 'Chyba načítání.';
+        });
+}
+</script>
 {{end}}
 
 {{else}}

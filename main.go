@@ -119,8 +119,13 @@ func main() {
 	r.Post("/tip/submit", handlers.SubmitTip)
 	r.Post("/tip/submit-ajax", handlers.SubmitTipAjax)
 
-	// ── Match API ─────────────────────────────────────────────────────────────
+	// ── Match & Round API ────────────────────────────────────────────────────
 	r.Get("/api/match/{match_id}/tip-distribution", handlers.MatchTipDistribution)
+	r.Get("/api/round/{round_id}/summary", handlers.RoundSummary)
+	r.Get("/api/stats/{comp_id}/per-round", handlers.StatsPerRound)
+
+	// ── Offline fallback (PWA) ─────────────────────────────────────────────
+	r.Get("/offline", offlineHandler)
 
 	// ── Leaderboard ───────────────────────────────────────────────────────────
 	r.Get("/leaderboard", handlers.Leaderboard(tmpl))
@@ -467,10 +472,51 @@ func setLangHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, referer, http.StatusSeeOther)
 }
 
-const serviceWorkerContent = `/* Tipovačka 3.0 — PWA service worker */
-const CACHE = 'tipovacka-pwa-v4';
+// offlineHandler — jednoduchá offline záložní stránka pro PWA
+func offlineHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Write([]byte(`<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tipovačka — offline</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0f1923;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1.5rem;text-align:center}
+  .card{background:#1a2d42;border:1px solid rgba(255,255,255,.1);border-radius:16px;
+        padding:2.5rem 2rem;max-width:340px;width:100%}
+  .icon{font-size:3.5rem;margin-bottom:1rem}
+  h1{font-size:1.35rem;font-weight:700;margin-bottom:.6rem}
+  p{font-size:.9rem;color:#94a3b8;line-height:1.55;margin-bottom:1.5rem}
+  .btn{display:inline-block;background:#10b981;color:#fff;border:none;border-radius:8px;
+       padding:.6rem 1.4rem;font-size:.95rem;font-weight:600;cursor:pointer;text-decoration:none;
+       transition:background .15s}
+  .btn:hover{background:#059669}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">📡</div>
+  <h1>Jsi offline</h1>
+  <p>Nepodařilo se načíst stránku.<br>Zkontroluj připojení k internetu a zkus to znovu.</p>
+  <button class="btn" onclick="window.location.reload()">Zkusit znovu</button>
+</div>
+</body>
+</html>`))
+}
 
-self.addEventListener('install', e => { self.skipWaiting(); });
+const serviceWorkerContent = `/* Tipovačka 3.0 — PWA service worker */
+const CACHE = 'tipovacka-pwa-v5';
+const OFFLINE_URL = '/offline';
+
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(cache => cache.addAll([OFFLINE_URL])).then(() => self.skipWaiting())
+  );
+});
 
 self.addEventListener('activate', e => {
   e.waitUntil(
@@ -481,6 +527,7 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
   if (e.request.url.includes('/static/') || e.request.url.includes('/icon.png')) {
     e.respondWith(
       caches.open(CACHE).then(cache =>
@@ -494,7 +541,11 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+  e.respondWith(
+    fetch(e.request).catch(() =>
+      caches.match(e.request).then(cached => cached || caches.match(OFFLINE_URL))
+    )
+  );
 });
 
 self.addEventListener('push', e => {

@@ -1308,3 +1308,56 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
 @media (min-width: 768px) {
     .pwa-install-banner { display: none !important; }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Round Summary — "Kolo shrnutí"
+───────────────────────────────────────────────────────────────── */
+.round-summary {
+    background: var(--bg2);
+    border: 1px solid var(--border-d);
+    border-left: 3px solid var(--accent, #10b981);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin: 0.5rem 0 1.25rem;
+    animation: fade-in .3s ease;
+}
+@keyframes fade-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+
+.rs-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--accent, #10b981);
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+.rs-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.85rem;
+    font-size: 0.78rem;
+    color: var(--muted-d);
+    margin-bottom: 0.75rem;
+}
+.rs-scorers {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.rs-scorer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    background: var(--bg3);
+}
+.rs-scorer-first {
+    background: rgba(16,185,129,.1);
+    border: 1px solid rgba(16,185,129,.2);
+}
+.rs-medal { font-size: 1rem; width: 1.4rem; text-align: center; flex-shrink: 0; }
+.rs-name  { flex: 1; font-weight: 600; color: var(--text-d); }
+.rs-pts   { font-weight: 700; color: #fbbf24; }
+.rs-exact { font-size: 0.75rem; color: #34d399; margin-left: 0.25rem; }
