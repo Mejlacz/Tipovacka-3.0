@@ -245,8 +245,9 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         <td class="col-user">
             {{$accStr := "—"}}{{if $row.Accuracy}}{{$accStr = printf "%d %%" (intVal $row.Accuracy)}}{{end}}
             {{$tipData := printf "🎯 Přesnost: %s\n✅ Přesné: %d\n☑️ Vítěz: %d\n❌ Minul: %d\n📊 Tipy: %s" $accStr $row.Exact $row.Winner $row.Miss $row.TipRatio}}
-            <span class="player-tip" data-tip="{{$tipData}}" style="cursor:pointer">{{if $isMe}}<em>{{$row.User.Username}}</em>{{else}}{{$row.User.Username}}{{end}}</span>
+            <span class="player-tip" data-tip="{{$tipData}}" style="cursor:pointer" {{if not $isMe}}data-vs-url="/stats/{{$.SelectedCompetitionID}}/vs/{{$row.User.ID}}"{{end}}>{{if $isMe}}<em>{{$row.User.Username}}</em>{{else}}{{$row.User.Username}}{{end}}</span>
             {{if $isMe}}<span class="badge-you" style="font-size:0.72rem;margin-left:0.2rem">ty</span>{{end}}
+            {{if ge $row.Streak 3}}<span title="{{$row.Streak}}× přesný tip v řadě" style="font-size:.7rem;margin-left:.25rem;cursor:default">🔥{{$row.Streak}}</span>{{end}}
         </td>
         <td class="col-pts"><strong>{{$row.Total}}</strong></td>
         {{range $.Matches}}
@@ -615,6 +616,9 @@ document.addEventListener('DOMContentLoaded', function () {
             html += statBox('Minul', miss, '#ef4444');
             html += '</div>';
             html += '<div style="display:flex;align-items:center;justify-content:center;gap:.5rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:10px;padding:.45rem .5rem"><span style="font-size:.75rem;color:var(--muted-d)">Tipy:</span><span style="font-weight:700;color:var(--text-d);font-size:.95rem">' + ratio + '</span></div>';
+            if (nameEl.dataset.vsUrl) {
+                html += '<a href="' + nameEl.dataset.vsUrl + '" style="display:block;text-align:center;margin-top:.5rem;font-size:.78rem;color:var(--accent);text-decoration:none">📊 H2H srovnání →</a>';
+            }
             document.getElementById('tipster-modal-body').innerHTML = html;
             modal.style.display = 'flex';
         });
@@ -676,6 +680,7 @@ function renderLbChart() {
                 return {
                     label: ds.label,
                     data: ds.data,
+                    hidden: !isMe && i >= 5,
                     borderColor: color,
                     backgroundColor: isMe ? 'rgba(52,211,153,.12)' : 'transparent',
                     borderWidth: isMe ? 3 : 1.5,
@@ -726,4 +731,24 @@ function renderLbChart() {
             document.getElementById('lb-chart-loading').textContent = 'Chyba načítání dat.';
         });
 }
+
+/* ── Live refresh ── */
+(function() {
+    var compId = (new URLSearchParams(location.search).get('competition_id')) || '0';
+    var lastTs = null;
+    var idle = true;
+    var idleTimer;
+    function resetIdle() { idle = false; clearTimeout(idleTimer); idleTimer = setTimeout(function(){ idle = true; }, 8000); }
+    ['mousemove','keydown','scroll','click','touchstart'].forEach(function(e){ document.addEventListener(e, resetIdle, {passive:true}); });
+    function check() {
+        if (!idle) return;
+        fetch('/leaderboard/last-update?competition_id=' + compId)
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (lastTs === null) { lastTs = d.ts; return; }
+                if (d.ts !== lastTs) { location.reload(); }
+            }).catch(function(){});
+    }
+    setInterval(check, 45000);
+})();
 </script>

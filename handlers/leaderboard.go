@@ -488,6 +488,36 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
+		// Streak: consecutive exact tips from most recent backwards
+		if len(matchIDs) > 0 {
+			type mdate struct {
+				id int
+				d  time.Time
+			}
+			var ordered []mdate
+			for _, m := range matches {
+				if m.HomeScore != nil && m.MatchDate != nil {
+					ordered = append(ordered, mdate{m.ID, *m.MatchDate})
+				}
+			}
+			sort.Slice(ordered, func(i, j int) bool { return ordered[i].d.After(ordered[j].d) })
+			for _, row := range userRows {
+				streak := 0
+				for _, md := range ordered {
+					tip := tipsByUser[row.User.ID][md.id]
+					if tip == nil || tip.Points == nil {
+						break
+					}
+					if *tip.Points == 3 {
+						streak++
+					} else {
+						break
+					}
+				}
+				row.Streak = streak
+			}
+		}
+
 		RenderTemplate(w, r, tmpl, "leaderboard.html", TemplateData{
 			"User":                  u,
 			"UserRows":              userRows,
@@ -668,5 +698,104 @@ func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
 
 		enc := json.NewEncoder(w)
 		_ = enc.Encode(chartResp{Labels: labels, Datasets: datasets})
+	}
+}
+
+// GET /api/my-rank — returns {place, points, comp_name} for current user in top active competition
+func MyRankAPI(tmpl *template.Template) http.HandlerFunc {
+	type resp struct {
+		Place    int    `json:"place"`
+		Points   int    `json:"points"`
+		CompName string `json:"comp_name"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		u := RequireLogin(w, r)
+		if u == nil {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		ctx := context.Background()
+		// Find top active competition by sort_order
+		var compID int
+		var compName string
+		_ = db.Pool.QueryRow(ctx,
+			`SELECT id, name FROM competitions WHERE is_active=true ORDER BY COALESCE(sort_order,9999) ASC, id DESC LIMIT 1`).
+			Scan(&compID, &compName)
+		if compID == 0 {
+			w.Write([]byte(`{}`))
+			return
+		}
+		// Get all grand totals and find rank
+		type row struct{ uid, pts, exact int }
+		rows, _ := db.Pool.Query(ctx,
+			`SELECT t.user_id,
+			        COALESCE(SUM(t.points),0)::int as pts,
+			        COALESCE(SUM(CASE WHEN t.points=3 THEN 1 ELSE 0 END),0)::int as exact
+			   FROM tips t
+			   JOIN matches m ON m.id=t.match_id
+			   JOIN rounds r ON r.id=m.round_id
+			  WHERE r.competition_id=$1 AND m.is_finished=true AND t.points IS NOT NULL
+			  GROUP BY t.user_id`, compID)
+		var allRows []row
+		myPts, myExact := 0, 0
+		for rows.Next() {
+			var rr row
+			_ = rows.Scan(&rr.uid, &rr.pts, &rr.exact)
+			allRows = append(allRows, rr)
+			if rr.uid == u.ID {
+				myPts = rr.pts
+				myExact = rr.exact
+			}
+		}
+		rows.Close()
+		// Add extra points
+		var extraPts int
+		_ = db.Pool.QueryRow(ctx,
+			`SELECT COALESCE(SUM(ea.points),0)::int FROM extra_answers ea
+			   JOIN extra_questions eq ON eq.id=ea.question_id
+			  WHERE eq.competition_id=$1 AND ea.user_id=$2 AND ea.points IS NOT NULL`,
+			compID, u.ID).Scan(&extraPts)
+		myTotal := myPts + extraPts
+		place := 1
+		for _, rr := range allRows {
+			if rr.uid == u.ID {
+				continue
+			}
+			if rr.pts > myPts || (rr.pts == myPts && rr.exact > myExact) {
+				place++
+			}
+		}
+		enc := json.NewEncoder(w)
+		_ = enc.Encode(resp{Place: place, Points: myTotal, CompName: compName})
+	}
+}
+
+// GET /leaderboard/last-update?competition_id=X
+func LeaderboardLastUpdate(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		u := RequireLogin(w, r)
+		if u == nil {
+			return
+		}
+		_ = u
+		w.Header().Set("Content-Type", "application/json")
+		compID, _ := strconv.Atoi(r.URL.Query().Get("competition_id"))
+		if compID == 0 {
+			w.Write([]byte(`{"ts":0}`))
+			return
+		}
+		ctx := context.Background()
+		var ts int64
+		_ = db.Pool.QueryRow(ctx,
+			`SELECT COALESCE(EXTRACT(EPOCH FROM MAX(m.updated_at))::bigint, 0)
+			   FROM matches m JOIN rounds r ON r.id=m.round_id
+			  WHERE r.competition_id=$1 AND m.is_finished=true`, compID).Scan(&ts)
+		if ts == 0 {
+			// fallback: count finished matches
+			_ = db.Pool.QueryRow(ctx,
+				`SELECT COUNT(*) FROM matches m JOIN rounds r ON r.id=m.round_id
+				  WHERE r.competition_id=$1 AND m.is_finished=true`, compID).Scan(&ts)
+		}
+		w.Write([]byte(`{"ts":` + strconv.FormatInt(ts, 10) + `}`))
 	}
 }

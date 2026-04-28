@@ -286,6 +286,7 @@ type UserRow struct {
 	TipRatio         string
 	Place            int
 	Trend            int
+	Streak           int // consecutive exact tips (most recent, from last finished match backwards)
 }
 
 // ─── ExtraCol (pro leaderboard) ───────────────────────────────────────────────

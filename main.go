@@ -121,6 +121,8 @@ func main() {
 	// ── Leaderboard ───────────────────────────────────────────────────────────
 	r.Get("/leaderboard", handlers.Leaderboard(tmpl))
 	r.Get("/leaderboard/chart-data", handlers.LeaderboardChartData(tmpl))
+	r.Get("/leaderboard/last-update", handlers.LeaderboardLastUpdate(tmpl))
+	r.Get("/api/my-rank", handlers.MyRankAPI(tmpl))
 	r.Get("/leaderboard/{competition_id}", func(w http.ResponseWriter, r *http.Request) {
 		compID := chi.URLParam(r, "competition_id")
 		http.Redirect(w, r, "/leaderboard?competition_id="+compID, http.StatusMovedPermanently)
@@ -252,6 +254,9 @@ func main() {
 	r.Get("/admin/pravidla/edit", handlers.AdminPravidlaEditForm(tmpl))
 	r.Post("/admin/pravidla/edit", handlers.AdminPravidlaEditSubmit)
 	r.Post("/admin/pravidla/reset", handlers.AdminPravidlaReset)
+
+	// Admin deadline alerts
+	r.Get("/admin/deadline-alerts", handlers.AdminDeadlineAlerts)
 
 	// Admin IO (import/export overview)
 	r.Get("/admin/io", handlers.AdminIO(tmpl))

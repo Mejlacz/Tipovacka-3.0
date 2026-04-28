@@ -1,3 +1,22 @@
+<div id="deadline-alert" style="display:none;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem">
+    <strong style="color:#fbbf24">⚠️ Blíží se uzávěrka tipování</strong>
+    <div id="deadline-alert-body" style="font-size:.82rem;color:var(--text-d);margin-top:.4rem"></div>
+</div>
+<script>
+(function() {
+    fetch('/admin/deadline-alerts').then(function(r){return r.ok?r.json():null;}).then(function(d){
+        if (!d || !d.alerts || !d.alerts.length) return;
+        var wrap = document.getElementById('deadline-alert');
+        var body = document.getElementById('deadline-alert-body');
+        var html = '';
+        d.alerts.forEach(function(a) {
+            html += '<div style="margin-top:.3rem">⏱ <strong>' + a.match + '</strong> (' + a.deadline + ') — netipovalo <strong>' + a.missing_count + '</strong> hráčů</div>';
+        });
+        body.innerHTML = html;
+        wrap.style.display = 'block';
+    }).catch(function(){});
+})();
+</script>
 <style>
 .comp-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; margin-top:1rem; }
 .comp-card { background:var(--bg2); border:1px solid var(--border-d); border-left:4px solid var(--border-d); border-radius:10px; padding:1rem 1.1rem; display:flex; flex-direction:column; gap:.6rem; }

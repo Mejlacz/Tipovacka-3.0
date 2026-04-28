@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>(function(){var t=localStorage.getItem('tipovacka-theme');var v=['classic','midnight','ocean','forest','sunset','neon','light'];if(t&&v.indexOf(t)>=0)document.getElementById('html-root').setAttribute('data-theme',t);})()</script>
+    <script>(function(){var t=localStorage.getItem('tipovacka-theme');var v=['classic','midnight','ocean','forest','sunset','neon','light'];if(t&&v.indexOf(t)>=0){document.getElementById('html-root').setAttribute('data-theme',t);}else if(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches){document.getElementById('html-root').setAttribute('data-theme','light');localStorage.setItem('tipovacka-theme','light');}})()</script>
     <title>{{if .Title}}{{.Title}} — {{end}}Tipovačka 3.0</title>
     <link rel="stylesheet" href="/static/css/style.css?v=20260427a" />
     <link rel="stylesheet" href="/static/css/themes.css?v=20260426a" />
@@ -350,6 +350,21 @@ if ('serviceWorker' in navigator) {
             burger.setAttribute('aria-expanded','false'); burger.textContent='☰';
         });
     });
+})();
+
+/* ── My rank chip ── */
+(function() {
+    if (!document.querySelector('.navbar-username')) return;
+    fetch('/api/my-rank').then(function(r){return r.ok?r.json():null;}).then(function(d){
+        if (!d || !d.place) return;
+        var el = document.querySelector('.navbar-username');
+        if (!el) return;
+        var chip = document.createElement('span');
+        chip.style.cssText = 'display:inline-block;margin-left:.4rem;font-size:.68rem;font-weight:700;background:rgba(16,185,129,.18);color:#34d399;border-radius:99px;padding:.1rem .45rem;vertical-align:middle';
+        chip.title = d.comp_name;
+        chip.textContent = d.place + '. · ' + d.points + ' b';
+        el.appendChild(chip);
+    }).catch(function(){});
 })();
 </script>
 </body>
