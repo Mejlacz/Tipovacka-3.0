@@ -1,3 +1,4 @@
+{{if .User.IsOwner}}
 <div id="deadline-alert" style="display:none;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem">
     <strong style="color:#fbbf24">⚠️ Blíží se uzávěrka tipování</strong>
     <div id="deadline-alert-body" style="font-size:.82rem;color:var(--text-d);margin-top:.4rem"></div>
@@ -17,6 +18,7 @@
     }).catch(function(){});
 })();
 </script>
+{{end}}
 <style>
 .comp-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; margin-top:1rem; }
 .comp-card { background:var(--bg2); border:1px solid var(--border-d); border-left:4px solid var(--border-d); border-radius:10px; padding:1rem 1.1rem; display:flex; flex-direction:column; gap:.6rem; }

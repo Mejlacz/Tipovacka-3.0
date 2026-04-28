@@ -13,6 +13,11 @@ func AdminDeadlineAlerts(w http.ResponseWriter, r *http.Request) {
 	if u == nil {
 		return
 	}
+	if !u.IsOwner {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"alerts":[]}`))
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	ctx := context.Background()
 	loc, _ := time.LoadLocation("Europe/Prague")
