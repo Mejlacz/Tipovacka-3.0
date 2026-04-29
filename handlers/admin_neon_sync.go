@@ -267,7 +267,7 @@ func AdminNeonSyncSettings(w http.ResponseWriter, r *http.Request) {
 
 // ─── Sync logika ──────────────────────────────────────────────────────────────
 
-// RunNeonSync spustí zálohu CockroachDB → Neon.
+// RunNeonSync spustí import dat CockroachDB (Tip 2.0) → Neon (Tip 3.0).
 // Vrátí celkový počet zkopírovaných řádků a chybu.
 func RunNeonSync(triggeredBy string) (int, error) {
 	ctx := context.Background()
@@ -319,24 +319,23 @@ func RunNeonSync(triggeredBy string) (int, error) {
 		return total, fmt.Errorf("%s", message)
 	}
 
-	// Připoj se k Neon
-	neonPool, err := pgxpool.New(ctx, config.NeonBackupURL)
+	// Připoj se ke CockroachDB (zdroj = Tipovačka 2.0)
+	cockPool, err := pgxpool.New(ctx, config.NeonBackupURL)
 	if err != nil {
-		return finish("error", fmt.Sprintf("Nelze se připojit k Neonu: %v", err), nil)
+		return finish("error", fmt.Sprintf("Nelze se připojit ke CockroachDB: %v", err), nil)
 	}
-	defer neonPool.Close()
+	defer cockPool.Close()
 
-	if err := neonPool.Ping(ctx); err != nil {
-		return finish("error", fmt.Sprintf("Neon ping selhal: %v", err), nil)
+	if err := cockPool.Ping(ctx); err != nil {
+		return finish("error", fmt.Sprintf("CockroachDB ping selhal: %v", err), nil)
 	}
 
-	// Zjisti průnik sloupců a zkopíruj každou tabulku
+	// Zkopíruj každou tabulku: CockroachDB (zdroj) → Neon (cíl = db.Pool)
 	counts := map[string]int{}
 	for _, table := range neonSyncTables {
-		n, err := copyTableNeon(ctx, db.Pool, neonPool, table)
+		n, err := copyTableNeon(ctx, cockPool, db.Pool, table)
 		if err != nil {
 			log.Printf("[neon_sync] chyba při kopírování '%s': %v", table, err)
-			// Pokračuj s ostatními tabulkami (soft error)
 			counts[table] = -1
 			continue
 		}
@@ -351,7 +350,7 @@ func RunNeonSync(triggeredBy string) (int, error) {
 	}
 
 	return finish("ok",
-		fmt.Sprintf("✅ Záloha dokončena — %d řádků ve %d tabulkách", total, len(neonSyncTables)),
+		fmt.Sprintf("✅ Import dokončen — %d řádků ve %d tabulkách", total, len(neonSyncTables)),
 		counts)
 }
 

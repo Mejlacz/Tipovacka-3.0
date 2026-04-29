@@ -12,7 +12,7 @@
 </style>
 
 <div class="page-header">
-    <h1>🔄 Neon Sync — záloha databáze</h1>
+    <h1>🔄 Neon Sync — import z CockroachDB</h1>
     <a href="/admin" class="btn btn-secondary">← Admin</a>
 </div>
 
@@ -40,12 +40,13 @@
 
 {{/* ── Spustit zálohu ── */}}
 <div class="ns-card">
-    <h2>Ruční záloha</h2>
+    <h2>Ruční import</h2>
     {{if not .NeonURLSet}}
-    <p style="color:#f87171">⚠️ NEON_BACKUP_URL není nastavena v env proměnných.</p>
+    <p style="color:#f87171">⚠️ NEON_BACKUP_URL (URL CockroachDB zdroje) není nastavena v env proměnných.</p>
     {{else}}
     <p style="font-size:.85rem;color:var(--muted-d);margin-bottom:.75rem">
-        Spustí okamžitou zálohu CockroachDB → Neon na pozadí. Výsledek se zobrazí v logu níže po obnovení stránky.
+        Zkopíruje všechna data z <strong>CockroachDB (Tipovačka 2.0)</strong> do <strong>Neon (Tipovačka 3.0)</strong> na pozadí.<br>
+        Stávající data v Neonu se přepíší. Výsledek se zobrazí v logu níže po obnovení stránky.
     </p>
     <form method="post" action="/admin/neon-sync/run">
         <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
@@ -56,7 +57,7 @@
 
 {{/* ── Nastavení ── */}}
 <div class="ns-card">
-    <h2>Automatická záloha</h2>
+    <h2>Automatický import</h2>
     <form method="post" action="/admin/neon-sync/settings">
         <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
         <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
@@ -79,7 +80,7 @@
 
 {{/* ── Log ── */}}
 <div class="ns-card">
-    <h2>Log zálohovacích operací (posledních 20)</h2>
+    <h2>Log importů (posledních 20)</h2>
     {{if .Log}}
     <table class="ns-table">
         <tr>
