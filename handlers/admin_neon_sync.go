@@ -1,5 +1,5 @@
-// handlers/admin_neon_sync.go — Tipovačka 2.0
-// Admin UI pro ruční Neon sync + zobrazení logu.
+// handlers/admin_neon_sync.go — Tipovačka 3.0
+// Admin UI pro zálohu CockroachDB → Neon + zobrazení logu.
 package handlers
 
 import (
@@ -215,7 +215,7 @@ func AdminNeonSyncRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if config.NeonBackupURL == "" {
-		middleware.SetFlash(w, r, "error", "NEON_BACKUP_URL není nastavena v env proměnných.")
+		middleware.SetFlash(w, r, "error", "NEON_BACKUP_URL (URL Neon zálohy) není nastavena v env proměnných.")
 		http.Redirect(w, r, "/admin/neon-sync", http.StatusSeeOther)
 		return
 	}
@@ -319,21 +319,21 @@ func RunNeonSync(triggeredBy string) (int, error) {
 		return total, fmt.Errorf("%s", message)
 	}
 
-	// Připoj se ke CockroachDB (zdroj = Tipovačka 2.0)
-	cockPool, err := pgxpool.New(ctx, config.NeonBackupURL)
+	// Připoj se k Neon (cíl zálohy)
+	neonPool, err := pgxpool.New(ctx, config.NeonBackupURL)
 	if err != nil {
-		return finish("error", fmt.Sprintf("Nelze se připojit ke CockroachDB: %v", err), nil)
+		return finish("error", fmt.Sprintf("Nelze se připojit k Neon záloze: %v", err), nil)
 	}
-	defer cockPool.Close()
+	defer neonPool.Close()
 
-	if err := cockPool.Ping(ctx); err != nil {
-		return finish("error", fmt.Sprintf("CockroachDB ping selhal: %v", err), nil)
+	if err := neonPool.Ping(ctx); err != nil {
+		return finish("error", fmt.Sprintf("Neon ping selhal: %v", err), nil)
 	}
 
-	// Zkopíruj každou tabulku: CockroachDB (zdroj) → Neon (cíl = db.Pool)
+	// Zkopíruj každou tabulku: CockroachDB (zdroj = db.Pool) → Neon (cíl = neonPool)
 	counts := map[string]int{}
 	for _, table := range neonSyncTables {
-		n, err := copyTableNeon(ctx, cockPool, db.Pool, table)
+		n, err := copyTableNeon(ctx, db.Pool, neonPool, table)
 		if err != nil {
 			log.Printf("[neon_sync] chyba při kopírování '%s': %v", table, err)
 			counts[table] = -1
@@ -350,7 +350,7 @@ func RunNeonSync(triggeredBy string) (int, error) {
 	}
 
 	return finish("ok",
-		fmt.Sprintf("✅ Import dokončen — %d řádků ve %d tabulkách", total, len(neonSyncTables)),
+		fmt.Sprintf("✅ Záloha dokončena — %d řádků ve %d tabulkách", total, len(neonSyncTables)),
 		counts)
 }
 
