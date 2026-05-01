@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	"tipovacka/config"
 	"tipovacka/db"
 	"tipovacka/middleware"
 	"tipovacka/models"
@@ -233,13 +235,43 @@ func ForgotPasswordSubmit(tmpl *template.Template) http.HandlerFunc {
 				`INSERT INTO password_reset_tokens (user_id, token, expires_at, used, created_at)
 				 VALUES ($1, $2, $3, false, NOW())`, userID, token, expires)
 
-			// TODO: implement SMTP — zatím logujeme jen server-side
-			log.Printf("[auth] Reset link (SMTP not configured): /reset-password/%s", token)
+			// Odešli email s odkazem na reset hesla
+			resetURL := config.AppURL + "/reset-password/" + token
+			subject := "🔑 Reset hesla — Tipovačka"
+			body := buildResetPasswordEmail(resetURL, config.AppURL)
+			if err := sendEmailHTML(userEmail, subject, body); err != nil {
+				log.Printf("[auth] Reset email chyba → %s: %v", userEmail, err)
+			} else {
+				log.Printf("[auth] Reset email odeslán → %s", userEmail)
+			}
 		}
 
 		// Vždy zobrazíme "e-mail byl odeslán"
 		RenderTemplate(w, r, tmpl, "auth/forgot_password.html", TemplateData{"Sent": true, "Error": nil})
 	}
+}
+
+// buildResetPasswordEmail sestaví HTML tělo emailu pro reset hesla.
+func buildResetPasswordEmail(resetURL, appURL string) string {
+	return fmt.Sprintf(`<html><body style="font-family:sans-serif;max-width:500px;margin:auto;padding:1rem;background:#f0f4f8">
+<div style="background:#131f2e;color:#fff;padding:1rem 1.5rem;border-radius:8px 8px 0 0">
+  <h2 style="margin:0;font-size:1.1rem">🔑 Reset hesla</h2>
+</div>
+<div style="background:#fff;padding:1.5rem;border-radius:0 0 8px 8px;border:1px solid #dde3ea;border-top:none">
+  <p style="margin-top:0">Někdo požádal o reset hesla k tvému účtu v Tipovačce. Pokud to nebyl ty, tento email ignoruj — nic se nestane.</p>
+  <div style="text-align:center;margin:1.5rem 0">
+    <a href="%s" style="background:#6366f1;color:#fff;text-decoration:none;padding:.65rem 1.8rem;border-radius:6px;font-weight:700;font-size:.95rem">
+      Nastavit nové heslo →
+    </a>
+  </div>
+  <p style="color:#64748b;font-size:.82rem;margin:0">
+    Odkaz je platný <strong>1 hodinu</strong>. Po vypršení bude potřeba požádat o nový.
+  </p>
+  <p style="color:#94a3b8;font-size:.78rem;text-align:center;margin-top:1.2rem;border-top:1px solid #e2e8f0;padding-top:.75rem">
+    Tipovačka · <a href="%s" style="color:#64748b">%s</a>
+  </p>
+</div>
+</body></html>`, resetURL, appURL, appURL)
 }
 
 // ─── GET /reset-password/{token} ─────────────────────────────────────────────

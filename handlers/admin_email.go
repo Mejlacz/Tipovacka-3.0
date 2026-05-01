@@ -85,6 +85,27 @@ func sendEmail(to, subject, body string) error {
 	return smtp.SendMail(addr, auth, from, []string{to}, []byte(msg))
 }
 
+// sendEmailHTML odešle HTML email přes SMTP.
+func sendEmailHTML(to, subject, bodyHTML string) error {
+	if !config.SMTPEnabled {
+		return fmt.Errorf("SMTP není nakonfigurováno")
+	}
+	from := config.SMTPFrom
+	if from == "" {
+		from = config.SMTPUser
+	}
+	msg := "From: " + from + "\r\n" +
+		"To: " + to + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/html; charset=UTF-8\r\n" +
+		"\r\n" +
+		bodyHTML
+	addr := fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)
+	auth := smtp.PlainAuth("", config.SMTPUser, config.SMTPPassword, config.SMTPHost)
+	return smtp.SendMail(addr, auth, from, []string{to}, []byte(msg))
+}
+
 // EmailUser je uživatel s emailem pro výběr příjemců.
 type EmailUser struct {
 	ID         int
