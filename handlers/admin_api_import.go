@@ -47,12 +47,28 @@ type fdTeam struct {
 }
 
 type fdScore struct {
-	FullTime fdGoals `json:"fullTime"`
+	// Duration: "REGULAR" | "EXTRA_TIME" | "PENALTY_SHOOTOUT"
+	// Pro tipovačku vždy bereme skóre po základní době:
+	//   fotbal = po 90 min  →  score.fullTime
+	//   hokej  = po 60 min  →  score.fullTime (analogicky)
+	// Prodloužení a penalty do výsledků NEVSTUPUJÍ.
+	Duration  string  `json:"duration"`
+	FullTime  fdGoals `json:"fullTime"`  // skóre po základní době (90/60 min)
+	ExtraTime fdGoals `json:"extraTime"` // po prodloužení — záměrně nepoužíváme
+	Penalties fdGoals `json:"penalties"` // penalty shootout — záměrně nepoužíváme
+	HalfTime  fdGoals `json:"halfTime"`  // informativní, nepoužíváme pro výsledek
 }
 
 type fdGoals struct {
 	Home *int `json:"home"`
 	Away *int `json:"away"`
+}
+
+// regularTimeScore vrátí skóre po základní době (fullTime) — ignoruje prodloužení a penalty.
+// football-data.org v4: score.fullTime je vždy výsledek po 90 min,
+// bez ohledu na to zda se hrálo prodloužení (extraTime/penalties se ukládají zvlášť).
+func regularTimeScore(s fdScore) (*int, *int) {
+	return s.FullTime.Home, s.FullTime.Away
 }
 
 type fdCompetitionList struct {
@@ -241,32 +257,36 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 
 	// Zjednodušená odpověď pro frontend
 	type previewMatch struct {
-		Home    string `json:"home"`
-		Away    string `json:"away"`
-		Date    string `json:"date"`
-		Status  string `json:"status"`
-		ScoreH  *int   `json:"score_h"`
-		ScoreA  *int   `json:"score_a"`
+		Home     string `json:"home"`
+		Away     string `json:"away"`
+		Date     string `json:"date"`
+		Status   string `json:"status"`
+		Duration string `json:"duration"`
+		ScoreH   *int   `json:"score_h"`
+		ScoreA   *int   `json:"score_a"`
 	}
 	var preview []previewMatch
 	skipped := 0
 	for _, m := range list.Matches {
-		if skipFinished && m.Score.FullTime.Home != nil {
+		h, a := regularTimeScore(m.Score)
+		if skipFinished && h != nil {
 			skipped++
 			continue
 		}
 		pm := previewMatch{
-			Home:   m.HomeTeam.Name,
-			Away:   m.AwayTeam.Name,
-			Status: m.Status,
+			Home:     m.HomeTeam.Name,
+			Away:     m.AwayTeam.Name,
+			Status:   m.Status,
+			Duration: m.Score.Duration,
 		}
 		if m.UtcDate != "" {
 			if t, err := time.Parse(time.RFC3339, m.UtcDate); err == nil {
 				pm.Date = t.In(pragueLocation).Format("02.01.2006 15:04")
 			}
 		}
-		pm.ScoreH = m.Score.FullTime.Home
-		pm.ScoreA = m.Score.FullTime.Away
+		// Vždy skóre po základní době — prodloužení/penalty se ignorují
+		pm.ScoreH = h
+		pm.ScoreA = a
 		preview = append(preview, pm)
 	}
 	if preview == nil {
@@ -381,8 +401,14 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 	created, skipped, teamsNew := 0, 0, 0
 
 	for _, m := range list.Matches {
+		// Skóre po základní době (90 min fotbal / 60 min hokej).
+		// Prodloužení (extraTime) a penalty NEPOUŽÍVÁME — football-data.org
+		// ukládá výsledky po 90 min do score.fullTime, ET a pens zvlášť.
+		homeScore, awayScore := regularTimeScore(m.Score)
+		isFinished := m.Status == "FINISHED" && homeScore != nil && awayScore != nil
+
 		// Přeskoč odehrané pokud je nastaveno
-		if skipFinished && m.Score.FullTime.Home != nil {
+		if skipFinished && homeScore != nil {
 			skipped++
 			continue
 		}
@@ -424,15 +450,6 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Skóre (pokud odehrán)
-		var homeScore, awayScore *int
-		isFinished := false
-		if m.Score.FullTime.Home != nil && m.Score.FullTime.Away != nil {
-			homeScore = m.Score.FullTime.Home
-			awayScore = m.Score.FullTime.Away
-			isFinished = true
-		}
-
 		// Zkontroluj duplicitu (stejný round + same teams)
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
@@ -441,11 +458,10 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 
 		if existingID > 0 {
 			// Aktualizuj datum a skóre pokud existuje
-			if homeScore != nil {
+			if isFinished {
 				_, _ = db.Pool.Exec(ctx,
 					`UPDATE matches SET match_date=$1, home_score=$2, away_score=$3, is_finished=$4 WHERE id=$5`,
 					matchDate, homeScore, awayScore, isFinished, existingID)
-				// Přepočítej tipy
 				RecalculateTips(ctx, existingID, *homeScore, *awayScore)
 			} else if matchDate != nil {
 				_, _ = db.Pool.Exec(ctx, `UPDATE matches SET match_date=$1 WHERE id=$2`, matchDate, existingID)
@@ -464,7 +480,6 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 			skipped++
 			continue
 		}
-		// Přepočítej tipy pokud má skóre
 		if isFinished {
 			RecalculateTips(ctx, newMatchID, *homeScore, *awayScore)
 		}
@@ -548,7 +563,14 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 	updated, noScore, notFound := 0, 0, 0
 
 	for _, m := range list.Matches {
-		if m.Score.FullTime.Home == nil || m.Score.FullTime.Away == nil {
+		// Bereme pouze FINISHED zápasy — skóre po základní době (fullTime),
+		// bez prodloužení (extraTime) a penalt (penalties).
+		if m.Status != "FINISHED" {
+			noScore++
+			continue
+		}
+		homeScore, awayScore := regularTimeScore(m.Score)
+		if homeScore == nil || awayScore == nil {
 			noScore++
 			continue
 		}
@@ -573,13 +595,13 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 
 		_, err = db.Pool.Exec(ctx,
 			`UPDATE matches SET home_score=$1, away_score=$2, is_finished=true WHERE id=$3`,
-			m.Score.FullTime.Home, m.Score.FullTime.Away, matchID)
+			homeScore, awayScore, matchID)
 		if err != nil {
 			notFound++
 			continue
 		}
 
-		RecalculateTips(ctx, matchID, *m.Score.FullTime.Home, *m.Score.FullTime.Away)
+		RecalculateTips(ctx, matchID, *homeScore, *awayScore)
 		updated++
 	}
 
@@ -616,7 +638,13 @@ func AutoFetchResults(ctx context.Context, compID int, fdCode, sport string) (up
 	}
 
 	for _, m := range list.Matches {
-		if m.Score.FullTime.Home == nil || m.Score.FullTime.Away == nil {
+		// Pouze FINISHED zápasy — skóre po základní době (fullTime = 90/60 min),
+		// prodloužení a penalty NEBEREME v potaz.
+		if m.Status != "FINISHED" {
+			continue
+		}
+		homeScore, awayScore := regularTimeScore(m.Score)
+		if homeScore == nil || awayScore == nil {
 			continue
 		}
 		var homeID, awayID int
@@ -640,11 +668,11 @@ func AutoFetchResults(ctx context.Context, compID int, fdCode, sport string) (up
 		}
 		_, err = db.Pool.Exec(ctx,
 			`UPDATE matches SET home_score=$1, away_score=$2, is_finished=true WHERE id=$3`,
-			m.Score.FullTime.Home, m.Score.FullTime.Away, matchID)
+			homeScore, awayScore, matchID)
 		if err != nil {
 			continue
 		}
-		RecalculateTips(ctx, matchID, *m.Score.FullTime.Home, *m.Score.FullTime.Away)
+		RecalculateTips(ctx, matchID, *homeScore, *awayScore)
 		updated++
 	}
 
