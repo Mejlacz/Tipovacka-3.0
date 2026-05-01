@@ -30,18 +30,107 @@
             Aktivní
         </label>
     </div>
+
+    {{/* ── API kód ── */}}
     <div class="form-group">
-        <label>API kód (football-data.org) — pro automatický import výsledků</label>
-        <input type="text" name="fd_code" maxlength="10" style="text-transform:uppercase;width:140px"
-               value="{{if .Competition}}{{.Competition.FdCode}}{{end}}"
-               placeholder="CL, PL, BL1…" />
-        <p style="font-size:.78rem;color:var(--muted-d);margin:.25rem 0 0">
-            Pokud vyplníš kód, scheduler automaticky každé 2 hodiny doplní výsledky z API.
-            Kódy: <code>CL</code> = Liga mistrů, <code>PL</code> = Premier League, <code>BL1</code> = Bundesliga…
+        <label style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+            API kód (football-data.org)
+            <span id="fd-load-status" style="font-size:.75rem;color:var(--muted-d)"></span>
+        </label>
+
+        {{/* Hidden input — odesílá skutečnou hodnotu formuláře */}}
+        <input type="hidden" name="fd_code" id="fd-code-value"
+               value="{{if .Competition}}{{.Competition.FdCode}}{{end}}" />
+
+        {{/* Select naplněný z API — zobrazí se po načtení */}}
+        <select id="fd-code-select"
+                style="display:none;width:100%;padding:.45rem .6rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.9rem"
+                onchange="document.getElementById('fd-code-value').value = this.value">
+        </select>
+
+        {{/* Fallback textový input — zobrazí se při chybě API nebo bez klíče */}}
+        <div id="fd-code-fallback" style="display:flex;align-items:center;gap:.5rem">
+            <input type="text" id="fd-code-text" maxlength="10"
+                   style="text-transform:uppercase;width:140px"
+                   value="{{if .Competition}}{{.Competition.FdCode}}{{end}}"
+                   placeholder="CL, PL, BL1…"
+                   oninput="document.getElementById('fd-code-value').value = this.value.toUpperCase()" />
+            <button type="button" class="btn btn-sm btn-secondary" onclick="loadFdComps()" id="fd-retry-btn">
+                🔄 Načíst ze API
+            </button>
+        </div>
+
+        <p style="font-size:.78rem;color:var(--muted-d);margin:.35rem 0 0">
+            Scheduler automaticky každé 2 hodiny doplní výsledky. Bez kódu = ruční zadávání.
         </p>
     </div>
+
     <div style="display:flex;gap:.5rem;margin-top:1rem">
         <button type="submit" class="btn btn-primary">Uložit</button>
         <a href="/admin" class="btn btn-secondary">Zrušit</a>
     </div>
 </form>
+
+<script>
+(function() {
+    var currentCode = '{{if .Competition}}{{.Competition.FdCode}}{{end}}';
+
+    window.loadFdComps = function() {
+        var status = document.getElementById('fd-load-status');
+        var sel    = document.getElementById('fd-code-select');
+        var fb     = document.getElementById('fd-code-fallback');
+        var retry  = document.getElementById('fd-retry-btn');
+        if (status) status.textContent = '⏳ Načítám…';
+        if (retry)  retry.disabled = true;
+
+        fetch('/admin/api/competitions')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.ok || !d.competitions || !d.competitions.length) {
+                    throw new Error(d.error || 'Žádné soutěže');
+                }
+                // Naplň select
+                sel.innerHTML = '';
+                var none = document.createElement('option');
+                none.value = '';
+                none.textContent = '— bez API kódu (ruční zadávání) —';
+                sel.appendChild(none);
+
+                d.competitions.forEach(function(c) {
+                    var opt = document.createElement('option');
+                    opt.value = c.code;
+                    opt.textContent = c.code + ' — ' + c.name + (c.area ? ' (' + c.area + ')' : '');
+                    if (c.code === currentCode) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+
+                // Pokud current kód není v seznamu, přidej jako extra option
+                if (currentCode && currentCode !== '') {
+                    var found = false;
+                    for (var i = 0; i < sel.options.length; i++) {
+                        if (sel.options[i].value === currentCode) { found = true; break; }
+                    }
+                    if (!found) {
+                        var ex = document.createElement('option');
+                        ex.value = currentCode;
+                        ex.textContent = currentCode + ' — (vlastní kód)';
+                        ex.selected = true;
+                        sel.appendChild(ex);
+                    }
+                }
+
+                sel.style.display = '';
+                fb.style.display  = 'none';
+                if (status) status.textContent = '✓ ' + (d.competitions.length) + ' soutěží';
+            })
+            .catch(function(e) {
+                if (status) status.textContent = '⚠ ' + (e.message || 'Chyba API');
+                fb.style.display = '';
+                if (retry) retry.disabled = false;
+            });
+    };
+
+    // Automaticky načti při otevření stránky
+    loadFdComps();
+})();
+</script>
