@@ -379,10 +379,13 @@ func StatsDetail(tmpl *template.Template) http.HandlerFunc {
 
 		var compareUsers []*models.User
 		if len(roundIDs) > 0 {
-			// Přidat filtr is_blocked=FALSE jen pokud sloupec existuje
+			// Přidat filtry is_blocked a is_inactive jen pokud sloupce existují
 			blockedFilter := ""
 			if userCols.IsBlocked {
 				blockedFilter = " AND u.is_blocked=FALSE"
+			}
+			if userCols.IsInactive {
+				blockedFilter += " AND COALESCE(u.is_inactive,false)=false"
 			}
 			cuRows, _ := db.Pool.Query(ctx,
 				`SELECT DISTINCT u.id, u.username
@@ -588,6 +591,9 @@ func StatsExtended(tmpl *template.Template) http.HandlerFunc {
 			blockedFilter := ""
 			if userCols.IsBlocked {
 				blockedFilter = " AND u.is_blocked=FALSE"
+			}
+			if userCols.IsInactive {
+				blockedFilter += " AND COALESCE(u.is_inactive,false)=false"
 			}
 			var roundIDs []int
 			rRows, _ := db.Pool.Query(ctx, `SELECT id FROM rounds WHERE competition_id=$1`, compID)

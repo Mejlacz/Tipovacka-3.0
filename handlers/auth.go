@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -234,8 +233,8 @@ func ForgotPasswordSubmit(tmpl *template.Template) http.HandlerFunc {
 				`INSERT INTO password_reset_tokens (user_id, token, expires_at, used, created_at)
 				 VALUES ($1, $2, $3, false, NOW())`, userID, token, expires)
 
-			// TODO: implement — email odesílání
-			fmt.Printf("[auth] Reset link: /reset-password/%s\n", token)
+			// TODO: implement SMTP — zatím logujeme jen server-side
+			log.Printf("[auth] Reset link (SMTP not configured): /reset-password/%s", token)
 		}
 
 		// Vždy zobrazíme "e-mail byl odeslán"

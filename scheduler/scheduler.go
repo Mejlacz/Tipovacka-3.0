@@ -20,12 +20,18 @@ import (
 func Start(ctx context.Context, pool *pgxpool.Pool) {
 	go runNeonBackupLoop(ctx, pool)
 	go runEmailNotifyLoop(ctx, pool)
+	go runAutoResultsLoop(ctx, pool)
 	log.Println("[scheduler] spuštěn")
 }
 
 // ─── Neon backup loop ─────────────────────────────────────────────────────────
 
 func runNeonBackupLoop(ctx context.Context, pool *pgxpool.Pool) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("[scheduler] neon-backup panic: %v", err)
+		}
+	}()
 	// Začni za 5 minut, pak každou hodinu
 	time.Sleep(5 * time.Minute)
 
@@ -72,6 +78,11 @@ func checkAndRunNeonBackup(ctx context.Context, pool *pgxpool.Pool) {
 // ─── Email notification loop ──────────────────────────────────────────────────
 
 func runEmailNotifyLoop(ctx context.Context, pool *pgxpool.Pool) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("[scheduler] email-notify panic: %v", err)
+		}
+	}()
 	// Začni za 2 minuty, pak každých 30 minut
 	time.Sleep(2 * time.Minute)
 
@@ -287,6 +298,66 @@ func buildNotifyEmailHTML(home, away, comp, matchTime string, isNight bool, tips
 		tipsURL,
 		appURL,
 	)
+}
+
+// ─── Auto update results loop ─────────────────────────────────────────────────
+
+// runAutoResultsLoop každé 2 hodiny doplní výsledky z football-data.org
+// pro aktivní soutěže, které mají nastavený fd_code.
+func runAutoResultsLoop(ctx context.Context, pool *pgxpool.Pool) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("[scheduler] auto-results panic: %v", err)
+		}
+	}()
+	// Začni za 10 minut (dej čas serveru nastartovat)
+	time.Sleep(10 * time.Minute)
+
+	ticker := time.NewTicker(2 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			runAutoResultsFetch(ctx, pool)
+		}
+	}
+}
+
+func runAutoResultsFetch(ctx context.Context, pool *pgxpool.Pool) { //nolint:unparam
+	// Najdi aktivní soutěže s nastaveným fd_code
+	rows, err := pool.Query(ctx,
+		`SELECT id, name, COALESCE(fd_code,'') FROM competitions
+		  WHERE is_active=true AND fd_code IS NOT NULL AND fd_code != ''`)
+	if err != nil {
+		log.Printf("[auto-results] DB chyba: %v", err)
+		return
+	}
+	type compInfo struct {
+		ID     int
+		Name   string
+		FdCode string
+	}
+	var comps []compInfo
+	for rows.Next() {
+		var c compInfo
+		_ = rows.Scan(&c.ID, &c.Name, &c.FdCode)
+		comps = append(comps, c)
+	}
+	rows.Close()
+
+	if len(comps) == 0 {
+		return
+	}
+
+	log.Printf("[auto-results] Spouštím auto-fetch pro %d soutěží", len(comps))
+
+	for _, comp := range comps {
+		updated, notFound := handlers.AutoFetchResults(ctx, comp.ID, comp.FdCode, "football")
+		log.Printf("[auto-results] %s (%s): %d aktualizováno, %d nenalezeno", comp.Name, comp.FdCode, updated, notFound)
+	}
 }
 
 // schedulerSendEmail odešle HTML email z plánovače.

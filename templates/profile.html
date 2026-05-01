@@ -34,6 +34,7 @@
     <div>
     {{end}}
         <form method="post" action="/profile/avatar" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
             <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
                 <img id="avatar-preview" src="" alt=""
                      style="display:none;width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--accent)" />

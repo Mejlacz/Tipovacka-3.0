@@ -44,7 +44,7 @@
     <a href="/admin/ocr"          class="btn btn-secondary">📋 Import výsledků</a>
     <a href="/admin/io"          class="btn btn-secondary">📦 Import / Export</a>
     {{if .User.IsOwner}}<a href="/admin/groups" class="btn btn-secondary">👥 Skupiny</a>{{end}}
-    <a href="/admin/history"          class="btn btn-secondary">Historie</a>
+    {{if .User.IsOwner}}<a href="/admin/history" class="btn btn-secondary">Historie</a>{{end}}
     <a href="/admin/manual"           class="btn btn-secondary">Manuál</a>
     <a href="/admin/health-dashboard" class="btn btn-secondary">🩺 Health</a>
 </div>
@@ -73,7 +73,7 @@
             <span>{{.SportLabel}}</span>
             <span>📅 {{.Comp.Season}}</span>
             <span>📋 {{.RoundsCount}} kol</span>
-            {{if .LastRound}}<span style="color:var(--text);font-weight:500">🏁 {{.LastRound.Name}}</span>{{end}}
+            {{if .LastRound}}<span style="color:var(--text-d);font-weight:500">🏁 {{.LastRound.Name}}</span>{{end}}
         </div>
         <div class="comp-card-actions">
             <a href="/admin/competitions/{{.Comp.ID}}/edit" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">Upravit</a>

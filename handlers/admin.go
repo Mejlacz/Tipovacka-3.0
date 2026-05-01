@@ -196,8 +196,8 @@ func AdminCompetitionEditForm(tmpl *template.Template) http.HandlerFunc {
 		ctx := context.Background()
 		comp := &models.Competition{}
 		err := db.Pool.QueryRow(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE id = $1`, compID).
-			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder)
+			`SELECT id, name, season, is_active, sport, sort_order, COALESCE(fd_code,'') FROM competitions WHERE id = $1`, compID).
+			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder, &comp.FdCode)
 		if err != nil {
 			http.Redirect(w, r, "/admin", http.StatusSeeOther)
 			return
@@ -220,12 +220,14 @@ func AdminCompetitionEditSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	name := strings.TrimSpace(r.FormValue("name"))
-	season := strings.TrimSpace(r.FormValue("season"))
-	sport := r.FormValue("sport")
+	name     := strings.TrimSpace(r.FormValue("name"))
+	season   := strings.TrimSpace(r.FormValue("season"))
+	sport    := r.FormValue("sport")
+	fdCode   := strings.ToUpper(strings.TrimSpace(r.FormValue("fd_code")))
+	isActive := r.FormValue("is_active") == "on"
 	_, _ = db.Pool.Exec(context.Background(),
-		`UPDATE competitions SET name=$1, season=$2, sport=$3 WHERE id=$4`,
-		name, season, sport, compID)
+		`UPDATE competitions SET name=$1, season=$2, sport=$3, fd_code=$4, is_active=$5 WHERE id=$6`,
+		name, season, sport, fdCode, isActive, compID)
 	middleware.SetFlash(w, r, "ok", "Soutěž byla uložena.")
 	http.Redirect(w, r, "/admin/competitions", http.StatusSeeOther)
 }
@@ -432,6 +434,26 @@ func AdminUsersBulkAction(w http.ResponseWriter, r *http.Request) {
 			msg += ", selhalo: " + strconv.Itoa(failed)
 		}
 		middleware.SetFlash(w, r, "ok", msg)
+
+	case "approve":
+		if !userCols.IsApproved {
+			middleware.SetFlash(w, r, "err", "Sloupec is_approved neexistuje v DB.")
+			break
+		}
+		var count int
+		for _, idStr := range userIDs {
+			uid, _ := strconv.Atoi(idStr)
+			if uid == 0 {
+				continue
+			}
+			_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_approved=true WHERE id=$1`, uid)
+			var username string
+			_ = db.Pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, uid).Scan(&username)
+			LogAction(&admin.ID, admin.Username, "user_approve", "user", &uid,
+				"Uživatel "+username+" schválen (bulk)", nil, nil)
+			count++
+		}
+		middleware.SetFlash(w, r, "ok", strconv.Itoa(count)+" uživatelů schváleno.")
 
 	case "delete":
 		var count int
@@ -940,7 +962,9 @@ func AdminUserEditSubmit(tmpl *template.Template) http.HandlerFunc {
 		}
 		isOwner := role == "owner"
 		isAdmin := role == "admin" || role == "owner"
-		isHidden := r.FormValue("is_hidden") == "on"
+		isHidden   := r.FormValue("is_hidden") == "on"
+		isApproved := r.FormValue("is_approved") == "on"
+		isBlocked  := r.FormValue("is_blocked") == "on"
 
 		lang := r.FormValue("lang")
 		if lang != "cs" && lang != "en" {
@@ -948,14 +972,16 @@ func AdminUserEditSubmit(tmpl *template.Template) http.HandlerFunc {
 		}
 		// Build UPDATE dynamically — jen existující sloupce
 		usql, uvals := buildUserUpdateSQL(userID, []UserUpdateField{
-			{Col: "username",   Val: username,          Include: true},
-			{Col: "email",      Val: PtrStr(email),     Include: userCols.Email},
-			{Col: "is_owner",   Val: isOwner,           Include: userCols.IsOwner},
-			{Col: "is_admin",   Val: isAdmin,           Include: userCols.IsAdmin},
-			{Col: "is_hidden",  Val: isHidden,          Include: userCols.IsHidden && admin.IsOwner},
-			{Col: "lang",       Val: lang,              Include: userCols.Lang},
-			{Col: "first_name", Val: PtrStr(firstName), Include: userCols.FirstName},
-			{Col: "last_name",  Val: PtrStr(lastName),  Include: userCols.LastName},
+			{Col: "username",    Val: username,          Include: true},
+			{Col: "email",       Val: PtrStr(email),     Include: userCols.Email},
+			{Col: "is_owner",    Val: isOwner,           Include: userCols.IsOwner},
+			{Col: "is_admin",    Val: isAdmin,           Include: userCols.IsAdmin},
+			{Col: "is_hidden",   Val: isHidden,          Include: userCols.IsHidden && admin.IsOwner},
+			{Col: "is_approved", Val: isApproved,        Include: userCols.IsApproved},
+			{Col: "is_blocked",  Val: isBlocked,         Include: userCols.IsBlocked},
+			{Col: "lang",        Val: lang,              Include: userCols.Lang},
+			{Col: "first_name",  Val: PtrStr(firstName), Include: userCols.FirstName},
+			{Col: "last_name",   Val: PtrStr(lastName),  Include: userCols.LastName},
 		})
 		_, _ = db.Pool.Exec(ctx, usql, uvals...)
 
@@ -1047,16 +1073,21 @@ func AdminIO(tmpl *template.Template) http.HandlerFunc {
 		compRows, _ := db.Pool.Query(ctx,
 			`SELECT id, name, season, is_active, sport, sort_order FROM competitions ORDER BY id DESC`)
 		var competitions []*models.Competition
+		var activeCompetitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}
 			_ = compRows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.Sport, &c.SortOrder)
 			competitions = append(competitions, c)
+			if c.IsActive {
+				activeCompetitions = append(activeCompetitions, c)
+			}
 		}
 		compRows.Close()
 
 		RenderTemplate(w, r, tmpl, "admin/io.html", TemplateData{
-			"User":         admin,
-			"Competitions": competitions,
+			"User":               admin,
+			"Competitions":       competitions,
+			"ActiveCompetitions": activeCompetitions,
 		})
 	}
 }

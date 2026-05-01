@@ -216,7 +216,7 @@
                         <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Soutěž</label>
                         <select name="competition_id" id="api-comp" required style="width:100%">
                             <option value="">— vyber soutěž —</option>
-                            {{range .Competitions}}
+                            {{range .ActiveCompetitions}}
                             <option value="{{.ID}}">{{.Name}}{{if .Season}} — {{.Season}}{{end}}</option>
                             {{end}}
                         </select>
@@ -237,9 +237,16 @@
                 </div>
 
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
-                    <div style="flex:1;min-width:120px">
-                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kód API soutěže</label>
-                        <input type="text" name="fd_code" id="api-fd-code" placeholder="CL, PL, BL1…" style="width:100%;text-transform:uppercase" maxlength="10" />
+                    <div style="flex:2;min-width:200px">
+                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">
+                            Soutěž v API
+                            <button type="button" id="api-load-comps-btn" onclick="loadFdCompetitions()" style="margin-left:.4rem;font-size:.72rem;padding:.1rem .45rem" class="btn btn-sm btn-secondary">↺ Načíst ze API</button>
+                        </label>
+                        <div style="display:flex;gap:.3rem;align-items:center">
+                            <select name="fd_code" id="api-fd-code-sel" style="flex:1;display:none"></select>
+                            <input type="text" name="fd_code" id="api-fd-code" placeholder="CL, PL, BL1… nebo ↺ načíst" style="flex:1;text-transform:uppercase" maxlength="10" />
+                        </div>
+                        <div id="api-comps-status" style="font-size:.72rem;color:var(--muted-d);margin-top:.15rem"></div>
                     </div>
                     <div style="min-width:80px">
                         <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo v API (nepovinné)</label>
@@ -261,6 +268,7 @@
                 <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
                     <button type="button" class="btn btn-sm btn-secondary" onclick="apiPreview()">🔍 Náhled</button>
                     <button type="submit" class="btn btn-sm btn-primary">📥 Importovat</button>
+                    <button type="button" id="api-update-btn" class="btn btn-sm btn-secondary" onclick="apiUpdateResults()" title="Doplní skóre existujících zápasů — nevytváří nové kolo ani zápasy">📊 Doplnit výsledky</button>
                     <span id="api-preview-status" style="font-size:.8rem;color:var(--muted-d)"></span>
                 </div>
             </form>
@@ -291,6 +299,7 @@
             <h3>👥 Import týmů (CSV)</h3>
             <p>Sloupce: <code>name, sport, display_name, alias, category</code>. Existující týmy (stejný name+sport) se aktualizují.</p>
             <form method="post" action="/admin/teams/import-csv" enctype="multipart/form-data">
+                <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
                 <div class="io-actions">
                     <input type="file" name="csv_file" accept=".csv" required style="font-size:.82rem" />
                     <button type="submit" class="btn btn-sm btn-primary">📥 Importovat CSV</button>
@@ -302,6 +311,7 @@
             <h3>📊 Import týmů (XLSX)</h3>
             <p>Stejná struktura jako CSV — sloupce A–E: <code>name, sport, display_name, alias, category</code>. První řádek může být záhlaví. Existující týmy se aktualizují.</p>
             <form method="post" action="/admin/teams/import-xlsx" enctype="multipart/form-data">
+                <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
                 <div class="io-actions">
                     <input type="file" name="xlsx_file" accept=".xlsx" required style="font-size:.82rem" />
                     <button type="submit" class="btn btn-sm btn-primary">📥 Importovat XLSX</button>
@@ -392,6 +402,7 @@
             </div>
         </div>
 
+        {{if .User.IsOwner}}
         <div class="io-card">
             <h3>📜 Historie změn</h3>
             <p>Log všech admin akcí — kdo co změnil a kdy.</p>
@@ -399,6 +410,7 @@
                 <a href="/admin/history" class="btn btn-primary btn-sm">Otevřít</a>
             </div>
         </div>
+        {{end}}
 
         <div class="io-card">
             <h3>🔍 Audit log</h3>
@@ -450,6 +462,14 @@ var newRow   = qs('#api-new-round-row');
 function syncNewRow(){
     if(!roundSel || !newRow) return;
     newRow.style.display = roundSel.value === '0' ? 'flex' : 'none';
+    var updateBtn = qs('#api-update-btn');
+    if(updateBtn){
+        var isNew = roundSel.value === '0';
+        updateBtn.disabled = isNew;
+        updateBtn.title = isNew
+            ? 'Nejdříve vyberte existující kolo (ne "Vytvořit nové")'
+            : 'Doplní skóre existujících zápasů — nevytváří nové kolo ani zápasy';
+    }
 }
 
 function loadRounds(compID){
@@ -471,23 +491,67 @@ function loadRounds(compID){
         .catch(function(){});
 }
 
+window.loadFdCompetitions = function(){
+    var btn      = qs('#api-load-comps-btn');
+    var statusEl = qs('#api-comps-status');
+    var sel      = qs('#api-fd-code-sel');
+    var inp      = qs('#api-fd-code');
+    if(statusEl) statusEl.textContent = '⏳ Načítám soutěže…';
+    if(btn) btn.disabled = true;
+    fetch('/admin/api/competitions')
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(btn) btn.disabled = false;
+            if(!data.ok){
+                if(statusEl) statusEl.textContent = '❌ ' + (data.error || 'Chyba');
+                return;
+            }
+            var comps = data.competitions || [];
+            if(!sel) return;
+            sel.innerHTML = '<option value="">— vyber soutěž z API —</option>';
+            comps.forEach(function(c){
+                var opt = document.createElement('option');
+                opt.value = c.code;
+                opt.textContent = c.code + ' — ' + c.name + (c.area && c.area !== 'World' ? ' (' + c.area + ')' : '');
+                sel.appendChild(opt);
+            });
+            // Zobraz select, skryj textový input
+            sel.style.display = '';
+            if(inp){ inp.style.display = 'none'; inp.removeAttribute('name'); }
+            sel.setAttribute('name', 'fd_code');
+            if(statusEl) statusEl.textContent = '✅ ' + comps.length + ' soutěží načteno.';
+        })
+        .catch(function(e){
+            if(btn) btn.disabled = false;
+            if(statusEl) statusEl.textContent = '❌ Síťová chyba: ' + e.message;
+        });
+};
+
+function getFdCode(){
+    var sel = qs('#api-fd-code-sel');
+    var inp = qs('#api-fd-code');
+    if(sel && sel.style.display !== 'none') return (sel.value || '').trim().toUpperCase();
+    return ((inp && inp.value) || '').trim().toUpperCase();
+}
+
 window.apiPreview = function(){
-    var fdCode   = (qs('#api-fd-code') || {}).value || '';
+    var fdCode   = getFdCode();
     var matchday = (qs('#api-matchday') || {}).value || '';
     var statusEl = qs('#api-preview-status');
     var box      = qs('#api-preview-box');
     var tbody    = qs('#api-preview-tbody');
 
-    fdCode = fdCode.trim().toUpperCase();
     if(!fdCode){
-        if(statusEl) statusEl.textContent = '⚠ Zadejte kód API soutěže.';
+        if(statusEl) statusEl.textContent = '⚠ Zadejte nebo načtěte kód API soutěže.';
         return;
     }
     if(statusEl) statusEl.textContent = '⏳ Načítám…';
     if(box)      box.style.display = 'none';
 
+    var skipFinished = (qs('input[name="skip_finished"]') || {}).checked ? '1' : '0';
     var url = '/admin/api/preview?fd_code=' + encodeURIComponent(fdCode);
     if(matchday) url += '&matchday=' + encodeURIComponent(matchday);
+    if(skipFinished === '1') url += '&skip_finished=1';
 
     fetch(url)
         .then(function(r){ return r.json(); })
@@ -497,7 +561,8 @@ window.apiPreview = function(){
                 return;
             }
             var matches = data.matches || [];
-            if(statusEl) statusEl.textContent = '✅ Nalezeno ' + matches.length + ' zápasů.';
+            var skipMsg = (data.skipped > 0) ? ' (' + data.skipped + ' odehraných přeskočeno)' : '';
+            if(statusEl) statusEl.textContent = '✅ Nalezeno ' + matches.length + ' zápasů.' + skipMsg;
             if(!tbody){ return; }
             tbody.innerHTML = '';
             matches.forEach(function(m){
@@ -513,6 +578,50 @@ window.apiPreview = function(){
                 tbody.appendChild(tr);
             });
             if(box) box.style.display = '';
+        })
+        .catch(function(e){
+            if(statusEl) statusEl.textContent = '❌ Síťová chyba: ' + e.message;
+        });
+};
+
+window.apiUpdateResults = function(){
+    var roundID  = (qs('#api-round') || {}).value || '0';
+    var compID   = (qs('#api-comp')  || {}).value || '';
+    var fdCode   = getFdCode();
+    var matchday = (qs('#api-matchday') || {}).value || '';
+    var sport    = (qs('select[name="sport"]') || {}).value || 'football';
+    var statusEl = qs('#api-preview-status');
+
+    if(roundID === '0' || !roundID){
+        if(statusEl) statusEl.textContent = '⚠ Vyberte existující kolo (ne "Vytvořit nové").';
+        return;
+    }
+    if(!fdCode){
+        if(statusEl) statusEl.textContent = '⚠ Zadejte nebo načtěte kód API soutěže.';
+        return;
+    }
+    if(!confirm('Doplnit výsledky z API pro vybrané kolo? Existující skóre budou přepsána, budou přepočítány tipy a žebříček.')){
+        return;
+    }
+    if(statusEl) statusEl.textContent = '⏳ Doplňuji výsledky…';
+
+    var form = new FormData();
+    form.append('competition_id', compID);
+    form.append('round_id',       roundID);
+    form.append('fd_code',        fdCode);
+    form.append('matchday',       matchday);
+    form.append('sport',          sport);
+
+    fetch('/admin/api/update-results', { method:'POST', body: form })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(data.ok){
+                if(statusEl) statusEl.textContent = '✅ ' + (data.message || 'Hotovo.');
+                // Obnov preview tabulku se skutečnými výsledky
+                apiPreview();
+            } else {
+                if(statusEl) statusEl.textContent = '❌ ' + (data.error || 'Chyba');
+            }
         })
         .catch(function(e){
             if(statusEl) statusEl.textContent = '❌ Síťová chyba: ' + e.message;

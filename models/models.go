@@ -62,6 +62,7 @@ type Competition struct {
 	IsActive  bool
 	Sport     string
 	SortOrder *int
+	FdCode    string // football-data.org kód pro auto-fetch výsledků (např. CL, PL)
 }
 
 // ─── Round ────────────────────────────────────────────────────────────────────

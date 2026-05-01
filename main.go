@@ -39,6 +39,7 @@ func migrateSchema() {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_inactive BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS notify_sent BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS can_see_deadline BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS fd_code VARCHAR(10) NOT NULL DEFAULT ''`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
@@ -250,9 +251,11 @@ func main() {
 	r.Post("/admin/ocr/cancel", handlers.AdminOCRCancel)
 
 	// Admin API import
+	r.Get("/admin/api/competitions", handlers.AdminAPICompetitions)
 	r.Get("/admin/api/rounds", handlers.AdminAPIRounds)
 	r.Get("/admin/api/preview", handlers.AdminAPIPreview)
 	r.Post("/admin/api/import", handlers.AdminAPIImport)
+	r.Post("/admin/api/update-results", handlers.AdminAPIUpdateResults)
 
 	// Admin audit
 	r.Get("/admin/history", handlers.AdminHistory(tmpl))
@@ -449,6 +452,18 @@ func templateFuncs() template.FuncMap {
 		},
 		// lower converts string to lowercase (for data-name search)
 		"lower": strings.ToLower,
+		// paginate vrátí slice stránek pro navigaci (čísla 1..total, -1 = "…")
+		"paginate": func(current, total int) []int {
+			var pages []int
+			for i := 1; i <= total; i++ {
+				if i == 1 || i == total || (i >= current-2 && i <= current+2) {
+					pages = append(pages, i)
+				} else if len(pages) > 0 && pages[len(pages)-1] != -1 {
+					pages = append(pages, -1) // oddělovač "…"
+				}
+			}
+			return pages
+		},
 	}
 }
 

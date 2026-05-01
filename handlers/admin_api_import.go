@@ -2,9 +2,10 @@
 // Import zápasů z football-data.org API (v4).
 //
 // Endpointy:
-//   GET  /admin/api/rounds    — JSON seznam kol pro vybranou soutěž (AJAX)
-//   GET  /admin/api/preview   — JSON náhled zápasů z API (AJAX)
-//   POST /admin/api/import    — skutečný import do DB
+//   GET  /admin/api/competitions — JSON seznam dostupných soutěží z API
+//   GET  /admin/api/rounds       — JSON seznam kol pro vybranou soutěž (AJAX)
+//   GET  /admin/api/preview      — JSON náhled zápasů z API (AJAX)
+//   POST /admin/api/import       — skutečný import do DB
 package handlers
 
 import (
@@ -54,6 +55,20 @@ type fdGoals struct {
 	Away *int `json:"away"`
 }
 
+type fdCompetitionList struct {
+	Competitions []fdCompetition `json:"competitions"`
+}
+
+type fdCompetition struct {
+	ID   int    `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+	Area struct {
+		Name string `json:"name"`
+	} `json:"area"`
+	Type string `json:"type"`
+}
+
 // fdCall volá football-data.org API a dekóduje JSON do dst.
 func fdCall(path string, dst interface{}) error {
 	if config.FootballAPIKey == "" {
@@ -73,6 +88,9 @@ func fdCall(path string, dst interface{}) error {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
+		if resp.StatusCode == 429 {
+			return fmt.Errorf("API limit překročen (429) — počkej chvíli a zkus znovu (free tier: 10 req/min)")
+		}
 		// Pokus o čtení chybové zprávy z API
 		var apiErr struct {
 			Message string `json:"message"`
@@ -137,9 +155,55 @@ func AdminAPIRounds(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
+// ── GET /admin/api/competitions ───────────────────────────────────────────────
+// Vrátí JSON seznam dostupných soutěží z football-data.org API.
+
+func AdminAPICompetitions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
+		return
+	}
+	if config.FootballAPIKey == "" {
+		w.Write([]byte(`{"ok":false,"error":"FOOTBALL_API_KEY není nastaven"}`))
+		return
+	}
+
+	var list fdCompetitionList
+	if err := fdCall("competitions", &list); err != nil {
+		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": err.Error()})
+		w.Write(b)
+		return
+	}
+
+	type compItem struct {
+		Code string `json:"code"`
+		Name string `json:"name"`
+		Area string `json:"area"`
+	}
+	var items []compItem
+	for _, c := range list.Competitions {
+		if c.Code == "" {
+			continue
+		}
+		items = append(items, compItem{
+			Code: c.Code,
+			Name: c.Name,
+			Area: c.Area.Name,
+		})
+	}
+	if items == nil {
+		items = []compItem{}
+	}
+	b, _ := json.Marshal(map[string]interface{}{"ok": true, "competitions": items})
+	w.Write(b)
+}
+
 // ── GET /admin/api/preview ────────────────────────────────────────────────────
 // Vrátí JSON seznam zápasů z football-data.org pro zobrazení náhledu.
-// Query params: fd_code (kód soutěže v API), matchday (číslo, nepovinné)
+// Query params: fd_code, matchday (nepovinné), skip_finished=1 (nepovinné)
 
 func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -156,6 +220,7 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 
 	fdCode := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("fd_code")))
 	matchdayStr := strings.TrimSpace(r.URL.Query().Get("matchday"))
+	skipFinished := r.URL.Query().Get("skip_finished") == "1"
 
 	if fdCode == "" {
 		w.Write([]byte(`{"ok":false,"error":"Chybí kód soutěže (fd_code)"}`))
@@ -184,7 +249,12 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 		ScoreA  *int   `json:"score_a"`
 	}
 	var preview []previewMatch
+	skipped := 0
 	for _, m := range list.Matches {
+		if skipFinished && m.Score.FullTime.Home != nil {
+			skipped++
+			continue
+		}
 		pm := previewMatch{
 			Home:   m.HomeTeam.Name,
 			Away:   m.AwayTeam.Name,
@@ -202,7 +272,7 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 	if preview == nil {
 		preview = []previewMatch{}
 	}
-	b, _ := json.Marshal(map[string]interface{}{"ok": true, "matches": preview})
+	b, _ := json.Marshal(map[string]interface{}{"ok": true, "matches": preview, "skipped": skipped})
 	w.Write(b)
 }
 
@@ -408,6 +478,182 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 		created, teamsNew, skipped)
 	middleware.SetFlash(w, r, "ok", msg)
 	http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/rounds", compID), http.StatusSeeOther)
+}
+
+// ── POST /admin/api/update-results ───────────────────────────────────────────
+// Doplní výsledky z football-data.org do existujících zápasů ve zvoleném kole.
+// Nezakládá nové zápasy ani týmy — pouze aktualizuje skóre + přepočítá tipy.
+// Form params: competition_id, round_id, fd_code, matchday, sport
+
+func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
+		return
+	}
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
+		_ = r.ParseForm()
+	}
+
+	jsonErr := func(msg string) {
+		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": msg})
+		w.Write(b)
+	}
+
+	if config.FootballAPIKey == "" {
+		jsonErr("FOOTBALL_API_KEY není nastaven v prostředí serveru.")
+		return
+	}
+
+	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
+	roundID, _ := strconv.Atoi(r.FormValue("round_id"))
+	fdCode := strings.ToUpper(strings.TrimSpace(r.FormValue("fd_code")))
+	matchdayStr := strings.TrimSpace(r.FormValue("matchday"))
+	sport := r.FormValue("sport")
+	if sport == "" {
+		sport = "football"
+	}
+
+	if fdCode == "" {
+		jsonErr("Chybí kód soutěže (fd_code).")
+		return
+	}
+	if compID == 0 || roundID == 0 {
+		jsonErr("Vyber soutěž a konkrétní kolo (ne ➕ nové).")
+		return
+	}
+
+	ctx := context.Background()
+
+	// Ověř že kolo patří do soutěže
+	var ownerComp int
+	if err := db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&ownerComp); err != nil || ownerComp != compID {
+		jsonErr("Kolo nepatří do vybrané soutěže.")
+		return
+	}
+
+	// Stáhni zápasy z API
+	path := "competitions/" + fdCode + "/matches"
+	if matchdayStr != "" {
+		path += "?matchday=" + matchdayStr
+	}
+	var list fdMatchList
+	if err := fdCall(path, &list); err != nil {
+		jsonErr("Chyba API: " + err.Error())
+		return
+	}
+
+	updated, noScore, notFound := 0, 0, 0
+
+	for _, m := range list.Matches {
+		if m.Score.FullTime.Home == nil || m.Score.FullTime.Away == nil {
+			noScore++
+			continue
+		}
+
+		var homeID, awayID int
+		_ = db.Pool.QueryRow(ctx, `SELECT id FROM teams WHERE name=$1 AND sport=$2`, m.HomeTeam.Name, sport).Scan(&homeID)
+		_ = db.Pool.QueryRow(ctx, `SELECT id FROM teams WHERE name=$1 AND sport=$2`, m.AwayTeam.Name, sport).Scan(&awayID)
+
+		if homeID == 0 || awayID == 0 {
+			notFound++
+			continue
+		}
+
+		var matchID int
+		err := db.Pool.QueryRow(ctx,
+			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			roundID, homeID, awayID).Scan(&matchID)
+		if err != nil {
+			notFound++
+			continue
+		}
+
+		_, err = db.Pool.Exec(ctx,
+			`UPDATE matches SET home_score=$1, away_score=$2, is_finished=true WHERE id=$3`,
+			m.Score.FullTime.Home, m.Score.FullTime.Away, matchID)
+		if err != nil {
+			notFound++
+			continue
+		}
+
+		RecalculateTips(ctx, matchID, *m.Score.FullTime.Home, *m.Score.FullTime.Away)
+		updated++
+	}
+
+	RecalculateStandings(compID)
+
+	// Audit log
+	adminID := admin.ID
+	logDesc := fmt.Sprintf("Doplnit výsledky API: %s matchday=%s → %d aktualizováno, %d bez skóre, %d nenalezeno (kolo id=%d)",
+		fdCode, matchdayStr, updated, noScore, notFound, roundID)
+	LogAction(&adminID, admin.Username, "api_update_results", "round", &roundID, logDesc, nil, nil)
+
+	msg := fmt.Sprintf("Výsledky doplněny: %d zápasů aktualizováno", updated)
+	if noScore > 0 {
+		msg += fmt.Sprintf(", %d bez skóre přeskočeno", noScore)
+	}
+	if notFound > 0 {
+		msg += fmt.Sprintf(", %d nenalezeno v DB", notFound)
+	}
+	msg += "."
+	b, _ := json.Marshal(map[string]interface{}{"ok": true, "message": msg})
+	w.Write(b)
+}
+
+// ── AutoFetchResults volá scheduler pro automatické doplnění výsledků ────────
+// Vrátí počet aktualizovaných a nenalezených zápasů. Používá db.Pool přímo.
+func AutoFetchResults(ctx context.Context, compID int, fdCode, sport string) (updated, notFound int) {
+	if config.FootballAPIKey == "" || fdCode == "" {
+		return 0, 0
+	}
+
+	var list fdMatchList
+	if err := fdCall("competitions/"+fdCode+"/matches", &list); err != nil {
+		return 0, 0
+	}
+
+	for _, m := range list.Matches {
+		if m.Score.FullTime.Home == nil || m.Score.FullTime.Away == nil {
+			continue
+		}
+		var homeID, awayID int
+		_ = db.Pool.QueryRow(ctx, `SELECT id FROM teams WHERE name=$1 AND sport=$2`, m.HomeTeam.Name, sport).Scan(&homeID)
+		_ = db.Pool.QueryRow(ctx, `SELECT id FROM teams WHERE name=$1 AND sport=$2`, m.AwayTeam.Name, sport).Scan(&awayID)
+		if homeID == 0 || awayID == 0 {
+			notFound++
+			continue
+		}
+		// Najdi zápas v libovolném kole dané soutěže
+		var matchID int
+		err := db.Pool.QueryRow(ctx,
+			`SELECT m.id FROM matches m
+			   JOIN rounds r ON r.id = m.round_id
+			  WHERE r.competition_id=$1 AND m.home_team_id=$2 AND m.away_team_id=$3
+			  LIMIT 1`,
+			compID, homeID, awayID).Scan(&matchID)
+		if err != nil {
+			notFound++
+			continue
+		}
+		_, err = db.Pool.Exec(ctx,
+			`UPDATE matches SET home_score=$1, away_score=$2, is_finished=true WHERE id=$3`,
+			m.Score.FullTime.Home, m.Score.FullTime.Away, matchID)
+		if err != nil {
+			continue
+		}
+		RecalculateTips(ctx, matchID, *m.Score.FullTime.Home, *m.Score.FullTime.Away)
+		updated++
+	}
+
+	if updated > 0 {
+		RecalculateStandings(compID)
+		LogAction(nil, "scheduler", "auto_fetch_results", "competition", &compID,
+			fmt.Sprintf("Auto-fetch %s: %d aktualizováno, %d nenalezeno", fdCode, updated, notFound), nil, nil)
+	}
+	return updated, notFound
 }
 
 // upsertTeam vrátí ID týmu (existující nebo nově vytvořeného).

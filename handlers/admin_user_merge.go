@@ -22,9 +22,15 @@ func AdminUserMergeForm(tmpl *template.Template) http.HandlerFunc {
 		if admin == nil {
 			return
 		}
+		if !admin.IsOwner {
+			http.Error(w, "403 Forbidden — jen pro Owner", http.StatusForbidden)
+			return
+		}
 		ctx := context.Background()
 
-		rows, _ := db.Pool.Query(ctx, `SELECT id, username FROM users ORDER BY username`)
+		// Blokovaní a neaktivní uživatelé se do dropdownu nezahrnují
+		mergeQuery := `SELECT id, username FROM users WHERE COALESCE(is_blocked,false)=false AND COALESCE(is_inactive,false)=false ORDER BY username`
+		rows, _ := db.Pool.Query(ctx, mergeQuery)
 		var users []*models.User
 		for rows.Next() {
 			u := &models.User{}
@@ -46,6 +52,10 @@ func AdminUserMergeForm(tmpl *template.Template) http.HandlerFunc {
 func AdminUserMerge(w http.ResponseWriter, r *http.Request) {
 	admin := RequireAdmin(w, r)
 	if admin == nil {
+		return
+	}
+	if !admin.IsOwner {
+		http.Error(w, "403 Forbidden — jen pro Owner", http.StatusForbidden)
 		return
 	}
 

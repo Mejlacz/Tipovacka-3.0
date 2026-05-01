@@ -30,6 +30,16 @@
             Aktivní
         </label>
     </div>
+    <div class="form-group">
+        <label>API kód (football-data.org) — pro automatický import výsledků</label>
+        <input type="text" name="fd_code" maxlength="10" style="text-transform:uppercase;width:140px"
+               value="{{if .Competition}}{{.Competition.FdCode}}{{end}}"
+               placeholder="CL, PL, BL1…" />
+        <p style="font-size:.78rem;color:var(--muted-d);margin:.25rem 0 0">
+            Pokud vyplníš kód, scheduler automaticky každé 2 hodiny doplní výsledky z API.
+            Kódy: <code>CL</code> = Liga mistrů, <code>PL</code> = Premier League, <code>BL1</code> = Bundesliga…
+        </p>
+    </div>
     <div style="display:flex;gap:.5rem;margin-top:1rem">
         <button type="submit" class="btn btn-primary">Uložit</button>
         <a href="/admin" class="btn btn-secondary">Zrušit</a>

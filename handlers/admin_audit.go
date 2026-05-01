@@ -30,6 +30,10 @@ func AdminHistory(tmpl *template.Template) http.HandlerFunc {
 		if admin == nil {
 			return
 		}
+		if !admin.IsOwner {
+			http.Error(w, "403 Forbidden — jen pro Owner", http.StatusForbidden)
+			return
+		}
 		ctx := context.Background()
 
 		// Load last 300 audit log entries
@@ -196,10 +200,33 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 
-		rows, _ := db.Pool.Query(ctx,
-			`SELECT id, timestamp, admin_id, admin_username, action, entity_type, entity_id,
+		const perPage = 100
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if page < 1 {
+			page = 1
+		}
+		offset := (page - 1) * perPage
+
+		// Non-Owner admins nevidí přesné tipy uživatelů
+		whereClause := ""
+		if !admin.IsOwner {
+			whereClause = ` WHERE action NOT IN ('tip_save','extra_save')`
+		}
+
+		// Celkový počet záznamů pro stránkování
+		var totalCount int
+		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM audit_log`+whereClause).Scan(&totalCount)
+		totalPages := (totalCount + perPage - 1) / perPage
+		if totalPages < 1 {
+			totalPages = 1
+		}
+
+		auditQuery := `SELECT id, timestamp, admin_id, admin_username, action, entity_type, entity_id,
 			        description, old_value, new_value, undone
-			   FROM audit_log ORDER BY id DESC LIMIT 100`)
+			   FROM audit_log` + whereClause +
+			` ORDER BY id DESC LIMIT $1 OFFSET $2`
+
+		rows, _ := db.Pool.Query(ctx, auditQuery, perPage, offset)
 		var entries []*models.AuditLog
 		for rows.Next() {
 			e := &models.AuditLog{}
@@ -226,11 +253,14 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		flash := middleware.GetFlash(w, r)
 
 		RenderTemplate(w, r, tmpl, "audit_log.html", TemplateData{
-			"User":             admin,
-			"Entries":          entries,
-			"UndoableIDs":      undoableIDs,
-			"UndoableActions":  UNDOABLE_ACTIONS,
-			"Flash":            flash,
+			"User":            admin,
+			"Entries":         entries,
+			"UndoableIDs":     undoableIDs,
+			"UndoableActions": UNDOABLE_ACTIONS,
+			"Flash":           flash,
+			"Page":            page,
+			"TotalPages":      totalPages,
+			"TotalCount":      totalCount,
 		})
 	}
 }
@@ -239,6 +269,10 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 func AdminAuditUndo(w http.ResponseWriter, r *http.Request) {
 	admin := RequireAdmin(w, r)
 	if admin == nil {
+		return
+	}
+	if !admin.IsOwner {
+		http.Error(w, "403 Forbidden — jen pro Owner", http.StatusForbidden)
 		return
 	}
 	entryID, _ := strconv.Atoi(r.PathValue("entry_id"))

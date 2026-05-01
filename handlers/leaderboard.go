@@ -623,7 +623,7 @@ func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
 		// Jména uživatelů
 		unames := map[int]string{}
 		unameRows, _ := db.Pool.Query(ctx,
-			`SELECT id, username FROM users WHERE is_blocked = false AND is_inactive = false`)
+			`SELECT id, username FROM users WHERE COALESCE(is_blocked,false)=false AND COALESCE(is_inactive,false)=false`)
 		for unameRows.Next() {
 			var uid int
 			var uname string

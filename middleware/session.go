@@ -122,9 +122,14 @@ func CSRFMiddleware(next http.Handler) http.Handler {
 		if !safeMethods[r.Method] && !exemptPaths[r.URL.Path] {
 			submitted := r.Header.Get("X-CSRF-Token")
 			if submitted == "" {
-				if err := r.ParseForm(); err == nil {
-					submitted = r.FormValue("_csrf")
+				// Multipart/form-data musíme parsovat explicitně — ParseForm tělo nečte
+				ct := r.Header.Get("Content-Type")
+				if strings.HasPrefix(ct, "multipart/form-data") {
+					_ = r.ParseMultipartForm(8 << 20) // 8 MB limit pro CSRF pole
+				} else {
+					_ = r.ParseForm()
 				}
+				submitted = r.FormValue("_csrf")
 			}
 			if submitted != tok {
 				http.Error(w, "CSRF chyba — obnovte stránku a zkuste znovu.", http.StatusForbidden)

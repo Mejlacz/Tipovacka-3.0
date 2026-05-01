@@ -32,7 +32,7 @@ func AdminDeadlineAlerts(w http.ResponseWriter, r *http.Request) {
 		       ht.name || ' – ' || at.name,
 		       TO_CHAR(r.deadline AT TIME ZONE 'Europe/Prague', 'DD.MM HH24:MI'),
 		       (SELECT COUNT(*) FROM users u
-		        WHERE u.is_approved=true AND u.is_blocked=false AND u.is_inactive=false
+		        WHERE COALESCE(u.is_approved,true)=true AND COALESCE(u.is_blocked,false)=false AND COALESCE(u.is_inactive,false)=false
 		          AND u.id NOT IN (SELECT user_id FROM tips WHERE match_id=m.id)) AS missing
 		  FROM matches m
 		  JOIN rounds r ON r.id=m.round_id

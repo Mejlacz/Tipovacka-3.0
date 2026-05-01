@@ -389,7 +389,7 @@ func AchievementsPage(tmpl *template.Template) http.HandlerFunc {
 
 		compRows, _ := db.Pool.Query(ctx,
 			`SELECT id, name, season, is_active, sport, sort_order FROM competitions
-			  ORDER BY is_active DESC, sort_order, id DESC`)
+			  ORDER BY is_active DESC, sort_order NULLS LAST, id DESC`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}

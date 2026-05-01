@@ -45,6 +45,7 @@
             Tipy se identifikují podle <strong>user_id</strong> a <strong>match_id</strong> — existující tipy se aktualizují, nové se vytvoří.
         </p>
         <form method="post" action="/admin/tips/{{.Comp.ID}}/import" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
             <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
                 <input type="file" name="csv_file" accept=".csv" required style="font-size:.85rem;flex:1;min-width:200px" />
                 <button type="submit" class="btn btn-primary">📥 Importovat</button>

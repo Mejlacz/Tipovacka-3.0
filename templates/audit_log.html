@@ -1,5 +1,5 @@
 <div class="page-header">
-    <h1>📋 Audit log</h1>
+    <h1>🔧 Admin log</h1>
     <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
 </div>
 
@@ -7,8 +7,17 @@
 <div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">{{index .Flash "msg"}}</div>
 {{end}}
 
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;flex-wrap:wrap">
+    <input type="text" id="audit-search" placeholder="🔍 Filtrovat — admin, akce, popis…"
+           oninput="filterAudit(this.value)"
+           style="flex:1;min-width:220px;max-width:380px;font-size:.85rem;
+                  background:var(--bg2);border:1px solid var(--border-d);border-radius:6px;
+                  color:var(--text-d);padding:.4rem .65rem" />
+    <span id="audit-count" style="font-size:.8rem;color:var(--muted-d)">{{.TotalCount}} záznamů</span>
+</div>
+
 <div style="overflow-x:auto">
-<table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+<table style="width:100%;border-collapse:collapse;font-size:0.82rem" id="audit-table">
     <thead>
         <tr style="background:var(--bg2)">
             <th style="padding:.4rem .5rem;text-align:left">Čas</th>
@@ -18,7 +27,7 @@
             <th style="padding:.4rem .5rem">Undo</th>
         </tr>
     </thead>
-    <tbody>
+    <tbody id="audit-tbody">
     {{range .Entries}}
     <tr {{if .Undone}}style="opacity:.4"{{end}}>
         <td style="padding:.3rem .5rem;white-space:nowrap;color:var(--muted-d);font-size:.75rem">
@@ -30,6 +39,7 @@
         </td>
         <td style="padding:.3rem .5rem">{{.Description}}</td>
         <td style="padding:.3rem .5rem;text-align:center">
+            {{if $.User.IsOwner}}
             {{if not .Undone}}{{if index $.UndoableIDs .ID}}
             <form method="post" action="/admin/audit/{{.ID}}/undo"
                   onsubmit="return confirm('Vrátit tuto akci?')">
@@ -37,9 +47,48 @@
             </form>
             {{end}}{{end}}
             {{if .Undone}}<span style="color:var(--muted-d);font-size:.75rem">vráceno</span>{{end}}
+            {{end}}
         </td>
     </tr>
     {{end}}
     </tbody>
 </table>
 </div>
+
+{{/* ── Pagination ── */}}
+{{if gt .TotalPages 1}}
+<div style="display:flex;align-items:center;gap:.4rem;justify-content:center;margin-top:1rem;flex-wrap:wrap">
+    {{if gt .Page 1}}
+    <a href="/admin/audit?page={{sub .Page 1}}" class="btn btn-sm btn-secondary">‹ Předchozí</a>
+    {{end}}
+    {{range paginate .Page .TotalPages}}
+    {{if eq . -1}}
+    <span style="color:var(--muted-d);padding:0 .2rem">…</span>
+    {{else if eq . $.Page}}
+    <span style="padding:.2rem .55rem;background:var(--accent,#6366f1);color:#fff;border-radius:5px;font-size:.82rem">{{.}}</span>
+    {{else}}
+    <a href="/admin/audit?page={{.}}" class="btn btn-sm btn-secondary" style="font-size:.82rem;padding:.2rem .55rem">{{.}}</a>
+    {{end}}
+    {{end}}
+    {{if lt .Page .TotalPages}}
+    <a href="/admin/audit?page={{add .Page 1}}" class="btn btn-sm btn-secondary">Další ›</a>
+    {{end}}
+    <span style="font-size:.78rem;color:var(--muted-d);margin-left:.4rem">strana {{.Page}} / {{.TotalPages}}</span>
+</div>
+{{end}}
+
+<script>
+function filterAudit(q) {
+    q = q.toLowerCase();
+    var rows = document.querySelectorAll('#audit-tbody tr');
+    var visible = 0;
+    rows.forEach(function(tr) {
+        var text = tr.textContent.toLowerCase();
+        var show = !q || text.indexOf(q) >= 0;
+        tr.style.display = show ? '' : 'none';
+        if(show) visible++;
+    });
+    var cnt = document.getElementById('audit-count');
+    if(cnt) cnt.textContent = q ? (visible + ' shod') : ('{{.TotalCount}} záznamů');
+}
+</script>

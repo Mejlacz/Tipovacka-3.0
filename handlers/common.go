@@ -22,17 +22,19 @@ import (
 
 // userCols obsahuje info o tom, které sloupce tabulky users v DB existují.
 var userCols struct {
-	Email      bool
-	IsAdmin    bool
-	IsOwner    bool
-	IsBlocked  bool
-	IsHidden   bool
-	IsApproved bool
-	IsInactive bool
-	Lang       bool
-	CreatedAt  bool
-	FirstName  bool
-	LastName   bool
+	Email         bool
+	IsAdmin       bool
+	IsOwner       bool
+	IsBlocked     bool
+	IsHidden      bool
+	IsApproved    bool
+	IsInactive    bool
+	Lang          bool
+	CreatedAt     bool
+	FirstName     bool
+	LastName      bool
+	NotifyAccess  bool
+	BackgroundURL bool
 }
 
 // InitUserSchema zjistí dostupné sloupce tabulky users jednou při startu.
@@ -50,21 +52,23 @@ func InitUserSchema() {
 		var col string
 		_ = rows.Scan(&col)
 		switch col {
-		case "email":        userCols.Email = true
-		case "is_admin":     userCols.IsAdmin = true
-		case "is_owner":     userCols.IsOwner = true
-		case "is_blocked":   userCols.IsBlocked = true
-		case "is_hidden":    userCols.IsHidden = true
-		case "is_approved":  userCols.IsApproved = true
-		case "is_inactive":  userCols.IsInactive = true
-		case "lang":         userCols.Lang = true
-		case "created_at":   userCols.CreatedAt = true
-		case "first_name":   userCols.FirstName = true
-		case "last_name":    userCols.LastName = true
+		case "email":          userCols.Email = true
+		case "is_admin":       userCols.IsAdmin = true
+		case "is_owner":       userCols.IsOwner = true
+		case "is_blocked":     userCols.IsBlocked = true
+		case "is_hidden":      userCols.IsHidden = true
+		case "is_approved":    userCols.IsApproved = true
+		case "is_inactive":    userCols.IsInactive = true
+		case "lang":           userCols.Lang = true
+		case "created_at":     userCols.CreatedAt = true
+		case "first_name":     userCols.FirstName = true
+		case "last_name":      userCols.LastName = true
+		case "notify_access":  userCols.NotifyAccess = true
+		case "background_url": userCols.BackgroundURL = true
 		}
 	}
-	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v is_hidden=%v is_approved=%v is_inactive=%v lang=%v created_at=%v first_name=%v last_name=%v",
-		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.IsApproved, userCols.IsInactive, userCols.Lang, userCols.CreatedAt, userCols.FirstName, userCols.LastName)
+	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v is_hidden=%v is_approved=%v is_inactive=%v lang=%v created_at=%v first_name=%v last_name=%v notify_access=%v background_url=%v",
+		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.IsApproved, userCols.IsInactive, userCols.Lang, userCols.CreatedAt, userCols.FirstName, userCols.LastName, userCols.NotifyAccess, userCols.BackgroundURL)
 }
 
 // buildUserSelect vrátí SELECT sloupců + jejich scan cíle pro daného uživatele.
@@ -105,6 +109,12 @@ func buildUserSelect() (cols string, scanInto func(u *models.User) []interface{}
 	}
 	if userCols.LastName {
 		names = append(names, "last_name")
+	}
+	if userCols.NotifyAccess {
+		names = append(names, "notify_access")
+	}
+	if userCols.BackgroundURL {
+		names = append(names, "background_url")
 	}
 
 	cols = strings.Join(names, ", ")
@@ -185,6 +195,14 @@ func scanUser(u *models.User, row interface {
 	if userCols.LastName {
 		ptrs = append(ptrs, &lastName)
 	}
+	var notifyAccess bool
+	if userCols.NotifyAccess {
+		ptrs = append(ptrs, &notifyAccess)
+	}
+	var backgroundURL *string
+	if userCols.BackgroundURL {
+		ptrs = append(ptrs, &backgroundURL)
+	}
 
 	if err := row.Scan(ptrs...); err != nil {
 		return err
@@ -198,6 +216,8 @@ func scanUser(u *models.User, row interface {
 	// is_approved: pokud sloupec neexistuje, fallback = true (backward compat)
 	u.IsApproved = isApproved || !userCols.IsApproved
 	u.IsInactive = isInactive
+	u.NotifyAccess = notifyAccess
+	u.BackgroundURL = backgroundURL
 	if lang != "" {
 		u.Lang = lang
 	} else {

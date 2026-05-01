@@ -57,7 +57,7 @@
                     <div class="nav-dropdown-divider"></div>
                     <a href="/admin/email">{{tr $.Lang "nav_email"}}</a>
                     <div class="nav-dropdown-divider"></div>
-                    <a href="/admin/history">{{tr $.Lang "nav_history"}}</a>
+                    {{if $u.IsOwner}}<a href="/admin/history">{{tr $.Lang "nav_history"}}</a>{{end}}
                     <a href="/admin/audit">{{tr $.Lang "nav_audit"}}</a>
                     {{if $u.IsOwner}}
                     <div class="nav-dropdown-divider"></div>

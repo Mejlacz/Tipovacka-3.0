@@ -103,14 +103,17 @@ func AdminEmailForm(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 
-		// Načti uživatele s emailem — vyřadit blokované
+		// Načti uživatele s emailem — vyřadit blokované a neaktivní
 		inactiveSel := "false"
 		if userCols.IsInactive {
 			inactiveSel = "COALESCE(is_inactive, false)"
 		}
 		blockedWhere := ""
 		if userCols.IsBlocked {
-			blockedWhere = "AND COALESCE(is_blocked, false) = false"
+			blockedWhere += " AND COALESCE(is_blocked, false) = false"
+		}
+		if userCols.IsInactive {
+			blockedWhere += " AND COALESCE(is_inactive, false) = false"
 		}
 		uRows, _ := db.Pool.Query(ctx,
 			`SELECT id, username, COALESCE(email,''), `+inactiveSel+` FROM users
