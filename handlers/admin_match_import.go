@@ -23,17 +23,26 @@ import (
 	"tipovacka/middleware"
 )
 
-// matchImportLinePattern odpovídá řádkům ve tvaru:
+// ── multi-format parsovací vzory ─────────────────────────────────────────────
 //
-//	"Tým A - Tým B  15.5. 18:00"
-//	"Tým A – Tým B  15.5.2026 18:00"
+// Podporované formáty (datum může být kdekoliv, čas vždy na konci řádku):
+//   Domácí - Hosté  15.5. 18:00
+//   Domácí - Hosté  15.5.2026 18:00
+//   15.5. Domácí - Hosté 18:00
+//   2. 5. 2026 Domácí Hosté 18:00          (bez pomlčky → split na 1. mezeře)
+//   2. 5. 2026 Domácí - Hosté 18:00
+//   TAB-oddělené z Excelu: datum\tDomácí\tHosté\tčas
 //
-// Datum i čas jsou POVINNÉ.
-var matchImportLinePattern = regexp.MustCompile(
-	`^([\pL\d .&'()/]+?)\s*[-–]\s*([\pL\d .&'()/]+?)\s+` +
-		`(\d{1,2})\.(\d{1,2})\.(\d{4})?\s+` +
-		`(\d{1,2})[.:](\d{2})$`,
-)
+// Datum i čas jsou povinné.
+
+// miDateRe hledá datum DD.MM. nebo DD. MM. nebo DD.MM.YYYY nebo DD. MM. YYYY
+var miDateRe = regexp.MustCompile(`(\d{1,2})\.[ \t]*(\d{1,2})\.[ \t]*(\d{4})?`)
+
+// miTimeEndRe hledá čas HH:MM nebo HH.MM na KONCI řádku
+var miTimeEndRe = regexp.MustCompile(`(\d{1,2})[.:](\d{2})[ \t]*$`)
+
+// mi2PlusSpaces pro detekci vícenásobných mezer
+var mi2PlusSpaces = regexp.MustCompile(`[ \t]{2,}`)
 
 type importMatchParsed struct {
 	HomeTeam   string  `json:"home_team"`
@@ -44,60 +53,107 @@ type importMatchParsed struct {
 	ParseError string  `json:"parse_error,omitempty"`
 }
 
-// parseMatchImportText parsuje vložený text a vrátí nalezené budoucí zápasy.
-// Datum i čas jsou povinné — bez nich není jasné kdy zápas začíná.
+// splitMITeams rozdělí řetězec "DomácíHosté" na dva týmy.
+// Pořadí pokusů: pomlčka → tab → 2+ mezery → první mezera.
+func splitMITeams(s string) (home, away string) {
+	for _, sep := range []string{" - ", " – ", " — "} {
+		if idx := strings.Index(s, sep); idx >= 0 {
+			return strings.TrimSpace(s[:idx]), strings.TrimSpace(s[idx+len(sep):])
+		}
+	}
+	if idx := strings.IndexByte(s, '\t'); idx >= 0 {
+		return strings.TrimSpace(s[:idx]), strings.TrimSpace(s[idx+1:])
+	}
+	if loc := mi2PlusSpaces.FindStringIndex(s); loc != nil {
+		return strings.TrimSpace(s[:loc[0]]), strings.TrimSpace(s[loc[1]:])
+	}
+	if idx := strings.IndexByte(s, ' '); idx >= 0 {
+		return strings.TrimSpace(s[:idx]), strings.TrimSpace(s[idx+1:])
+	}
+	return s, ""
+}
+
+// parseMILine parsuje jeden řádek a vrátí importMatchParsed.
+func parseMILine(line string, currentYear int) importMatchParsed {
+	orig := line
+
+	// ── 1. Najdi čas na konci řádku ─────────────────────────────────────────
+	tmLoc := miTimeEndRe.FindStringSubmatchIndex(line)
+	if tmLoc == nil {
+		return importMatchParsed{RawLine: orig,
+			ParseError: "čas nenalezen — zadej čas na konci řádku ve formátu HH:MM"}
+	}
+	hour, _ := strconv.Atoi(line[tmLoc[2]:tmLoc[3]])
+	min, _ := strconv.Atoi(line[tmLoc[4]:tmLoc[5]])
+	if hour > 23 || min > 59 {
+		return importMatchParsed{RawLine: orig,
+			ParseError: fmt.Sprintf("neplatný čas %02d:%02d", hour, min)}
+	}
+
+	// Odstraň čas z konce → zbytek obsahuje datum + týmy
+	rest := strings.TrimRight(line[:tmLoc[0]], " \t")
+
+	// ── 2. Najdi datum kdekoliv v zbytku ────────────────────────────────────
+	dtIdx := miDateRe.FindStringSubmatchIndex(rest)
+	if dtIdx == nil {
+		return importMatchParsed{RawLine: orig,
+			ParseError: "datum nenalezeno — použij formát DD.MM. nebo DD. MM. YYYY"}
+	}
+	day, _ := strconv.Atoi(rest[dtIdx[2]:dtIdx[3]])
+	month, _ := strconv.Atoi(rest[dtIdx[4]:dtIdx[5]])
+	year := currentYear
+	if dtIdx[6] >= 0 {
+		year, _ = strconv.Atoi(rest[dtIdx[6]:dtIdx[7]])
+		if year < 100 {
+			year += 2000
+		}
+	}
+	if month < 1 || month > 12 || day < 1 || day > 31 {
+		return importMatchParsed{RawLine: orig,
+			ParseError: fmt.Sprintf("neplatné datum %02d.%02d.", day, month)}
+	}
+
+	// Odstraň datum → zbydou týmy (před datem nebo za ním)
+	before := strings.TrimSpace(rest[:dtIdx[0]])
+	after := strings.TrimSpace(rest[dtIdx[1]:])
+	teamsPart := before
+	if teamsPart == "" {
+		teamsPart = after
+	} else if after != "" {
+		// datum uprostřed (neobvyklé) — spoj s 2+ mezerami jako oddělovač
+		teamsPart = before + "  " + after
+	}
+	if teamsPart == "" {
+		return importMatchParsed{RawLine: orig, ParseError: "chybí názvy týmů"}
+	}
+
+	// ── 3. Rozděl týmy ───────────────────────────────────────────────────────
+	home, away := splitMITeams(teamsPart)
+	if home == "" || away == "" {
+		return importMatchParsed{RawLine: orig,
+			ParseError: "nepodařilo se rozpoznat oba týmy — pro vícesvlovné názvy použij: Domácí - Hosté"}
+	}
+
+	dateStr := fmt.Sprintf("%02d.%02d.%04d %02d:%02d", day, month, year, hour, min)
+	isoStr := fmt.Sprintf("%04d-%02d-%02dT%02d:%02d", year, month, day, hour, min)
+	return importMatchParsed{
+		HomeTeam: home, AwayTeam: away,
+		DateStr: dateStr, ParsedDate: &isoStr,
+		RawLine: orig,
+	}
+}
+
+// parseMatchImportText parsuje celý vložený text.
 func parseMatchImportText(text string) []importMatchParsed {
 	now := time.Now().In(pragueLocation)
 	currentYear := now.Year()
-
 	var results []importMatchParsed
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		m := matchImportLinePattern.FindStringSubmatch(line)
-		if m == nil {
-			results = append(results, importMatchParsed{
-				RawLine:    line,
-				ParseError: "nečitelný formát — očekáváno: Domácí - Hosté DD.MM. HH:MM (datum i čas jsou povinné)",
-			})
-			continue
-		}
-
-		home := strings.TrimSpace(m[1])
-		away := strings.TrimSpace(m[2])
-		day, _ := strconv.Atoi(m[3])
-		month, _ := strconv.Atoi(m[4])
-		year := currentYear
-		if m[5] != "" {
-			year, _ = strconv.Atoi(m[5])
-			if year < 100 {
-				year += 2000
-			}
-		}
-		hour, _ := strconv.Atoi(m[6])
-		min, _ := strconv.Atoi(m[7])
-
-		// Validace data
-		if month < 1 || month > 12 || day < 1 || day > 31 {
-			results = append(results, importMatchParsed{
-				RawLine:    line,
-				ParseError: fmt.Sprintf("neplatné datum %02d.%02d.", day, month),
-			})
-			continue
-		}
-
-		dateStr := fmt.Sprintf("%02d.%02d.%04d %02d:%02d", day, month, year, hour, min)
-		isoStr := fmt.Sprintf("%04d-%02d-%02dT%02d:%02d", year, month, day, hour, min)
-
-		results = append(results, importMatchParsed{
-			HomeTeam:   home,
-			AwayTeam:   away,
-			DateStr:    dateStr,
-			ParsedDate: &isoStr,
-			RawLine:    line,
-		})
+		results = append(results, parseMILine(line, currentYear))
 	}
 	return results
 }
