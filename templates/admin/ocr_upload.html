@@ -17,7 +17,7 @@
         <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
 
         <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
-            <div style="flex:2;min-width:220px">
+            <div style="flex:1;min-width:220px">
                 <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Kolo</label>
                 <select name="round_id" required style="width:100%">
                     <option value="">— Vyber kolo —</option>
@@ -32,13 +32,6 @@
                         <option value="{{.ID}}">{{.Name}}</option>
                     {{end}}
                     {{if .Rounds}}</optgroup>{{end}}
-                </select>
-            </div>
-            <div style="flex:1;min-width:130px">
-                <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Sport</label>
-                <select name="sport" style="width:100%">
-                    <option value="football">⚽ Fotbal</option>
-                    <option value="hockey">🏒 Hokej</option>
                 </select>
             </div>
         </div>

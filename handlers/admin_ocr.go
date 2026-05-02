@@ -136,7 +136,7 @@ func AdminOCRForm(tmpl *template.Template) http.HandlerFunc {
 }
 
 // ── POST /admin/ocr/parse ─────────────────────────────────────────────────────
-// Form: round_id, sport, text
+// Form: round_id, text
 
 func AdminOCRParse(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -175,10 +175,16 @@ func AdminOCRParse(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		roundID, _ := strconv.Atoi(r.FormValue("round_id"))
-		sport := r.FormValue("sport")
-		if sport == "" {
-			sport = "football"
+
+		// Sport se načte automaticky ze soutěže kola
+		sport := "football"
+		if roundID > 0 {
+			_ = db.Pool.QueryRow(ctx,
+				`SELECT COALESCE(c.sport, 'football')
+				   FROM rounds r JOIN competitions c ON c.id = r.competition_id
+				  WHERE r.id = $1`, roundID).Scan(&sport)
 		}
+
 		text := strings.TrimSpace(r.FormValue("text"))
 
 		if roundID == 0 {
