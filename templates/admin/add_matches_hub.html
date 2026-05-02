@@ -1,0 +1,159 @@
+<style>
+.hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1.25rem;
+}
+.hub-card {
+    background: var(--bg2);
+    border: 1px solid var(--border-d);
+    border-radius: 12px;
+    padding: 1.25rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .15s, box-shadow .15s;
+    cursor: pointer;
+}
+.hub-card:hover {
+    border-color: var(--accent, #6366f1);
+    box-shadow: 0 0 0 2px rgba(99,102,241,.12);
+    text-decoration: none;
+    color: inherit;
+}
+.hub-card-icon { font-size: 2rem; line-height: 1; }
+.hub-card-title { font-size: 1rem; font-weight: 700; margin: 0; }
+.hub-card-desc { font-size: .82rem; color: var(--muted-d); line-height: 1.5; margin: 0; }
+.hub-card-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .2rem; }
+.hub-tag {
+    font-size: .72rem; font-weight: 600;
+    padding: .1rem .45rem; border-radius: 99px;
+    background: rgba(99,102,241,.12); color: var(--accent, #6366f1);
+}
+.hub-tag.green { background: rgba(16,185,129,.12); color: #10b981; }
+.hub-tag.amber { background: rgba(245,158,11,.12); color: #f59e0b; }
+.hub-divider {
+    font-size: .78rem; font-weight: 700; color: var(--muted-d);
+    text-transform: uppercase; letter-spacing: .06em;
+    margin: 1.5rem 0 .1rem; padding-bottom: .4rem;
+    border-bottom: 1px solid var(--border-d);
+}
+</style>
+
+<div class="page-header">
+    <h1>➕ Přidat zápasy</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+<p style="color:var(--muted-d);font-size:.88rem;margin:.25rem 0 0">
+    Zvol způsob přidání nových zápasů nebo kola do aktivní soutěže.
+</p>
+
+<div class="hub-divider">Hromadný import zápasů</div>
+<div class="hub-grid">
+
+    <a class="hub-card" href="/admin/matches/import">
+        <div class="hub-card-icon">📋</div>
+        <p class="hub-card-title">Vložení textu (paste)</p>
+        <p class="hub-card-desc">
+            Zkopíruj zápasy z webu, Excelu nebo tabulky. Parser automaticky rozpozná
+            datum, čas a porovná týmy s DB soutěže.
+        </p>
+        <div class="hub-card-tags">
+            <span class="hub-tag green">doporučeno</span>
+            <span class="hub-tag">různé formáty</span>
+            <span class="hub-tag">bez skóre</span>
+        </div>
+    </a>
+
+    <a class="hub-card" href="/admin/io#import">
+        <div class="hub-card-icon">🌐</div>
+        <p class="hub-card-title">API — football-data.org</p>
+        <p class="hub-card-desc">
+            Automatický import zápasů a výsledků z mezinárodních soutěží.
+            Vyžaduje nastavený kód soutěže (CL, PL, BL1…).
+        </p>
+        <div class="hub-card-tags">
+            <span class="hub-tag green">automatický</span>
+            <span class="hub-tag">fotbal</span>
+            <span class="hub-tag">mezinárodní ligy</span>
+        </div>
+    </a>
+
+    <a class="hub-card" href="/admin/io#import">
+        <div class="hub-card-icon">📥</div>
+        <p class="hub-card-title">Import souboru (CSV / XLSX)</p>
+        <p class="hub-card-desc">
+            Nahraj soubor z Excelu nebo CSV se zápasy, výsledky nebo tipy.
+            Podporuje více typů dat.
+        </p>
+        <div class="hub-card-tags">
+            <span class="hub-tag">.xlsx</span>
+            <span class="hub-tag">.csv</span>
+        </div>
+    </a>
+
+</div>
+
+<div class="hub-divider">Výsledky hotových zápasů</div>
+<div class="hub-grid">
+
+    <a class="hub-card" href="/admin/ocr">
+        <div class="hub-card-icon">⚡</div>
+        <p class="hub-card-title">Zadat výsledky textem (paste)</p>
+        <p class="hub-card-desc">
+            Hromadné zadání skóre pro existující zápasy vložením textu
+            z Flashscore nebo jiného zdroje. Formát: Tým A - Tým B  2:1
+        </p>
+        <div class="hub-card-tags">
+            <span class="hub-tag amber">jen výsledky</span>
+            <span class="hub-tag">existující zápasy</span>
+        </div>
+    </a>
+
+    <a class="hub-card" href="/admin/unscored">
+        <div class="hub-card-icon">⏳</div>
+        <p class="hub-card-title">Nevyhodnocené zápasy</p>
+        <p class="hub-card-desc">
+            Přehled odehraných zápasů bez výsledku. Zadej skóre přímo
+            u každého zápasu.
+        </p>
+        <div class="hub-card-tags">
+            <span class="hub-tag amber">jen výsledky</span>
+        </div>
+    </a>
+
+</div>
+
+<div class="hub-divider">Správa kol a soutěží</div>
+<div class="hub-grid">
+
+    <a class="hub-card" href="/admin/competitions">
+        <div class="hub-card-icon">🏆</div>
+        <p class="hub-card-title">Soutěže → přidat kolo</p>
+        <p class="hub-card-desc">
+            Vyber aktivní soutěž, přidej nové kolo a poté zápasy ručně
+            nebo importem.
+        </p>
+        <div class="hub-card-tags">
+            <span class="hub-tag">nové kolo</span>
+            <span class="hub-tag">ruční zadání</span>
+        </div>
+    </a>
+
+    <a class="hub-card" href="/admin/competitions/new">
+        <div class="hub-card-icon">🆕</div>
+        <p class="hub-card-title">Nová soutěž</p>
+        <p class="hub-card-desc">
+            Založ novou soutěž (ligu, turnaj), nastav kód pro API
+            a přidej první kolo.
+        </p>
+        <div class="hub-card-tags">
+            <span class="hub-tag">nová soutěž</span>
+        </div>
+    </a>
+
+</div>

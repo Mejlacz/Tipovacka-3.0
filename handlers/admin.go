@@ -1092,6 +1092,20 @@ func AdminIO(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
+// ─── GET /admin/add-matches — rozcestník pro přidávání zápasů ────────────────
+
+func AdminAddMatchesHub(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin := RequireAdmin(w, r)
+		if admin == nil {
+			return
+		}
+		RenderTemplate(w, r, tmpl, "admin/add_matches_hub.html", TemplateData{
+			"User": admin,
+		})
+	}
+}
+
 // ─── POST /admin/users/{id}/send-welcome ─────────────────────────────────────
 
 func AdminUserSendWelcome(w http.ResponseWriter, r *http.Request) {

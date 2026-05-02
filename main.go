@@ -250,6 +250,9 @@ func main() {
 	r.Post("/admin/ocr/confirm", handlers.AdminOCRConfirm)
 	r.Post("/admin/ocr/cancel", handlers.AdminOCRCancel)
 
+	// Admin rozcestník — přidat zápasy
+	r.Get("/admin/add-matches", handlers.AdminAddMatchesHub(tmpl))
+
 	// Admin hromadný import budoucích zápasů
 	r.Get("/admin/matches/import", handlers.AdminMatchImportForm(tmpl))
 	r.Post("/admin/matches/import/parse", handlers.AdminMatchImportParse(tmpl))
