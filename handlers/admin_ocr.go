@@ -112,12 +112,13 @@ func AdminOCRForm(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 
-		// Načti kola seřazená po soutěžích
+		// Načti kola seřazená po soutěžích — pouze aktivní soutěže
 		rows, _ := db.Pool.Query(ctx,
 			`SELECT r.id, r.name, c.name, c.season
 			   FROM rounds r
 			   JOIN competitions c ON c.id = r.competition_id
-			  ORDER BY c.id DESC, r.id DESC`)
+			  WHERE COALESCE(c.is_active, false) = true
+			  ORDER BY c.sort_order ASC NULLS LAST, c.id DESC, r.id DESC`)
 		var rounds []ocrRoundItem
 		for rows.Next() {
 			var ri ocrRoundItem
@@ -150,12 +151,13 @@ func AdminOCRParse(tmpl *template.Template) http.HandlerFunc {
 
 		ctx := context.Background()
 
-		// Načti kola pro formulář (pro případ chyby)
+		// Načti kola pro formulář (pro případ chyby) — pouze aktivní soutěže
 		roundRows, _ := db.Pool.Query(ctx,
 			`SELECT r.id, r.name, c.name, c.season
 			   FROM rounds r
 			   JOIN competitions c ON c.id = r.competition_id
-			  ORDER BY c.id DESC, r.id DESC`)
+			  WHERE COALESCE(c.is_active, false) = true
+			  ORDER BY c.sort_order ASC NULLS LAST, c.id DESC, r.id DESC`)
 		var rounds []ocrRoundItem
 		for roundRows.Next() {
 			var ri ocrRoundItem
