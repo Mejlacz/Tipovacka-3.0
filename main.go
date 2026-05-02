@@ -252,6 +252,7 @@ func main() {
 
 	// Admin rozcestník — přidat zápasy
 	r.Get("/admin/add-matches", handlers.AdminAddMatchesHub(tmpl))
+	r.Post("/admin/rounds/quick-new", handlers.AdminRoundQuickNew)
 
 	// Admin hromadný import budoucích zápasů
 	r.Get("/admin/matches/import", handlers.AdminMatchImportForm(tmpl))

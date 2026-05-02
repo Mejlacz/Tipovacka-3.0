@@ -80,6 +80,46 @@ func AdminRoundCreate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/rounds", http.StatusSeeOther)
 }
 
+// POST /admin/rounds/quick-new — vytvoří kolo a přejde přímo na zápasy
+func AdminRoundQuickNew(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
+	name := strings.TrimSpace(r.FormValue("name"))
+	deadlineStr := r.FormValue("deadline")
+
+	if compID == 0 || name == "" {
+		middleware.SetFlash(w, r, "error", "Vyber soutěž a zadej název kola.")
+		http.Redirect(w, r, "/admin/add-matches", http.StatusSeeOther)
+		return
+	}
+
+	var deadline *time.Time
+	if deadlineStr != "" {
+		t, err := time.ParseInLocation("2006-01-02T15:04", deadlineStr, pragueLocation)
+		if err == nil {
+			deadline = &t
+		}
+	}
+
+	var roundID int
+	err := db.Pool.QueryRow(context.Background(),
+		`INSERT INTO rounds (competition_id, name, deadline, is_active) VALUES ($1,$2,$3,true) RETURNING id`,
+		compID, name, deadline).Scan(&roundID)
+	if err != nil {
+		middleware.SetFlash(w, r, "error", "Nepodařilo se vytvořit kolo.")
+		http.Redirect(w, r, "/admin/add-matches", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+}
+
 // POST /admin/rounds/{id}/edit
 func AdminRoundEdit(w http.ResponseWriter, r *http.Request) {
 	admin := RequireAdmin(w, r)

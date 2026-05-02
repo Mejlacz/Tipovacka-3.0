@@ -1100,8 +1100,26 @@ func AdminAddMatchesHub(tmpl *template.Template) http.HandlerFunc {
 		if admin == nil {
 			return
 		}
+		ctx := context.Background()
+		rows, _ := db.Pool.Query(ctx,
+			`SELECT id, name, season FROM competitions WHERE COALESCE(is_active,false)=true
+			  ORDER BY sort_order ASC NULLS LAST, id DESC`)
+		type compOpt struct {
+			ID     int
+			Name   string
+			Season string
+		}
+		var comps []compOpt
+		for rows.Next() {
+			var c compOpt
+			_ = rows.Scan(&c.ID, &c.Name, &c.Season)
+			comps = append(comps, c)
+		}
+		rows.Close()
 		RenderTemplate(w, r, tmpl, "admin/add_matches_hub.html", TemplateData{
-			"User": admin,
+			"User":         admin,
+			"Competitions": comps,
+			"Flash":        middleware.GetFlash(w, r),
 		})
 	}
 }
