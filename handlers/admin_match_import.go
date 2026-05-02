@@ -27,11 +27,12 @@ import (
 //
 //	"Tým A - Tým B  15.5. 18:00"
 //	"Tým A – Tým B  15.5.2026 18:00"
-//	"Tým A - Tým B  15.5.2026"          (bez času)
+//
+// Datum i čas jsou POVINNÉ.
 var matchImportLinePattern = regexp.MustCompile(
 	`^([\pL\d .&'()/]+?)\s*[-–]\s*([\pL\d .&'()/]+?)\s+` +
-		`(\d{1,2})\.(\d{1,2})\.(\d{4})?\s*` +
-		`(?:(\d{1,2})[.:](\d{2}))?$`,
+		`(\d{1,2})\.(\d{1,2})\.(\d{4})?\s+` +
+		`(\d{1,2})[.:](\d{2})$`,
 )
 
 type importMatchParsed struct {
@@ -39,12 +40,12 @@ type importMatchParsed struct {
 	AwayTeam   string  `json:"away_team"`
 	DateStr    string  `json:"date_str"`    // "15.05.2026 18:00"
 	ParsedDate *string `json:"parsed_date"` // "2026-05-15T18:00" pro vložení
-	HasTime    bool    `json:"has_time"`
 	RawLine    string  `json:"raw_line"`
 	ParseError string  `json:"parse_error,omitempty"`
 }
 
 // parseMatchImportText parsuje vložený text a vrátí nalezené budoucí zápasy.
+// Datum i čas jsou povinné — bez nich není jasné kdy zápas začíná.
 func parseMatchImportText(text string) []importMatchParsed {
 	now := time.Now().In(pragueLocation)
 	currentYear := now.Year()
@@ -59,7 +60,7 @@ func parseMatchImportText(text string) []importMatchParsed {
 		if m == nil {
 			results = append(results, importMatchParsed{
 				RawLine:    line,
-				ParseError: "nečitelný formát — očekáváno: Domácí - Hosté DD.MM. HH:MM",
+				ParseError: "nečitelný formát — očekáváno: Domácí - Hosté DD.MM. HH:MM (datum i čas jsou povinné)",
 			})
 			continue
 		}
@@ -75,13 +76,8 @@ func parseMatchImportText(text string) []importMatchParsed {
 				year += 2000
 			}
 		}
-
-		hasTime := m[6] != ""
-		hour, min := 0, 0
-		if hasTime {
-			hour, _ = strconv.Atoi(m[6])
-			min, _ = strconv.Atoi(m[7])
-		}
+		hour, _ := strconv.Atoi(m[6])
+		min, _ := strconv.Atoi(m[7])
 
 		// Validace data
 		if month < 1 || month > 12 || day < 1 || day > 31 {
@@ -92,18 +88,14 @@ func parseMatchImportText(text string) []importMatchParsed {
 			continue
 		}
 
-		dateStr := fmt.Sprintf("%02d.%02d.%04d", day, month, year)
+		dateStr := fmt.Sprintf("%02d.%02d.%04d %02d:%02d", day, month, year, hour, min)
 		isoStr := fmt.Sprintf("%04d-%02d-%02dT%02d:%02d", year, month, day, hour, min)
-		if hasTime {
-			dateStr += fmt.Sprintf(" %02d:%02d", hour, min)
-		}
 
 		results = append(results, importMatchParsed{
 			HomeTeam:   home,
 			AwayTeam:   away,
 			DateStr:    dateStr,
 			ParsedDate: &isoStr,
-			HasTime:    hasTime,
 			RawLine:    line,
 		})
 	}

@@ -40,9 +40,7 @@
                 <td style="padding:.4rem .6rem;color:var(--muted-d)">{{add $i 1}}</td>
                 <td style="padding:.4rem .6rem;font-weight:600">{{$m.HomeTeam}}</td>
                 <td style="padding:.4rem .6rem">{{$m.AwayTeam}}</td>
-                <td style="padding:.4rem .6rem;font-family:monospace;font-size:.83rem">
-                    {{if $m.HasTime}}{{$m.DateStr}}{{else}}<span style="color:var(--muted-d)">{{$m.DateStr}} <em>(bez času)</em></span>{{end}}
-                </td>
+                <td style="padding:.4rem .6rem;font-family:monospace;font-size:.83rem">{{$m.DateStr}}</td>
                 <td style="padding:.4rem .6rem;color:#10b981;font-size:.8rem">✓ OK</td>
             </tr>
             {{end}}
