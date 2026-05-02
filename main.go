@@ -244,11 +244,17 @@ func main() {
 	r.Get("/admin/roster", handlers.AdminRosterMatrix(tmpl))
 	r.Post("/admin/roster/toggle", handlers.AdminRosterToggle)
 
-	// Admin OCR (text paste import)
+	// Admin OCR (výsledky paste import)
 	r.Get("/admin/ocr", handlers.AdminOCRForm(tmpl))
 	r.Post("/admin/ocr/parse", handlers.AdminOCRParse(tmpl))
 	r.Post("/admin/ocr/confirm", handlers.AdminOCRConfirm)
 	r.Post("/admin/ocr/cancel", handlers.AdminOCRCancel)
+
+	// Admin hromadný import budoucích zápasů
+	r.Get("/admin/matches/import", handlers.AdminMatchImportForm(tmpl))
+	r.Post("/admin/matches/import/parse", handlers.AdminMatchImportParse(tmpl))
+	r.Post("/admin/matches/import/confirm", handlers.AdminMatchImportConfirm)
+	r.Post("/admin/matches/import/cancel", handlers.AdminMatchImportCancel)
 
 	// Admin API import
 	r.Get("/admin/api/competitions", handlers.AdminAPICompetitions)

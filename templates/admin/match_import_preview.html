@@ -1,0 +1,63 @@
+<div class="page-header">
+    <h1>➕ Přidat zápasy — náhled</h1>
+    <a href="/admin/matches/import" class="btn btn-secondary">← Zpět</a>
+</div>
+
+<div style="max-width:760px">
+    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:.75rem 1rem;margin-bottom:1.25rem;font-size:.88rem">
+        <strong>Kolo:</strong> {{.CompName}} — {{.RoundName}}
+    </div>
+
+    {{$hasErrors := false}}
+    {{range .Parsed}}{{if .ParseError}}{{$hasErrors = true}}{{end}}{{end}}
+
+    {{if $hasErrors}}
+    <div class="alert alert-error" style="margin-bottom:1rem;font-size:.85rem">
+        ⚠️ Některé řádky se nepodařilo rozpoznat — jsou označeny červeně. Ostatní zápasy budou přesto importovány.
+    </div>
+    {{end}}
+
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem;margin-bottom:1.25rem">
+        <thead>
+            <tr style="border-bottom:2px solid var(--border-d);text-align:left">
+                <th style="padding:.45rem .6rem;color:var(--muted-d);font-weight:600">#</th>
+                <th style="padding:.45rem .6rem;color:var(--muted-d);font-weight:600">Domácí</th>
+                <th style="padding:.45rem .6rem;color:var(--muted-d);font-weight:600">Hosté</th>
+                <th style="padding:.45rem .6rem;color:var(--muted-d);font-weight:600">Datum a čas</th>
+                <th style="padding:.45rem .6rem;color:var(--muted-d);font-weight:600">Stav</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range $i, $m := .Parsed}}
+            {{if $m.ParseError}}
+            <tr style="background:rgba(231,76,60,.08);border-bottom:1px solid var(--border-d)">
+                <td style="padding:.4rem .6rem;color:var(--muted-d)">{{add $i 1}}</td>
+                <td colspan="3" style="padding:.4rem .6rem;font-family:monospace;font-size:.82rem;color:var(--muted-d)">{{$m.RawLine}}</td>
+                <td style="padding:.4rem .6rem;color:#e74c3c;font-size:.8rem">❌ {{$m.ParseError}}</td>
+            </tr>
+            {{else}}
+            <tr style="border-bottom:1px solid var(--border-d)">
+                <td style="padding:.4rem .6rem;color:var(--muted-d)">{{add $i 1}}</td>
+                <td style="padding:.4rem .6rem;font-weight:600">{{$m.HomeTeam}}</td>
+                <td style="padding:.4rem .6rem">{{$m.AwayTeam}}</td>
+                <td style="padding:.4rem .6rem;font-family:monospace;font-size:.83rem">
+                    {{if $m.HasTime}}{{$m.DateStr}}{{else}}<span style="color:var(--muted-d)">{{$m.DateStr}} <em>(bez času)</em></span>{{end}}
+                </td>
+                <td style="padding:.4rem .6rem;color:#10b981;font-size:.8rem">✓ OK</td>
+            </tr>
+            {{end}}
+        {{end}}
+        </tbody>
+    </table>
+
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+        <form method="post" action="/admin/matches/import/confirm" style="margin:0">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+            <button type="submit" class="btn btn-primary">✅ Potvrdit import zápasů</button>
+        </form>
+        <form method="post" action="/admin/matches/import/cancel" style="margin:0">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+            <button type="submit" class="btn btn-secondary">✕ Zrušit</button>
+        </form>
+    </div>
+</div>

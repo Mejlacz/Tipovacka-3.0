@@ -1,0 +1,58 @@
+<div class="page-header">
+    <h1>➕ Přidat zápasy — hromadný import</h1>
+    <a href="/admin" class="btn btn-secondary">← Admin</a>
+</div>
+
+{{if .Error}}
+<div class="alert alert-error" style="margin-bottom:1rem">{{.Error}}</div>
+{{end}}
+
+<div style="max-width:700px">
+    <p style="color:var(--muted-d);font-size:.88rem;margin-bottom:1.25rem">
+        Vlož budoucí zápasy — každý řádek ve tvaru
+        <code>Domácí - Hosté&nbsp;&nbsp;DD.MM. HH:MM</code>.
+        Zápasy se vytvoří bez skóre, uživatelé na ně mohou tipovat.
+    </p>
+
+    <form method="post" action="/admin/matches/import/parse" style="display:flex;flex-direction:column;gap:1rem">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+
+        <div>
+            <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Kolo</label>
+            <select name="round_id" required style="width:100%;max-width:480px">
+                <option value="">— Vyber kolo —</option>
+                {{$last := ""}}
+                {{range .Rounds}}
+                    {{$label := print .CompName " — " .CompSeason}}
+                    {{if ne $label $last}}
+                        {{if $last}}</optgroup>{{end}}
+                        <optgroup label="{{$label}}">
+                        {{$last = $label}}
+                    {{end}}
+                    <option value="{{.ID}}">{{.Name}}</option>
+                {{end}}
+                {{if .Rounds}}</optgroup>{{end}}
+            </select>
+        </div>
+
+        <div>
+            <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">
+                Zápasy k importu
+            </label>
+            <textarea name="text" rows="14" required
+                placeholder="Arsenal - Chelsea  15.5. 18:00&#10;Manchester City - Liverpool  16.5. 20:45&#10;Bayern München - Borussia Dortmund  17.5.2026 18:30&#10;Real Madrid - Barcelona  18.5."
+                style="width:100%;font-family:monospace;font-size:.85rem;resize:vertical;
+                       background:var(--bg2);border:1px solid var(--border-d);border-radius:6px;
+                       color:var(--text-d);padding:.6rem .75rem;box-sizing:border-box"></textarea>
+            <div style="font-size:.78rem;color:var(--muted-d);margin:.4rem 0 0;display:flex;flex-direction:column;gap:.2rem">
+                <span>Formát: <code>Domácí - Hosté&nbsp;&nbsp;DD.MM. HH:MM</code> nebo <code>DD.MM.RRRR HH:MM</code></span>
+                <span>Čas je nepovinný. Rok se doplní automaticky (aktuální rok). Každý zápas na samostatném řádku.</span>
+                <span style="color:var(--accent)">Příklady: <code>Arsenal - Chelsea 15.5. 18:00</code> · <code>Real Madrid - Barcelona 18.5.2026</code></span>
+            </div>
+        </div>
+
+        <div>
+            <button type="submit" class="btn btn-primary">🔍 Zkontrolovat a zobrazit náhled</button>
+        </div>
+    </form>
+</div>

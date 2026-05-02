@@ -5,7 +5,8 @@ package i18n
 var translations = map[string]map[string]string{
 	"cs": {
 		"nav_leaderboard":    "Žebříček",
-		"nav_matches":        "Zápasy",
+		"nav_matches":        "🎯 Tipovat",
+		"nav_add_matches":    "➕ Přidat zápasy",
 		"nav_results":        "⚡ Výsledky",
 		"nav_io":             "📥 I/O",
 		"nav_competitions":   "🏆 Soutěže",
@@ -293,7 +294,8 @@ var translations = map[string]map[string]string{
 	},
 	"en": {
 		"nav_leaderboard":    "Leaderboard",
-		"nav_matches":        "Matches",
+		"nav_matches":        "🎯 Tip matches",
+		"nav_add_matches":    "➕ Add matches",
 		"nav_results":        "⚡ Results",
 		"nav_io":             "📥 I/O",
 		"nav_competitions":   "🏆 Competitions",

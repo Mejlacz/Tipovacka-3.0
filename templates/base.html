@@ -33,6 +33,7 @@
             {{end}}
             <a href="/">{{tr $.Lang "nav_matches"}}</a>
             {{if $u.IsAdmin}}
+            <a href="/admin/matches/import" class="nav-quick-btn">{{tr $.Lang "nav_add_matches"}}</a>
             <a href="/admin/unscored" class="nav-quick-btn">{{tr $.Lang "nav_results"}}</a>
             <a href="/admin/io" class="nav-quick-btn">{{tr $.Lang "nav_io"}}</a>
             <a href="/admin/competitions" class="nav-quick-btn">{{tr $.Lang "nav_competitions"}}</a>
@@ -49,6 +50,9 @@
                     <a href="/admin">{{tr $.Lang "nav_dashboard"}}</a>
                     <a href="/admin/competitions">{{tr $.Lang "nav_competitions"}}</a>
                     <a href="/admin/competitions/new">{{tr $.Lang "nav_new_competition"}}</a>
+                    <div class="nav-dropdown-divider"></div>
+                    <a href="/admin/matches/import">{{tr $.Lang "nav_add_matches"}}</a>
+                    <a href="/admin/ocr">📋 Import výsledků (paste)</a>
                     <div class="nav-dropdown-divider"></div>
                     <a href="/admin/unscored">{{tr $.Lang "nav_unscored"}} <span id="unscored-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;font-size:.7rem;font-weight:700;padding:.05rem .4rem;margin-left:.2rem;vertical-align:middle"></span></a>
                     <a href="/admin/teams">{{tr $.Lang "nav_teams"}}</a>
