@@ -229,14 +229,33 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
 		return
 	}
+
+	sport := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sport")))
+	fdCode := strings.TrimSpace(r.URL.Query().Get("fd_code"))
+	matchdayStr := strings.TrimSpace(r.URL.Query().Get("matchday"))
+	skipFinished := r.URL.Query().Get("skip_finished") == "1"
+
+	// ── Hockey: api-sports.io ─────────────────────────────────────────────────
+	if sport == "hockey" {
+		season := ashSeasonFromString(matchdayStr)
+		items, skipped, err := ashPreview(fdCode, season, skipFinished)
+		if err != nil {
+			b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": err.Error()})
+			w.Write(b)
+			return
+		}
+		b, _ := json.Marshal(map[string]interface{}{"ok": true, "matches": items, "skipped": skipped})
+		w.Write(b)
+		return
+	}
+
+	// ── Football: football-data.org ───────────────────────────────────────────
 	if config.FootballAPIKey == "" {
 		w.Write([]byte(`{"ok":false,"error":"FOOTBALL_API_KEY není nastaven v prostředí"}`))
 		return
 	}
 
-	fdCode := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("fd_code")))
-	matchdayStr := strings.TrimSpace(r.URL.Query().Get("matchday"))
-	skipFinished := r.URL.Query().Get("skip_finished") == "1"
+	fdCode = strings.ToUpper(fdCode)
 
 	if fdCode == "" {
 		w.Write([]byte(`{"ok":false,"error":"Chybí kód soutěže (fd_code)"}`))
@@ -317,16 +336,10 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if config.FootballAPIKey == "" {
-		middleware.SetFlash(w, r, "error", "FOOTBALL_API_KEY není nastaven v prostředí serveru.")
-		http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
-		return
-	}
-
 	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
 	roundID, _ := strconv.Atoi(r.FormValue("round_id"))
 	newRoundName := strings.TrimSpace(r.FormValue("new_round_name"))
-	fdCode := strings.ToUpper(strings.TrimSpace(r.FormValue("fd_code")))
+	fdCode := strings.TrimSpace(r.FormValue("fd_code"))
 	matchdayStr := strings.TrimSpace(r.FormValue("matchday"))
 	sport := r.FormValue("sport")
 	if sport == "" {
@@ -379,6 +392,29 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// ── Hockey: api-sports.io ─────────────────────────────────────────────────
+	if sport == "hockey" {
+		season := ashSeasonFromString(matchdayStr)
+		created, teamsNew, skipped, err := ashImport(ctx, compID, roundID, fdCode, season, skipFinished)
+		if err != nil {
+			middleware.SetFlash(w, r, "error", "Chyba API: "+err.Error())
+			http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+			return
+		}
+		msg := fmt.Sprintf("Import dokončen: <b>%d</b> nových zápasů, <b>%d</b> nových týmů, %d přeskočeno.", created, teamsNew, skipped)
+		middleware.SetFlash(w, r, "ok", msg)
+		http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/rounds", compID), http.StatusSeeOther)
+		return
+	}
+
+	// ── Football: football-data.org ───────────────────────────────────────────
+	if config.FootballAPIKey == "" {
+		middleware.SetFlash(w, r, "error", "FOOTBALL_API_KEY není nastaven v prostředí serveru.")
+		http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+		return
+	}
+	fdCode = strings.ToUpper(fdCode)
 
 	// Stáhni zápasy z API
 	path := "competitions/" + fdCode + "/matches"
@@ -517,14 +553,9 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 		w.Write(b)
 	}
 
-	if config.FootballAPIKey == "" {
-		jsonErr("FOOTBALL_API_KEY není nastaven v prostředí serveru.")
-		return
-	}
-
 	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
 	roundID, _ := strconv.Atoi(r.FormValue("round_id"))
-	fdCode := strings.ToUpper(strings.TrimSpace(r.FormValue("fd_code")))
+	fdCode := strings.TrimSpace(r.FormValue("fd_code"))
 	matchdayStr := strings.TrimSpace(r.FormValue("matchday"))
 	sport := r.FormValue("sport")
 	if sport == "" {
@@ -548,6 +579,27 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 		jsonErr("Kolo nepatří do vybrané soutěže.")
 		return
 	}
+
+	// ── Hockey: api-sports.io ─────────────────────────────────────────────────
+	if sport == "hockey" {
+		season := ashSeasonFromString(matchdayStr)
+		upd, noScr, notFnd, err := ashUpdateResults(ctx, roundID, compID, fdCode, season)
+		if err != nil {
+			jsonErr("Chyba API: " + err.Error())
+			return
+		}
+		msg := fmt.Sprintf("Hotovo: %d aktualizováno, %d bez skóre, %d nenalezeno v kole.", upd, noScr, notFnd)
+		b, _ := json.Marshal(map[string]interface{}{"ok": true, "message": msg})
+		w.Write(b)
+		return
+	}
+
+	// ── Football: football-data.org ───────────────────────────────────────────
+	if config.FootballAPIKey == "" {
+		jsonErr("FOOTBALL_API_KEY není nastaven v prostředí serveru.")
+		return
+	}
+	fdCode = strings.ToUpper(fdCode)
 
 	// Stáhni zápasy z API
 	path := "competitions/" + fdCode + "/matches"

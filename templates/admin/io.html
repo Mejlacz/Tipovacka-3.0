@@ -206,27 +206,81 @@
 
         {{/* ── API import zápasů ── */}}
         <div class="io-card" style="grid-column:1/-1">
-            <h3>🌐 API — football-data.org / TheSportsDB</h3>
+            <h3>🌐 Import přes API</h3>
             <p>Načti aktuální zápasy nebo výsledky přímo z externích API pro fotbal a hokej.</p>
 
-            <form id="api-import-form" method="post" action="/admin/api/import" style="display:flex;flex-direction:column;gap:.65rem;margin-top:.3rem">
+            {{/* Sport tabs */}}
+            <div style="display:flex;gap:.4rem;margin-top:.5rem;margin-bottom:.75rem">
+                <button type="button" id="api-sport-btn-football" class="btn btn-sm btn-primary" onclick="setApiSport('football')">⚽ Fotbal</button>
+                <button type="button" id="api-sport-btn-hockey"   class="btn btn-sm btn-secondary" onclick="setApiSport('hockey')">🏒 Hokej</button>
+            </div>
 
+            <form id="api-import-form" method="post" action="/admin/api/import" style="display:flex;flex-direction:column;gap:.65rem">
+
+                {{/* Hidden sport field — updated by setApiSport() */}}
+                <input type="hidden" name="sport" id="api-sport-val" value="football" />
+
+                {{/* Liga / turnaj */}}
+                <div>
+                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">
+                        Liga / turnaj
+                    </label>
+                    {{/* Football: text input + načíst button */}}
+                    <div id="api-league-football" style="display:flex;gap:.3rem;align-items:center">
+                        <select name="fd_code" id="api-fd-code-sel" style="flex:1;display:none"></select>
+                        <input type="text" name="fd_code" id="api-fd-code" placeholder="CL, PL, BL1… nebo ↺ načíst" style="flex:1;text-transform:uppercase" maxlength="10" />
+                        <button type="button" id="api-load-comps-btn" onclick="loadFdCompetitions()" class="btn btn-sm btn-secondary" style="white-space:nowrap">↺ Načíst</button>
+                    </div>
+                    {{/* Hockey: dropdown ze API */}}
+                    <div id="api-league-hockey" style="display:none;gap:.3rem;align-items:center">
+                        <select name="fd_code" id="api-hockey-league-sel" style="flex:1">
+                            <option value="">— načítám ligy… —</option>
+                        </select>
+                    </div>
+                    <div id="api-comps-status" style="font-size:.72rem;color:var(--muted-d);margin-top:.15rem"></div>
+                </div>
+
+                {{/* Sezóna / kolo v API */}}
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
-                    <div style="flex:1;min-width:180px">
-                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Soutěž</label>
-                        <select name="competition_id" id="api-comp" required style="width:100%">
-                            <option value="">— vyber soutěž —</option>
-                            {{range .ActiveCompetitions}}
-                            <option value="{{.ID}}">{{.Name}}{{if .Season}} — {{.Season}}{{end}}</option>
-                            {{end}}
-                        </select>
+                    <div style="flex:1;min-width:140px">
+                        {{/* Football: text input pro matchday */}}
+                        <div id="api-matchday-row-football">
+                            <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo v API</label>
+                            <input type="text" name="matchday" id="api-matchday" placeholder="—" style="width:100%" maxlength="12" />
+                        </div>
+                        {{/* Hockey: dropdown sezón ze API */}}
+                        <div id="api-matchday-row-hockey" style="display:none">
+                            <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Sezóna</label>
+                            <select id="api-hockey-season-sel" style="width:100%">
+                                <option value="">— vyber sezónu —</option>
+                            </select>
+                            {{/* hidden input který se aktualizuje při výběru sezóny */}}
+                            <input type="hidden" name="matchday" id="api-hockey-season-val" value="" />
+                        </div>
                     </div>
-                    <div style="flex:1;min-width:180px">
-                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo (nebo nové)</label>
-                        <select name="round_id" id="api-round" style="width:100%">
-                            <option value="0">➕ Vytvořit nové kolo</option>
-                        </select>
-                    </div>
+                    <label style="font-size:.82rem;display:flex;align-items:center;gap:.35rem;cursor:pointer;white-space:nowrap;padding-bottom:.15rem">
+                        <input type="checkbox" name="skip_finished" value="1" />
+                        Přeskočit odehrané
+                    </label>
+                </div>
+
+                {{/* Naše soutěž */}}
+                <div>
+                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Naše soutěž (kam přiřadit)</label>
+                    <select name="competition_id" id="api-comp" required style="width:100%">
+                        <option value="">— vyber soutěž —</option>
+                        {{range .ActiveCompetitions}}
+                        <option value="{{.ID}}">{{.Name}}{{if .Season}} — {{.Season}}{{end}}</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                {{/* Kolo */}}
+                <div>
+                    <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo (nebo nové)</label>
+                    <select name="round_id" id="api-round" style="width:100%">
+                        <option value="0">➕ Vytvořit nové kolo</option>
+                    </select>
                 </div>
 
                 <div id="api-new-round-row" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
@@ -236,35 +290,7 @@
                     </div>
                 </div>
 
-                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
-                    <div style="flex:2;min-width:200px">
-                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">
-                            Soutěž v API
-                            <button type="button" id="api-load-comps-btn" onclick="loadFdCompetitions()" style="margin-left:.4rem;font-size:.72rem;padding:.1rem .45rem" class="btn btn-sm btn-secondary">↺ Načíst ze API</button>
-                        </label>
-                        <div style="display:flex;gap:.3rem;align-items:center">
-                            <select name="fd_code" id="api-fd-code-sel" style="flex:1;display:none"></select>
-                            <input type="text" name="fd_code" id="api-fd-code" placeholder="CL, PL, BL1… nebo ↺ načíst" style="flex:1;text-transform:uppercase" maxlength="10" />
-                        </div>
-                        <div id="api-comps-status" style="font-size:.72rem;color:var(--muted-d);margin-top:.15rem"></div>
-                    </div>
-                    <div style="min-width:80px">
-                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Kolo v API (nepovinné)</label>
-                        <input type="number" name="matchday" id="api-matchday" min="1" max="99" placeholder="—" style="width:100%" />
-                    </div>
-                    <div style="min-width:110px">
-                        <label style="font-size:.78rem;color:var(--muted-d);display:block;margin-bottom:.2rem">Sport</label>
-                        <select name="sport" style="width:100%">
-                            <option value="football">⚽ Fotbal</option>
-                            <option value="hockey">🏒 Hokej</option>
-                        </select>
-                    </div>
-                    <label style="font-size:.82rem;display:flex;align-items:center;gap:.35rem;cursor:pointer;white-space:nowrap;padding-bottom:.15rem">
-                        <input type="checkbox" name="skip_finished" value="1" />
-                        Přeskočit odehrané
-                    </label>
-                </div>
-
+                {{/* Akce */}}
                 <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
                     <button type="button" class="btn btn-sm btn-secondary" onclick="apiPreview()">🔍 Náhled</button>
                     <button type="submit" class="btn btn-sm btn-primary">📥 Importovat</button>
@@ -286,6 +312,11 @@
                     </thead>
                     <tbody id="api-preview-tbody"></tbody>
                 </table>
+            </div>
+
+            <div style="font-size:.72rem;color:var(--muted-d);margin-top:.5rem">
+                Data: <a href="https://www.thesportsdb.com" target="_blank" rel="noopener" style="color:inherit">thesportsdb.com</a> (hokej) /
+                <a href="https://www.football-data.org" target="_blank" rel="noopener" style="color:inherit">football-data.org</a> (fotbal)
             </div>
         </div>
 
@@ -491,6 +522,69 @@ function loadRounds(compID){
         .catch(function(){});
 }
 
+// ── Sport switching ────────────────────────────────────────────────────────────
+
+var _currentSport = 'football';
+
+window.setApiSport = function(sport) {
+    _currentSport = sport;
+    // Update hidden field
+    var sv = qs('#api-sport-val');
+    if(sv) sv.value = sport;
+    // Button states
+    var btnF = qs('#api-sport-btn-football');
+    var btnH = qs('#api-sport-btn-hockey');
+    if(btnF){ btnF.className = sport === 'football' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary'; }
+    if(btnH){ btnH.className = sport === 'hockey'   ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary'; }
+    // Liga rows
+    var lF = qs('#api-league-football');
+    var lH = qs('#api-league-hockey');
+    if(lF) lF.style.display = sport === 'football' ? 'flex' : 'none';
+    if(lH) lH.style.display = sport === 'hockey'   ? 'flex' : 'none';
+    // Fix name attr — only active row's fd_code should submit
+    var fdInp = qs('#api-fd-code');
+    var fdSel = qs('#api-fd-code-sel');
+    var hkSel = qs('#api-hockey-league-sel');
+    if(sport === 'hockey'){
+        if(fdInp){ fdInp.removeAttribute('name'); }
+        if(fdSel){ fdSel.removeAttribute('name'); }
+        if(hkSel){ hkSel.setAttribute('name','fd_code'); }
+    } else {
+        // Football: restore whichever is visible
+        if(fdSel && fdSel.style.display !== 'none'){
+            fdSel.setAttribute('name','fd_code');
+            if(fdInp) fdInp.removeAttribute('name');
+        } else {
+            if(fdInp) fdInp.setAttribute('name','fd_code');
+            if(fdSel) fdSel.removeAttribute('name');
+        }
+        if(hkSel) hkSel.removeAttribute('name');
+    }
+    // Sezóna / matchday rows
+    var mdf = qs('#api-matchday-row-football');
+    var mdh = qs('#api-matchday-row-hockey');
+    if(mdf) mdf.style.display = sport === 'football' ? '' : 'none';
+    if(mdh) mdh.style.display = sport === 'hockey'   ? '' : 'none';
+    // matchday name attr — only active input should submit
+    var mdInp = qs('#api-matchday');
+    var mdHid = qs('#api-hockey-season-val');
+    if(sport === 'hockey'){
+        if(mdInp) mdInp.removeAttribute('name');
+        if(mdHid) mdHid.setAttribute('name','matchday');
+    } else {
+        if(mdInp) mdInp.setAttribute('name','matchday');
+        if(mdHid) mdHid.removeAttribute('name');
+    }
+    // Load hockey leagues on first switch
+    if(sport === 'hockey'){
+        var hkSelEl = qs('#api-hockey-league-sel');
+        if(hkSelEl && hkSelEl.options.length <= 1 && (hkSelEl.options[0]||{}).value === ''){
+            loadHockeyLeagues();
+        }
+    }
+};
+
+// ── Football: načíst soutěže ──────────────────────────────────────────────────
 window.loadFdCompetitions = function(){
     var btn      = qs('#api-load-comps-btn');
     var statusEl = qs('#api-comps-status');
@@ -517,8 +611,8 @@ window.loadFdCompetitions = function(){
             });
             // Zobraz select, skryj textový input
             sel.style.display = '';
-            if(inp){ inp.style.display = 'none'; inp.removeAttribute('name'); }
             sel.setAttribute('name', 'fd_code');
+            if(inp){ inp.style.display = 'none'; inp.removeAttribute('name'); }
             if(statusEl) statusEl.textContent = '✅ ' + comps.length + ' soutěží načteno.';
         })
         .catch(function(e){
@@ -527,29 +621,125 @@ window.loadFdCompetitions = function(){
         });
 };
 
+// ── Hockey: načíst ligy z TheSportsDB ─────────────────────────────────────────
+function loadHockeyLeagues(){
+    var statusEl = qs('#api-comps-status');
+    var sel      = qs('#api-hockey-league-sel');
+    if(statusEl) statusEl.textContent = '⏳ Načítám hokejové ligy…';
+    fetch('/admin/api/hockey-leagues')
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(!data.ok){
+                if(statusEl) statusEl.textContent = '❌ ' + (data.error || 'Chyba');
+                return;
+            }
+            var leagues = data.leagues || [];
+            if(!sel) return;
+            sel.innerHTML = '<option value="">— vyber ligu —</option>';
+            leagues.forEach(function(l){
+                var opt = document.createElement('option');
+                opt.value = String(l.id);
+                opt.textContent = l.name + (l.country && l.country !== 'International' ? ' (' + l.country + ')' : '');
+                sel.appendChild(opt);
+            });
+            if(statusEl) statusEl.textContent = '✅ ' + leagues.length + ' lig načteno.';
+        })
+        .catch(function(e){
+            if(statusEl) statusEl.textContent = '❌ Síťová chyba: ' + e.message;
+        });
+}
+
+// Po výběru hokejové ligy — načíst sezóny
+var hockeyLeagueSel = qs('#api-hockey-league-sel');
+if(hockeyLeagueSel){
+    hockeyLeagueSel.addEventListener('change', function(){
+        var leagueID = this.value;
+        var statusEl = qs('#api-comps-status');
+        var seasonSel = qs('#api-hockey-season-sel');
+        var seasonVal = qs('#api-hockey-season-val');
+        if(!leagueID){
+            if(seasonSel) seasonSel.innerHTML = '<option value="">— vyber sezónu —</option>';
+            if(seasonVal) seasonVal.value = '';
+            return;
+        }
+        if(statusEl) statusEl.textContent = '⏳ Načítám sezóny…';
+        fetch('/admin/api/hockey-seasons?league_id=' + encodeURIComponent(leagueID))
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                if(!data.ok){
+                    if(statusEl) statusEl.textContent = '❌ ' + (data.error || 'Chyba');
+                    return;
+                }
+                var seasons = data.seasons || [];
+                if(!seasonSel) return;
+                seasonSel.innerHTML = '<option value="">— vyber sezónu —</option>';
+                seasons.forEach(function(s){
+                    var opt = document.createElement('option');
+                    opt.value = s.season;
+                    opt.textContent = s.season;
+                    seasonSel.appendChild(opt);
+                });
+                if(statusEl) statusEl.textContent = '✅ ' + seasons.length + ' sezón načteno.';
+                // Předvyber první (nejnovější) sezónu
+                if(seasons.length > 0){
+                    seasonSel.value = seasons[0].season;
+                    if(seasonVal) seasonVal.value = seasons[0].season;
+                }
+            })
+            .catch(function(e){
+                if(statusEl) statusEl.textContent = '❌ Síťová chyba: ' + e.message;
+            });
+    });
+}
+
+// Sync sezóna select → hidden input
+var hockeySeasonSel = qs('#api-hockey-season-sel');
+if(hockeySeasonSel){
+    hockeySeasonSel.addEventListener('change', function(){
+        var seasonVal = qs('#api-hockey-season-val');
+        if(seasonVal) seasonVal.value = this.value;
+    });
+}
+
+// ── getFdCode — přečte aktuální ligu/kód pro preview/update ───────────────────
 function getFdCode(){
+    if(_currentSport === 'hockey'){
+        var hkSel = qs('#api-hockey-league-sel');
+        return hkSel ? (hkSel.value || '').trim() : '';
+    }
     var sel = qs('#api-fd-code-sel');
     var inp = qs('#api-fd-code');
     if(sel && sel.style.display !== 'none') return (sel.value || '').trim().toUpperCase();
     return ((inp && inp.value) || '').trim().toUpperCase();
 }
 
+// ── getMatchday — přečte sezónu/kolo ─────────────────────────────────────────
+function getMatchday(){
+    if(_currentSport === 'hockey'){
+        var sv = qs('#api-hockey-season-val');
+        return sv ? sv.value : '';
+    }
+    return (qs('#api-matchday') || {}).value || '';
+}
+
+// ── apiPreview ────────────────────────────────────────────────────────────────
 window.apiPreview = function(){
     var fdCode   = getFdCode();
-    var matchday = (qs('#api-matchday') || {}).value || '';
+    var matchday = getMatchday();
     var statusEl = qs('#api-preview-status');
     var box      = qs('#api-preview-box');
     var tbody    = qs('#api-preview-tbody');
 
     if(!fdCode){
-        if(statusEl) statusEl.textContent = '⚠ Zadejte nebo načtěte kód API soutěže.';
+        if(statusEl) statusEl.textContent = '⚠ Zadejte nebo vyberte ligu / soutěž.';
         return;
     }
     if(statusEl) statusEl.textContent = '⏳ Načítám…';
     if(box)      box.style.display = 'none';
 
     var skipFinished = (qs('input[name="skip_finished"]') || {}).checked ? '1' : '0';
-    var url = '/admin/api/preview?fd_code=' + encodeURIComponent(fdCode);
+    var sport = _currentSport;
+    var url = '/admin/api/preview?fd_code=' + encodeURIComponent(fdCode) + '&sport=' + encodeURIComponent(sport);
     if(matchday) url += '&matchday=' + encodeURIComponent(matchday);
     if(skipFinished === '1') url += '&skip_finished=1';
 
@@ -584,12 +774,13 @@ window.apiPreview = function(){
         });
 };
 
+// ── apiUpdateResults ──────────────────────────────────────────────────────────
 window.apiUpdateResults = function(){
     var roundID  = (qs('#api-round') || {}).value || '0';
     var compID   = (qs('#api-comp')  || {}).value || '';
     var fdCode   = getFdCode();
-    var matchday = (qs('#api-matchday') || {}).value || '';
-    var sport    = (qs('select[name="sport"]') || {}).value || 'football';
+    var matchday = getMatchday();
+    var sport    = _currentSport;
     var statusEl = qs('#api-preview-status');
 
     if(roundID === '0' || !roundID){
@@ -597,7 +788,7 @@ window.apiUpdateResults = function(){
         return;
     }
     if(!fdCode){
-        if(statusEl) statusEl.textContent = '⚠ Zadejte nebo načtěte kód API soutěže.';
+        if(statusEl) statusEl.textContent = '⚠ Zadejte nebo vyberte ligu / soutěž.';
         return;
     }
     if(!confirm('Doplnit výsledky z API pro vybrané kolo? Existující skóre budou přepsána, budou přepočítány tipy a žebříček.')){
@@ -617,7 +808,6 @@ window.apiUpdateResults = function(){
         .then(function(data){
             if(data.ok){
                 if(statusEl) statusEl.textContent = '✅ ' + (data.message || 'Hotovo.');
-                // Obnov preview tabulku se skutečnými výsledky
                 apiPreview();
             } else {
                 if(statusEl) statusEl.textContent = '❌ ' + (data.error || 'Chyba');
@@ -640,6 +830,8 @@ if(roundSel){
     roundSel.addEventListener('change', syncNewRow);
 }
 syncNewRow();
+// Inicializuj football jako výchozí sport
+setApiSport('football');
 
 })();
 </script>

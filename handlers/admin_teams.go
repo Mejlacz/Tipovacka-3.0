@@ -222,9 +222,14 @@ func AdminCompetitionTeamsForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
+		// Filtruj týmy podle sportu soutěže (hokejová soutěž → hokejové týmy)
+		teamSport := comp.Sport
+		if teamSport == "" {
+			teamSport = "football"
+		}
 		allTeamRows, _ := db.Pool.Query(ctx,
 			`SELECT id, name, sport, alias, display_name, logo_url, category, competition_id
-			   FROM teams ORDER BY LOWER(name)`)
+			   FROM teams WHERE sport=$1 ORDER BY LOWER(name)`, teamSport)
 		var allTeams []*models.Team
 		for allTeamRows.Next() {
 			t := &models.Team{}

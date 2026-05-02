@@ -47,7 +47,8 @@ var (
 	GithubPAT  string
 	GithubRepo string
 
-	FootballAPIKey string
+	FootballAPIKey  string
+	HockeySportsKey string // API_SPORTS_HOCKEY_KEY — api-sports.io hockey
 )
 
 func init() {
@@ -79,7 +80,8 @@ func init() {
 	GithubPAT = getEnv("GITHUB_PAT", "")
 	GithubRepo = getEnv("GITHUB_REPO", "Mejlacz/Tipovacka-2.0")
 
-	FootballAPIKey = getEnv("FOOTBALL_API_KEY", "")
+	FootballAPIKey  = getEnv("FOOTBALL_API_KEY", "")
+	HockeySportsKey = getEnv("API_SPORTS_HOCKEY_KEY", "")
 }
 
 func getEnv(key, fallback string) string {

@@ -18,7 +18,7 @@
     </div>
     <div class="form-group">
         <label>Sport</label>
-        <select name="sport">
+        <select name="sport" id="sport-select" onchange="onSportChange(this.value)">
             <option value="football" {{if .Competition}}{{if eq .Competition.Sport "football"}}selected{{end}}{{end}}>⚽ Fotbal</option>
             <option value="hockey" {{if .Competition}}{{if eq .Competition.Sport "hockey"}}selected{{end}}{{end}}>🏒 Hokej</option>
         </select>
@@ -31,8 +31,8 @@
         </label>
     </div>
 
-    {{/* ── API kód ── */}}
-    <div class="form-group">
+    {{/* ── API kód — jen pro fotbal ── */}}
+    <div class="form-group" id="api-section">
         <label style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
             API kód (football-data.org)
             <span id="fd-load-status" style="font-size:.75rem;color:var(--muted-d)"></span>
@@ -65,6 +65,34 @@
         </p>
     </div>
 
+    {{/* ── Hockey API kód — api-sports.io ── */}}
+    <div class="form-group" id="api-hockey-section" style="display:none">
+        <label style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+            Liga (api-sports.io)
+            <span id="ash-load-status" style="font-size:.75rem;color:var(--muted-d)"></span>
+        </label>
+
+        <select id="ash-league-select"
+                style="display:none;width:100%;padding:.45rem .6rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.9rem"
+                onchange="document.getElementById('fd-code-value').value = this.value">
+        </select>
+
+        <div id="ash-fallback" style="display:flex;align-items:center;gap:.5rem">
+            <input type="text" id="ash-text" maxlength="10"
+                   style="width:100px"
+                   value="{{if .Competition}}{{.Competition.FdCode}}{{end}}"
+                   placeholder="57 (NHL)…"
+                   oninput="document.getElementById('fd-code-value').value = this.value" />
+            <button type="button" class="btn btn-sm btn-secondary" onclick="loadHockeyLeagues()" id="ash-retry-btn">
+                🔄 Načíst ligy
+            </button>
+        </div>
+
+        <p style="font-size:.78rem;color:var(--muted-d);margin:.35rem 0 0">
+            Scheduler automaticky každé 2 hodiny doplní výsledky. Bez kódu = ruční zadávání.
+        </p>
+    </div>
+
     <div style="display:flex;gap:.5rem;margin-top:1rem">
         <button type="submit" class="btn btn-primary">Uložit</button>
         <a href="/admin" class="btn btn-secondary">Zrušit</a>
@@ -74,6 +102,90 @@
 <script>
 (function() {
     var currentCode = '{{if .Competition}}{{.Competition.FdCode}}{{end}}';
+
+    // ── Sport změna — schovat/zobrazit API sekci ──
+    window.onSportChange = function(sport) {
+        var apiSection    = document.getElementById('api-section');
+        var apiHockey     = document.getElementById('api-hockey-section');
+        var fdCodeValue   = document.getElementById('fd-code-value');
+        if (sport === 'football') {
+            if (apiSection)  apiSection.style.display  = '';
+            if (apiHockey)   apiHockey.style.display   = 'none';
+        } else if (sport === 'hockey') {
+            if (apiSection)  apiSection.style.display  = 'none';
+            if (apiHockey)   apiHockey.style.display   = '';
+            // Načti ligy automaticky pokud nejsou načteny
+            var sel = document.getElementById('ash-league-select');
+            if (sel && sel.options.length <= 1) loadHockeyLeagues();
+        } else {
+            if (apiSection)  apiSection.style.display  = 'none';
+            if (apiHockey)   apiHockey.style.display   = 'none';
+            if (fdCodeValue) fdCodeValue.value = '';
+        }
+    };
+
+    // ── Hockey leagues loader ──
+    window.loadHockeyLeagues = function() {
+        var status  = document.getElementById('ash-load-status');
+        var sel     = document.getElementById('ash-league-select');
+        var fb      = document.getElementById('ash-fallback');
+        var retry   = document.getElementById('ash-retry-btn');
+        var current = document.getElementById('fd-code-value').value || '{{if .Competition}}{{.Competition.FdCode}}{{end}}';
+        if (status) status.textContent = '⏳ Načítám…';
+        if (retry)  retry.disabled = true;
+
+        fetch('/admin/api/hockey-leagues')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.ok || !d.leagues || !d.leagues.length) {
+                    throw new Error(d.error || 'Žádné ligy');
+                }
+                sel.innerHTML = '';
+                var none = document.createElement('option');
+                none.value = '';
+                none.textContent = '— bez API kódu (ruční zadávání) —';
+                sel.appendChild(none);
+
+                d.leagues.forEach(function(l) {
+                    var opt = document.createElement('option');
+                    opt.value = String(l.id);
+                    opt.textContent = l.id + ' — ' + l.name + (l.country && l.country !== 'World' ? ' (' + l.country + ')' : '');
+                    if (String(l.id) === current) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+
+                // Vlastní kód není v seznamu
+                if (current && current !== '') {
+                    var found = false;
+                    for (var i = 0; i < sel.options.length; i++) {
+                        if (sel.options[i].value === current) { found = true; break; }
+                    }
+                    if (!found) {
+                        var ex = document.createElement('option');
+                        ex.value = current;
+                        ex.textContent = current + ' — (vlastní ID)';
+                        ex.selected = true;
+                        sel.appendChild(ex);
+                    }
+                }
+
+                sel.style.display = '';
+                if (fb) fb.style.display = 'none';
+                document.getElementById('fd-code-value').value = sel.value;
+                if (status) status.textContent = '✓ ' + d.leagues.length + ' lig';
+            })
+            .catch(function(e) {
+                if (status) status.textContent = '⚠ ' + (e.message || 'Chyba API');
+                if (fb) fb.style.display = '';
+                if (retry) retry.disabled = false;
+            });
+    };
+
+    // Spusť hned při načtení stránky
+    (function() {
+        var sel = document.getElementById('sport-select');
+        if (sel) onSportChange(sel.value);
+    })();
 
     window.loadFdComps = function() {
         var status = document.getElementById('fd-load-status');

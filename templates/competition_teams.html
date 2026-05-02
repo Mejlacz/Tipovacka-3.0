@@ -1,5 +1,5 @@
 <div class="page-header">
-    <h1 style="font-size:1.15rem">👥 Týmy soutěže: {{.Comp.Name}} <small style="font-size:.75rem;font-weight:400;color:var(--muted-d)">{{.Comp.Season}}</small></h1>
+    <h1 style="font-size:1.15rem">{{if eq .Comp.Sport "hockey"}}🏒{{else}}⚽{{end}} Týmy soutěže: {{.Comp.Name}} <small style="font-size:.75rem;font-weight:400;color:var(--muted-d)">{{.Comp.Season}}</small></h1>
     <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
 </div>
 <nav style="display:flex;gap:.35rem;margin-bottom:1rem;flex-wrap:wrap">
@@ -47,6 +47,12 @@
     <button type="submit" class="btn btn-primary btn-sm">💾 Uložit roster</button>
     <span id="count-badge" style="color:var(--muted-d);font-size:.85rem;margin-left:auto"></span>
 </div>
+
+{{/* ── Sport filter note ── */}}
+<p style="font-size:.8rem;color:var(--muted-d);margin:.25rem 0 .9rem">
+    {{if eq .Comp.Sport "hockey"}}🏒 Zobrazují se pouze hokejové týmy.{{else}}⚽ Zobrazují se pouze fotbalové týmy.{{end}}
+    Chybí tým? <a href="/admin/teams">Přidat do katalogu →</a>
+</p>
 
 {{/* ── Skupiny podle kategorie ── */}}
 {{if .Groups}}
