@@ -6,6 +6,12 @@
 //   POST /admin/matches/import/parse    — parsování, náhled
 //   POST /admin/matches/import/confirm  — uložení do DB
 //   POST /admin/matches/import/cancel   — zrušení
+//
+// Podporované formáty vstupu (datum a čas kdekoliv v řádku):
+//   Domácí - Hosté  15.5. 18:00
+//   2. 5. 2026  Domácí Hosté  18:00       (bez pomlčky → matchuj z DB nebo split)
+//   2. 5. 2026  Domácí - Hosté  18:00
+//   Excel tabulátor: datum⇥Domácí⇥Hosté⇥čas  (libovolné pořadí sloupců)
 package handlers
 
 import (
@@ -18,43 +24,164 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"tipovacka/db"
 	"tipovacka/middleware"
 )
 
-// ── multi-format parsovací vzory ─────────────────────────────────────────────
-//
-// Podporované formáty (datum může být kdekoliv, čas vždy na konci řádku):
-//   Domácí - Hosté  15.5. 18:00
-//   Domácí - Hosté  15.5.2026 18:00
-//   15.5. Domácí - Hosté 18:00
-//   2. 5. 2026 Domácí Hosté 18:00          (bez pomlčky → split na 1. mezeře)
-//   2. 5. 2026 Domácí - Hosté 18:00
-//   TAB-oddělené z Excelu: datum\tDomácí\tHosté\tčas
-//
-// Datum i čas jsou povinné.
+// ── regexpy ──────────────────────────────────────────────────────────────────
 
-// miDateRe hledá datum DD.MM. nebo DD. MM. nebo DD.MM.YYYY nebo DD. MM. YYYY
+// miDateRe: DD.MM., DD. MM., DD.MM.YYYY, DD. MM. YYYY
 var miDateRe = regexp.MustCompile(`(\d{1,2})\.[ \t]*(\d{1,2})\.[ \t]*(\d{4})?`)
 
-// miTimeEndRe hledá čas HH:MM nebo HH.MM na KONCI řádku
-var miTimeEndRe = regexp.MustCompile(`(\d{1,2})[.:](\d{2})[ \t]*$`)
+// miTimeColonRe: HH:MM kdekoliv (dvojtečka = bezpečné, nezaměnitelné s datem)
+var miTimeColonRe = regexp.MustCompile(`(\d{1,2}):(\d{2})`)
 
-// mi2PlusSpaces pro detekci vícenásobných mezer
+// miTimeDotEndRe: HH.MM na konci řádku (fallback pokud není dvojtečka)
+var miTimeDotEndRe = regexp.MustCompile(`(\d{1,2})\.(\d{2})[ \t]*$`)
+
+// mi2PlusSpaces: 2+ mezer/tabulátorů
 var mi2PlusSpaces = regexp.MustCompile(`[ \t]{2,}`)
+
+// ── typy ─────────────────────────────────────────────────────────────────────
 
 type importMatchParsed struct {
 	HomeTeam   string  `json:"home_team"`
 	AwayTeam   string  `json:"away_team"`
 	DateStr    string  `json:"date_str"`    // "15.05.2026 18:00"
-	ParsedDate *string `json:"parsed_date"` // "2026-05-15T18:00" pro vložení
+	ParsedDate *string `json:"parsed_date"` // "2026-05-15T18:04" pro vložení
 	RawLine    string  `json:"raw_line"`
 	ParseError string  `json:"parse_error,omitempty"`
+	FromDB     bool    `json:"from_db"` // true = oba týmy nalezeny v DB soutěže
 }
 
-// splitMITeams rozdělí řetězec "DomácíHosté" na dva týmy.
-// Pořadí pokusů: pomlčka → tab → 2+ mezery → první mezera.
+// ── normalizace názvů týmů pro porovnání ─────────────────────────────────────
+
+func normTeamName(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.TrimRight(s, ".")
+	// odstraň interpunkci kromě písmen, číslic a mezer
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' {
+			return r
+		}
+		return -1
+	}, s)
+}
+
+// ── matchování týmů z DB ──────────────────────────────────────────────────────
+
+// scoreTeam vrátí shodu kandidáta s normalizovaným názvem týmu.
+// 3 = přesná shoda, 2 = prefix (zkratka), 1 = podřetězec, 0 = neshoda.
+func scoreTeam(candidate string, normKnown []string, origKnown []string) (string, int) {
+	c := normTeamName(candidate)
+	if c == "" {
+		return "", 0
+	}
+	best, bestScore := "", 0
+	for i, nk := range normKnown {
+		var sc int
+		switch {
+		case nk == c:
+			sc = 3
+		case strings.HasPrefix(nk, c):
+			sc = 2
+		case strings.Contains(nk, c):
+			sc = 1
+		}
+		if sc > bestScore {
+			bestScore = sc
+			best = origKnown[i]
+		}
+	}
+	return best, bestScore
+}
+
+// matchTeamsWithKnown zkusí rozpoznat oba týmy z textu pomocí DB.
+// Projde všechna možná rozdělení slov a vybere to s nejvyšším skóre.
+// Vrátí home, away, fromDB.
+func matchTeamsWithKnown(teamsPart string, knownTeams []string) (home, away string, fromDB bool) {
+	if len(knownTeams) == 0 {
+		h, a := splitMITeams(teamsPart)
+		return h, a, false
+	}
+
+	// Připrav normalizované verze
+	normKnown := make([]string, len(knownTeams))
+	for i, t := range knownTeams {
+		normKnown[i] = normTeamName(t)
+	}
+
+	// Pokud je pomlčka / tabulátor / 2+mezery → split bez hledání v DB
+	for _, sep := range []string{" - ", " – ", " — "} {
+		if idx := strings.Index(teamsPart, sep); idx >= 0 {
+			h := strings.TrimSpace(teamsPart[:idx])
+			a := strings.TrimSpace(teamsPart[idx+len(sep):])
+			// Pokus o zpřesnění názvů z DB
+			if hm, hs := scoreTeam(h, normKnown, knownTeams); hs >= 2 {
+				h = hm
+				fromDB = true
+			}
+			if am, as := scoreTeam(a, normKnown, knownTeams); as >= 2 {
+				a = am
+				fromDB = true
+			}
+			return h, a, fromDB
+		}
+	}
+	if idx := strings.IndexByte(teamsPart, '\t'); idx >= 0 {
+		return strings.TrimSpace(teamsPart[:idx]), strings.TrimSpace(teamsPart[idx+1:]), false
+	}
+	if loc := mi2PlusSpaces.FindStringIndex(teamsPart); loc != nil {
+		h := strings.TrimSpace(teamsPart[:loc[0]])
+		a := strings.TrimSpace(teamsPart[loc[1]:])
+		if hm, hs := scoreTeam(h, normKnown, knownTeams); hs >= 2 {
+			h = hm; fromDB = true
+		}
+		if am, as := scoreTeam(a, normKnown, knownTeams); as >= 2 {
+			a = am; fromDB = true
+		}
+		return h, a, fromDB
+	}
+
+	// Žádný explicitní oddělovač → projdi všechna rozdělení slov
+	words := strings.Fields(teamsPart)
+	if len(words) < 2 {
+		if len(words) == 1 {
+			return teamsPart, "", false
+		}
+		return "", "", false
+	}
+
+	bestScore := -1
+	var bestHome, bestAway string
+	bestFromDB := false
+
+	for split := 1; split < len(words); split++ {
+		hCand := strings.Join(words[:split], " ")
+		aCand := strings.Join(words[split:], " ")
+		hMatch, hSc := scoreTeam(hCand, normKnown, knownTeams)
+		aMatch, aSc := scoreTeam(aCand, normKnown, knownTeams)
+		total := hSc + aSc
+		if hSc > 0 && aSc > 0 && total > bestScore {
+			bestScore = total
+			bestHome = hMatch
+			bestAway = aMatch
+			bestFromDB = true
+		}
+	}
+
+	if bestFromDB {
+		return bestHome, bestAway, true
+	}
+
+	// Fallback: split na první mezeře
+	h, a := splitMITeams(teamsPart)
+	return h, a, false
+}
+
+// splitMITeams jednoduché rozdělení bez DB (pomlčka → tab → 2+mezery → 1. mezera).
 func splitMITeams(s string) (home, away string) {
 	for _, sep := range []string{" - ", " – ", " — "} {
 		if idx := strings.Index(s, sep); idx >= 0 {
@@ -73,25 +200,46 @@ func splitMITeams(s string) (home, away string) {
 	return s, ""
 }
 
-// parseMILine parsuje jeden řádek a vrátí importMatchParsed.
-func parseMILine(line string, currentYear int) importMatchParsed {
+// ── parsování jednoho řádku ───────────────────────────────────────────────────
+
+func parseMILine(line string, currentYear int, knownTeams []string) importMatchParsed {
 	orig := line
+	line = strings.TrimSpace(line)
 
-	// ── 1. Najdi čas na konci řádku ─────────────────────────────────────────
-	tmLoc := miTimeEndRe.FindStringSubmatchIndex(line)
-	if tmLoc == nil {
-		return importMatchParsed{RawLine: orig,
-			ParseError: "čas nenalezen — zadej čas na konci řádku ve formátu HH:MM"}
+	// ── 1. Najdi čas kdekoliv (přednost: HH:MM s dvojtečkou) ────────────────
+	var hour, min, timeStart, timeEnd int
+	found := false
+
+	// Projdi všechny HH:MM (colon) matchey, vyber poslední platný
+	for _, m := range miTimeColonRe.FindAllStringSubmatchIndex(line, -1) {
+		h, _ := strconv.Atoi(line[m[2]:m[3]])
+		mn, _ := strconv.Atoi(line[m[4]:m[5]])
+		if h <= 23 && mn <= 59 {
+			hour, min = h, mn
+			timeStart, timeEnd = m[0], m[1]
+			found = true
+		}
 	}
-	hour, _ := strconv.Atoi(line[tmLoc[2]:tmLoc[3]])
-	min, _ := strconv.Atoi(line[tmLoc[4]:tmLoc[5]])
-	if hour > 23 || min > 59 {
+	if !found {
+		// Fallback: HH.MM na konci řádku
+		if m := miTimeDotEndRe.FindStringSubmatchIndex(line); m != nil {
+			h, _ := strconv.Atoi(line[m[2]:m[3]])
+			mn, _ := strconv.Atoi(line[m[4]:m[5]])
+			if h <= 23 && mn <= 59 {
+				hour, min = h, mn
+				timeStart, timeEnd = m[0], m[1]
+				found = true
+			}
+		}
+	}
+	if !found {
 		return importMatchParsed{RawLine: orig,
-			ParseError: fmt.Sprintf("neplatný čas %02d:%02d", hour, min)}
+			ParseError: "čas nenalezen — přidej čas ve formátu HH:MM (např. 18:00)"}
 	}
 
-	// Odstraň čas z konce → zbytek obsahuje datum + týmy
-	rest := strings.TrimRight(line[:tmLoc[0]], " \t")
+	// Odstraň čas → zbytek = datum + týmy
+	rest := strings.TrimSpace(line[:timeStart] + " " + line[timeEnd:])
+	rest = strings.TrimSpace(rest)
 
 	// ── 2. Najdi datum kdekoliv v zbytku ────────────────────────────────────
 	dtIdx := miDateRe.FindStringSubmatchIndex(rest)
@@ -102,7 +250,7 @@ func parseMILine(line string, currentYear int) importMatchParsed {
 	day, _ := strconv.Atoi(rest[dtIdx[2]:dtIdx[3]])
 	month, _ := strconv.Atoi(rest[dtIdx[4]:dtIdx[5]])
 	year := currentYear
-	if dtIdx[6] >= 0 {
+	if dtIdx[6] >= 0 && dtIdx[7] >= 0 {
 		year, _ = strconv.Atoi(rest[dtIdx[6]:dtIdx[7]])
 		if year < 100 {
 			year += 2000
@@ -113,49 +261,69 @@ func parseMILine(line string, currentYear int) importMatchParsed {
 			ParseError: fmt.Sprintf("neplatné datum %02d.%02d.", day, month)}
 	}
 
-	// Odstraň datum → zbydou týmy (před datem nebo za ním)
+	// Odstraň datum → zbydou týmy
 	before := strings.TrimSpace(rest[:dtIdx[0]])
 	after := strings.TrimSpace(rest[dtIdx[1]:])
 	teamsPart := before
 	if teamsPart == "" {
 		teamsPart = after
 	} else if after != "" {
-		// datum uprostřed (neobvyklé) — spoj s 2+ mezerami jako oddělovač
 		teamsPart = before + "  " + after
 	}
+	teamsPart = strings.TrimSpace(teamsPart)
 	if teamsPart == "" {
 		return importMatchParsed{RawLine: orig, ParseError: "chybí názvy týmů"}
 	}
 
-	// ── 3. Rozděl týmy ───────────────────────────────────────────────────────
-	home, away := splitMITeams(teamsPart)
-	if home == "" || away == "" {
+	// ── 3. Rozpoznej týmy (DB nebo split) ────────────────────────────────────
+	homeTeam, awayTeam, fromDB := matchTeamsWithKnown(teamsPart, knownTeams)
+	if homeTeam == "" || awayTeam == "" {
 		return importMatchParsed{RawLine: orig,
-			ParseError: "nepodařilo se rozpoznat oba týmy — pro vícesvlovné názvy použij: Domácí - Hosté"}
+			ParseError: "nepodařilo se rozpoznat oba týmy — zkus formát: Domácí - Hosté"}
 	}
 
 	dateStr := fmt.Sprintf("%02d.%02d.%04d %02d:%02d", day, month, year, hour, min)
 	isoStr := fmt.Sprintf("%04d-%02d-%02dT%02d:%02d", year, month, day, hour, min)
 	return importMatchParsed{
-		HomeTeam: home, AwayTeam: away,
+		HomeTeam: homeTeam, AwayTeam: awayTeam,
 		DateStr: dateStr, ParsedDate: &isoStr,
-		RawLine: orig,
+		RawLine: orig, FromDB: fromDB,
 	}
 }
 
 // parseMatchImportText parsuje celý vložený text.
-func parseMatchImportText(text string) []importMatchParsed {
-	now := time.Now().In(pragueLocation)
-	currentYear := now.Year()
+func parseMatchImportText(text string, knownTeams []string) []importMatchParsed {
+	currentYear := time.Now().In(pragueLocation).Year()
 	var results []importMatchParsed
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		results = append(results, parseMILine(line, currentYear))
+		results = append(results, parseMILine(line, currentYear, knownTeams))
 	}
 	return results
+}
+
+// ── loadCompTeams: týmy soutěže pro daný round ────────────────────────────────
+
+func loadCompTeams(ctx context.Context, roundID int) []string {
+	rows, _ := db.Pool.Query(ctx,
+		`SELECT COALESCE(t.display_name, t.name)
+		   FROM teams t
+		   JOIN competition_teams ct ON ct.team_id = t.id
+		   JOIN rounds r ON r.competition_id = ct.competition_id
+		  WHERE r.id = $1
+		  ORDER BY t.name`, roundID)
+	var teams []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil {
+			teams = append(teams, name)
+		}
+	}
+	rows.Close()
+	return teams
 }
 
 // ── session helpers ───────────────────────────────────────────────────────────
@@ -269,9 +437,12 @@ func AdminMatchImportParse(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		parsed := parseMatchImportText(text)
+		// Načti týmy soutěže pro chytré rozpoznávání
+		knownTeams := loadCompTeams(ctx, roundID)
+
+		parsed := parseMatchImportText(text, knownTeams)
 		if len(parsed) == 0 {
-			showError("Nepodařilo se rozpoznat žádné zápasy. Zkontroluj formát (např.: Arsenal - Chelsea 15.5. 18:00).")
+			showError("Nepodařilo se rozpoznat žádné zápasy.")
 			return
 		}
 
@@ -305,7 +476,6 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
-	// Ověř kolo a zjisti sport soutěže
 	var compID int
 	sport := "football"
 	if err := db.Pool.QueryRow(ctx,
@@ -335,7 +505,6 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Přiřaď týmy ke soutěži
 		_, _ = db.Pool.Exec(ctx,
 			`INSERT INTO competition_teams (competition_id, team_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
 			compID, homeID)
@@ -343,13 +512,11 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 			`INSERT INTO competition_teams (competition_id, team_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
 			compID, awayID)
 
-		// Zkontroluj duplicitu
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
 			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
 			roundID, homeID, awayID).Scan(&existingID)
 		if existingID > 0 {
-			// Aktualizuj jen datum pokud je zadáno
 			if m.ParsedDate != nil && *m.ParsedDate != "" {
 				t, err := time.ParseInLocation("2006-01-02T15:04", *m.ParsedDate, pragueLocation)
 				if err == nil {
@@ -360,7 +527,6 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Vlož nový zápas (bez skóre)
 		var matchDate *time.Time
 		if m.ParsedDate != nil && *m.ParsedDate != "" {
 			t, err := time.ParseInLocation("2006-01-02T15:04", *m.ParsedDate, pragueLocation)

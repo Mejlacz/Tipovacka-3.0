@@ -41,7 +41,9 @@
                 <td style="padding:.4rem .6rem;font-weight:600">{{$m.HomeTeam}}</td>
                 <td style="padding:.4rem .6rem">{{$m.AwayTeam}}</td>
                 <td style="padding:.4rem .6rem;font-family:monospace;font-size:.83rem">{{$m.DateStr}}</td>
-                <td style="padding:.4rem .6rem;color:#10b981;font-size:.8rem">✓ OK</td>
+                <td style="padding:.4rem .6rem;font-size:.8rem">
+                    {{if $m.FromDB}}<span style="color:#10b981">✓ ze soutěže</span>{{else}}<span style="color:#f59e0b">✓ text</span>{{end}}
+                </td>
             </tr>
             {{end}}
         {{end}}
