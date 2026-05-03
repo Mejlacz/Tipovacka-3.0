@@ -264,6 +264,7 @@ func main() {
 	r.Get("/admin/api/competitions", handlers.AdminAPICompetitions)
 	r.Get("/admin/api/hockey-leagues", handlers.AdminAPIHockeyLeagues)
 	r.Get("/admin/api/hockey-seasons", handlers.AdminAPIHockeySeasons)
+	r.Get("/admin/api/apisports-leagues", handlers.AdminAPISportsLeagues)
 	r.Get("/admin/api/rounds", handlers.AdminAPIRounds)
 	r.Get("/admin/api/preview", handlers.AdminAPIPreview)
 	r.Post("/admin/api/import", handlers.AdminAPIImport)

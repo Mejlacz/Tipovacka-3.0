@@ -235,10 +235,18 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 	matchdayStr := strings.TrimSpace(r.URL.Query().Get("matchday"))
 	skipFinished := r.URL.Query().Get("skip_finished") == "1"
 
-	// ── Hockey: api-sports.io ─────────────────────────────────────────────────
+	// ── Hockey: api-sports.io nebo TheSportsDB ───────────────────────────────
 	if sport == "hockey" {
 		season := ashSeasonFromString(matchdayStr)
-		items, skipped, err := ashPreview(fdCode, season, skipFinished)
+		source := r.URL.Query().Get("source")
+		var items []previewMatchItem
+		var skipped int
+		var err error
+		if source == "apisports" {
+			items, skipped, err = asioPreview(fdCode, season, skipFinished)
+		} else {
+			items, skipped, err = ashPreview(fdCode, season, skipFinished)
+		}
 		if err != nil {
 			b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": err.Error()})
 			w.Write(b)
@@ -412,10 +420,28 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// ── Hockey: api-sports.io ─────────────────────────────────────────────────
+	// ── Hockey: api-sports.io nebo TheSportsDB ───────────────────────────────
 	if sport == "hockey" {
 		season := ashSeasonFromString(matchdayStr)
-		created, teamsNew, skipped, err := ashImport(ctx, compID, roundID, fdCode, season, skipFinished)
+		source := r.FormValue("source")
+		var created, teamsNew, skipped int
+		var err error
+		if source == "apisports" {
+			var pItems []previewMatchItem
+			pItems, _, err = asioPreview(fdCode, season, skipFinished)
+			if err == nil {
+				sItems := make([]selMatchItem, 0, len(pItems))
+				for _, pi := range pItems {
+					sItems = append(sItems, selMatchItem{
+						Home: pi.Home, Away: pi.Away, RawDate: pi.RawDate,
+						Status: pi.Status, ScoreH: pi.ScoreH, ScoreA: pi.ScoreA,
+					})
+				}
+				created, teamsNew, skipped, err = importFromSelectedMatches(ctx, sItems, compID, roundID, "hockey")
+			}
+		} else {
+			created, teamsNew, skipped, err = ashImport(ctx, compID, roundID, fdCode, season, skipFinished)
+		}
 		if err != nil {
 			middleware.SetFlash(w, r, "error", "Chyba API: "+err.Error())
 			http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
@@ -682,10 +708,17 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── Hockey: api-sports.io ─────────────────────────────────────────────────
+	// ── Hockey: api-sports.io nebo TheSportsDB ───────────────────────────────
 	if sport == "hockey" {
 		season := ashSeasonFromString(matchdayStr)
-		upd, noScr, notFnd, err := ashUpdateResults(ctx, roundID, compID, fdCode, season)
+		source := r.FormValue("source")
+		var upd, noScr, notFnd int
+		var err error
+		if source == "apisports" {
+			upd, noScr, notFnd, err = asioUpdateResults(ctx, roundID, compID, fdCode, season)
+		} else {
+			upd, noScr, notFnd, err = ashUpdateResults(ctx, roundID, compID, fdCode, season)
+		}
 		if err != nil {
 			jsonErr("Chyba API: " + err.Error())
 			return
