@@ -204,12 +204,13 @@ func AdminAPIHockeySeasons(w http.ResponseWriter, r *http.Request) {
 // ── previewMatchItem — sdílená struktura pro preview odpověď ─────────────────
 
 type previewMatchItem struct {
-	Home   string `json:"home"`
-	Away   string `json:"away"`
-	Date   string `json:"date"`
-	Status string `json:"status"`
-	ScoreH *int   `json:"score_h"`
-	ScoreA *int   `json:"score_a"`
+	Home    string `json:"home"`
+	Away    string `json:"away"`
+	Date    string `json:"date"`     // formátovaný pro zobrazení "02.01.2006 15:04"
+	RawDate string `json:"raw_date"` // ISO "2006-01-02T15:04:05" pro import
+	Status  string `json:"status"`
+	ScoreH  *int   `json:"score_h"`
+	ScoreA  *int   `json:"score_a"`
 }
 
 // ── ashLoadEvents — načte zápasy z TheSportsDB ────────────────────────────────
@@ -263,7 +264,8 @@ func ashPreview(leagueID, season string, skipFinished bool) ([]previewMatchItem,
 			Status: e.StrStatus,
 		}
 		if t := tsdbEventDate(e.DateEvent, e.StrTime); t != nil {
-			item.Date = t.Format("02.01.2006 15:04")
+			item.Date    = t.Format("02.01.2006 15:04")
+			item.RawDate = t.Format("2006-01-02T15:04:05")
 		}
 		if finished {
 			item.ScoreH = tsdbScoreInt(e.IntHomeScore)

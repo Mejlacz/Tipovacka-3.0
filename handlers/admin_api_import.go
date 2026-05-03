@@ -279,6 +279,7 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 		Home     string `json:"home"`
 		Away     string `json:"away"`
 		Date     string `json:"date"`
+		RawDate  string `json:"raw_date"`
 		Status   string `json:"status"`
 		Duration string `json:"duration"`
 		ScoreH   *int   `json:"score_h"`
@@ -300,10 +301,11 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 		}
 		if m.UtcDate != "" {
 			if t, err := time.Parse(time.RFC3339, m.UtcDate); err == nil {
-				pm.Date = t.In(pragueLocation).Format("02.01.2006 15:04")
+				tp := t.In(pragueLocation)
+				pm.Date    = tp.Format("02.01.2006 15:04")
+				pm.RawDate = tp.Format("2006-01-02T15:04:05")
 			}
 		}
-		// Vždy skóre po základní době — prodloužení/penalty se ignorují
 		pm.ScoreH = h
 		pm.ScoreA = a
 		preview = append(preview, pm)
@@ -389,6 +391,23 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 		if err := db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&ownerComp); err != nil || ownerComp != compID {
 			middleware.SetFlash(w, r, "error", "Kolo nepatří do vybrané soutěže.")
 			http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+			return
+		}
+	}
+
+	// ── Pokud frontend poslal vybrané zápasy jako JSON, importuj přímo z nich ──
+	if selectedJSON := strings.TrimSpace(r.FormValue("selected_matches")); selectedJSON != "" {
+		var items []selMatchItem
+		if jsonErr := json.Unmarshal([]byte(selectedJSON), &items); jsonErr == nil && len(items) > 0 {
+			created, teamsNew, skipped, importErr := importFromSelectedMatches(ctx, items, compID, roundID, sport)
+			if importErr != nil {
+				middleware.SetFlash(w, r, "error", "Chyba importu: "+importErr.Error())
+				http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
+				return
+			}
+			msg := fmt.Sprintf("Import dokončen: <b>%d</b> nových zápasů, <b>%d</b> nových týmů, %d přeskočeno.", created, teamsNew, skipped)
+			middleware.SetFlash(w, r, "ok", msg)
+			http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/rounds", compID), http.StatusSeeOther)
 			return
 		}
 	}
@@ -529,6 +548,89 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 		created, teamsNew, skipped)
 	middleware.SetFlash(w, r, "ok", msg)
 	http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/rounds", compID), http.StatusSeeOther)
+}
+
+// ── importFromSelectedMatches — import z JSON (předaný z frontend preview) ───
+
+type selMatchItem struct {
+	Home    string `json:"home"`
+	Away    string `json:"away"`
+	RawDate string `json:"raw_date"`
+	Status  string `json:"status"`
+	ScoreH  *int   `json:"score_h"`
+	ScoreA  *int   `json:"score_a"`
+}
+
+func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID, roundID int, sport string) (created, teamsNew, skipped int, err error) {
+	for _, m := range items {
+		if m.Home == "" || m.Away == "" {
+			skipped++
+			continue
+		}
+		isFinished := m.ScoreH != nil && m.ScoreA != nil
+
+		homeTeam := fdTeam{Name: m.Home, ShortName: m.Home}
+		awayTeam := fdTeam{Name: m.Away, ShortName: m.Away}
+
+		homeID, isNew := upsertTeam(ctx, homeTeam, sport)
+		if homeID == 0 {
+			skipped++
+			continue
+		}
+		if isNew {
+			teamsNew++
+		}
+		awayID, isNew := upsertTeam(ctx, awayTeam, sport)
+		if awayID == 0 {
+			skipped++
+			continue
+		}
+		if isNew {
+			teamsNew++
+		}
+
+		_, _ = db.Pool.Exec(ctx,
+			`INSERT INTO competition_teams (competition_id, team_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, compID, homeID)
+		_, _ = db.Pool.Exec(ctx,
+			`INSERT INTO competition_teams (competition_id, team_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, compID, awayID)
+
+		var matchDate *time.Time
+		if m.RawDate != "" {
+			if t, terr := time.ParseInLocation("2006-01-02T15:04:05", m.RawDate, pragueLocation); terr == nil {
+				matchDate = &t
+			} else if t, terr := time.Parse(time.RFC3339, m.RawDate); terr == nil {
+				tp := t.In(pragueLocation)
+				matchDate = &tp
+			}
+		}
+
+		// Zkontroluj duplicitu
+		var existingID int
+		_ = db.Pool.QueryRow(ctx,
+			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			roundID, homeID, awayID).Scan(&existingID)
+		if existingID > 0 {
+			skipped++
+			continue
+		}
+
+		var newMatchID int
+		if dbErr := db.Pool.QueryRow(ctx,
+			`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, home_score, away_score, is_finished)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+			roundID, homeID, awayID, matchDate, m.ScoreH, m.ScoreA, isFinished).Scan(&newMatchID); dbErr != nil {
+			skipped++
+			continue
+		}
+		if isFinished {
+			RecalculateTips(ctx, newMatchID, *m.ScoreH, *m.ScoreA)
+		}
+		created++
+	}
+	if created > 0 {
+		RecalculateStandings(compID)
+	}
+	return
 }
 
 // ── POST /admin/api/update-results ───────────────────────────────────────────

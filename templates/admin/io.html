@@ -306,6 +306,8 @@
                     </label>
                 </div>
 
+                <input type="hidden" name="selected_matches" id="api-selected-matches" value="" />
+
                 <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.35rem">
                     <button type="button" class="btn btn-sm btn-secondary" onclick="apiPreview()">🔍 Náhled</button>
                     <button type="button" id="api-action-btn" class="btn btn-sm btn-primary" onclick="apiDoAction()">📥 Načíst z football-data.org</button>
@@ -317,6 +319,9 @@
                 <table style="width:100%;border-collapse:collapse;font-size:.8rem">
                     <thead>
                         <tr style="background:var(--bg3)">
+                            <th style="padding:.3rem .5rem;text-align:center;width:2rem">
+                                <input type="checkbox" id="api-cb-all" checked title="Vybrat vše" onchange="toggleAllMatches(this.checked)" />
+                            </th>
                             <th style="padding:.3rem .5rem;text-align:left">Domácí</th>
                             <th style="padding:.3rem .5rem;text-align:left">Hosté</th>
                             <th style="padding:.3rem .5rem;text-align:left">Datum</th>
@@ -545,10 +550,26 @@ function updateActionBtn(){
 window.apiDoAction = function(){
     if(_mode === 'results'){
         apiUpdateResults();
-    } else {
-        var form = qs('#api-import-form');
-        if(form) form.submit();
+        return;
     }
+    var statusEl = qs('#api-preview-status');
+    // Pokud byl proveden náhled — použij jen vybrané zápasy
+    if(_previewMatches.length > 0){
+        var selected = getSelectedMatches();
+        if(selected.length === 0){
+            if(statusEl) statusEl.textContent = '⚠ Nevybral jsi žádný zápas.';
+            return;
+        }
+        var hidSel = qs('#api-selected-matches');
+        if(hidSel) hidSel.value = JSON.stringify(selected);
+        if(statusEl) statusEl.textContent = '⏳ Importuji ' + selected.length + ' zápasů…';
+    } else {
+        // Náhled nebyl proveden — varovat
+        if(statusEl) statusEl.textContent = '⚠ Nejdřív klikni na Náhled a vyber zápasy.';
+        return;
+    }
+    var form = qs('#api-import-form');
+    if(form) form.submit();
 };
 
 function loadRounds(compID){
@@ -793,13 +814,51 @@ function getMatchday(){
     return (qs('#api-matchday') || {}).value || '';
 }
 
+// ── Preview data storage ──────────────────────────────────────────────────────
+var _previewMatches = [];
+
+window.toggleAllMatches = function(checked){
+    document.querySelectorAll('.api-match-cb').forEach(function(cb){ cb.checked = checked; });
+};
+
+function getSelectedMatches(){
+    var selected = [];
+    document.querySelectorAll('.api-match-cb:checked').forEach(function(cb){
+        var idx = parseInt(cb.getAttribute('data-idx'), 10);
+        if(_previewMatches[idx]) selected.push(_previewMatches[idx]);
+    });
+    return selected;
+}
+
+function renderPreviewTable(matches){
+    var tbody = qs('#api-preview-tbody');
+    var cbAll = qs('#api-cb-all');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    matches.forEach(function(m, i){
+        var score = (m.score_h !== null && m.score_a !== null)
+            ? m.score_h + ' : ' + m.score_a : '—';
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td style="padding:.2rem .4rem;text-align:center">' +
+                '<input type="checkbox" class="api-match-cb" data-idx="' + i + '" checked />' +
+            '</td>' +
+            '<td style="padding:.25rem .5rem">' + esc(m.home) + '</td>' +
+            '<td style="padding:.25rem .5rem">' + esc(m.away) + '</td>' +
+            '<td style="padding:.25rem .5rem">' + esc(m.date) + '</td>' +
+            '<td style="padding:.25rem .5rem">' + esc(m.status) + '</td>' +
+            '<td style="padding:.25rem .5rem;text-align:center">' + esc(score) + '</td>';
+        tbody.appendChild(tr);
+    });
+    if(cbAll) cbAll.checked = true;
+}
+
 // ── apiPreview ────────────────────────────────────────────────────────────────
 window.apiPreview = function(){
     var fdCode   = getFdCode();
     var matchday = getMatchday();
     var statusEl = qs('#api-preview-status');
     var box      = qs('#api-preview-box');
-    var tbody    = qs('#api-preview-tbody');
 
     if(!fdCode){
         if(statusEl) statusEl.textContent = '⚠ Zadejte nebo vyberte ligu / soutěž.';
@@ -807,6 +866,10 @@ window.apiPreview = function(){
     }
     if(statusEl) statusEl.textContent = '⏳ Načítám…';
     if(box)      box.style.display = 'none';
+    _previewMatches = [];
+    // Reset hidden field
+    var hidSel = qs('#api-selected-matches');
+    if(hidSel) hidSel.value = '';
 
     var skipFinished = (qs('input[name="skip_finished"]') || {}).checked ? '1' : '0';
     var sport = _currentSport;
@@ -821,23 +884,10 @@ window.apiPreview = function(){
                 if(statusEl) statusEl.textContent = '❌ ' + (data.error || 'Chyba');
                 return;
             }
-            var matches = data.matches || [];
+            _previewMatches = data.matches || [];
             var skipMsg = (data.skipped > 0) ? ' (' + data.skipped + ' odehraných přeskočeno)' : '';
-            if(statusEl) statusEl.textContent = '✅ Nalezeno ' + matches.length + ' zápasů.' + skipMsg;
-            if(!tbody){ return; }
-            tbody.innerHTML = '';
-            matches.forEach(function(m){
-                var score = (m.score_h !== null && m.score_a !== null)
-                    ? m.score_h + ' : ' + m.score_a : '—';
-                var tr = document.createElement('tr');
-                tr.innerHTML =
-                    '<td style="padding:.25rem .5rem">' + esc(m.home) + '</td>' +
-                    '<td style="padding:.25rem .5rem">' + esc(m.away) + '</td>' +
-                    '<td style="padding:.25rem .5rem">' + esc(m.date) + '</td>' +
-                    '<td style="padding:.25rem .5rem">' + esc(m.status) + '</td>' +
-                    '<td style="padding:.25rem .5rem;text-align:center">' + esc(score) + '</td>';
-                tbody.appendChild(tr);
-            });
+            if(statusEl) statusEl.textContent = '✅ Nalezeno ' + _previewMatches.length + ' zápasů' + skipMsg + ' — zaškrtni které chceš importovat.';
+            renderPreviewTable(_previewMatches);
             if(box) box.style.display = '';
             // Varování o kvalitě dat pro hokej
             var warn = qs('#api-tsdb-warning');
