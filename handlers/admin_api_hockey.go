@@ -181,8 +181,8 @@ func AdminAPIHockeySeasons(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Zobraz jen posledních 5 let (aktuální ± 2) — historické sezóny jsou zbytečné.
-	minYear := now - 2
+	// Zobraz jen aktuální rok a dopředu — minulé sezóny jsou pro import irelevantní.
+	minYear := now
 	var recent []seasonItem
 	for _, it := range items {
 		yr, err := strconv.Atoi(strings.SplitN(it.Season, "/", 2)[0])
