@@ -750,12 +750,11 @@ func upsertTeam(ctx context.Context, ft fdTeam, sport string) (int, bool) {
 		displayName = ""
 	}
 
-	// Zkus najít existující tým (přesná shoda jména + sport)
+	// 1. Přesná shoda jména + sport
 	var id int
 	err := db.Pool.QueryRow(ctx,
 		`SELECT id FROM teams WHERE name=$1 AND sport=$2`, ft.Name, sport).Scan(&id)
 	if err == nil {
-		// Existuje — aktualizuj alias a display_name pokud jsou prázdné
 		_, _ = db.Pool.Exec(ctx,
 			`UPDATE teams SET
 			   alias       = COALESCE(NULLIF(alias,''), NULLIF($1,'')),
@@ -765,7 +764,21 @@ func upsertTeam(ctx context.Context, ft fdTeam, sport string) (int, bool) {
 		return id, false
 	}
 
-	// Neexistuje — vlož
+	// 2. Shoda přes alias (case-insensitive) — admin nastaví alias "Czech Republic" na tým "Česko"
+	err = db.Pool.QueryRow(ctx,
+		`SELECT id FROM teams WHERE LOWER(alias)=LOWER($1) AND sport=$2`, ft.Name, sport).Scan(&id)
+	if err == nil {
+		return id, false
+	}
+
+	// 3. Shoda přes display_name (case-insensitive)
+	err = db.Pool.QueryRow(ctx,
+		`SELECT id FROM teams WHERE LOWER(display_name)=LOWER($1) AND sport=$2`, ft.Name, sport).Scan(&id)
+	if err == nil {
+		return id, false
+	}
+
+	// Nenalezen — vytvoř nový tým
 	var newID int
 	insertErr := db.Pool.QueryRow(ctx,
 		`INSERT INTO teams (name, sport, display_name, alias)
