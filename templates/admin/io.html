@@ -241,12 +241,6 @@
                         <button type="button" id="api-load-comps-btn" onclick="loadFdCompetitions()" class="btn btn-sm btn-secondary" title="Načíst dostupné soutěže z API" style="white-space:nowrap">↺ Načíst</button>
                     </div>
                     <div id="api-league-hockey" style="display:none;flex-direction:column;gap:.35rem">
-                        {{if .HasHockeyAPIKey}}
-                        <div style="display:flex;gap:.35rem">
-                            <button type="button" id="api-hsrc-asio" class="btn btn-sm btn-primary" onclick="setHockeySource('apisports')">api-sports.io ⭐</button>
-                            <button type="button" id="api-hsrc-tsdb" class="btn btn-sm btn-secondary" onclick="setHockeySource('tsdb')">TheSportsDB</button>
-                        </div>
-                        {{end}}
                         <select id="api-hockey-league-sel" style="width:100%">
                             <option value="">— načítám ligy… —</option>
                         </select>
@@ -520,9 +514,7 @@ var compSel  = qs('#api-comp');
 var roundSel = qs('#api-round');
 var newRow   = qs('#api-new-round-row');
 
-// Hockey source: 'tsdb' = TheSportsDB, 'apisports' = api-sports.io
-var _hasHockeyAPIKey = {{if .HasHockeyAPIKey}}true{{else}}false{{end}};
-var _hockeySource    = _hasHockeyAPIKey ? 'apisports' : 'tsdb';
+var _hockeySource = 'tsdb';
 
 function syncNewRow(){
     if(!roundSel || !newRow) return;
@@ -553,9 +545,7 @@ function updateActionBtn(){
     if(_mode === 'results'){
         btn.textContent = '⚡ Doplnit výsledky';
     } else if(_currentSport === 'hockey'){
-        btn.textContent = _hockeySource === 'apisports'
-            ? '📥 Načíst z api-sports.io'
-            : '📥 Načíst z TheSportsDB';
+        btn.textContent = '📥 Načíst z TheSportsDB';
     } else {
         btn.textContent = '📥 Načíst z football-data.org';
     }
@@ -564,43 +554,8 @@ function updateActionBtn(){
 function updateAttribution(){
     var el = qs('#api-attribution-text');
     if(!el) return;
-    if(_currentSport === 'hockey' && _hockeySource === 'apisports'){
-        el.innerHTML = 'Data: <a href="https://api-sports.io" target="_blank" rel="noopener" style="color:inherit">api-sports.io</a> (hokej) / <a href="https://www.football-data.org" target="_blank" rel="noopener" style="color:inherit">football-data.org</a> (fotbal)';
-    } else {
-        el.innerHTML = 'Data: <a href="https://www.thesportsdb.com" target="_blank" rel="noopener" style="color:inherit">thesportsdb.com</a> (hokej) / <a href="https://www.football-data.org" target="_blank" rel="noopener" style="color:inherit">football-data.org</a> (fotbal)';
-    }
+    el.innerHTML = 'Data: <a href="https://www.thesportsdb.com" target="_blank" rel="noopener" style="color:inherit">thesportsdb.com</a> (hokej) / <a href="https://www.football-data.org" target="_blank" rel="noopener" style="color:inherit">football-data.org</a> (fotbal)';
 }
-
-// ── setHockeySource ────────────────────────────────────────────────────────────
-window.setHockeySource = function(src){
-    _hockeySource = src;
-    // Aktualizuj hidden source field
-    var srcVal = qs('#api-source-val');
-    if(srcVal) srcVal.value = src === 'apisports' ? 'apisports' : '';
-    // Tlačítka
-    var btnAsio = qs('#api-hsrc-asio');
-    var btnTsdb = qs('#api-hsrc-tsdb');
-    if(btnAsio) btnAsio.className = src === 'apisports' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
-    if(btnTsdb) btnTsdb.className = src === 'tsdb'      ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
-    // Resetuj výběry
-    var hkSel     = qs('#api-hockey-league-sel');
-    var seasonSel = qs('#api-hockey-season-sel');
-    var seasonVal = qs('#api-hockey-season-val');
-    var seasonText= qs('#api-hockey-season-text');
-    var badge     = qs('#api-season-count');
-    if(hkSel)     hkSel.innerHTML = '<option value="">— načítám ligy… —</option>';
-    if(seasonSel) seasonSel.innerHTML = '<option value="">— vyber sezónu —</option>';
-    if(seasonVal) seasonVal.value = '';
-    if(seasonText){ seasonText.textContent = ''; seasonText.style.display = 'none'; }
-    if(badge)     badge.style.display = 'none';
-    // Skryj preview
-    var box = qs('#api-preview-box');
-    if(box) box.style.display = 'none';
-    _previewMatches = [];
-    updateActionBtn();
-    updateAttribution();
-    loadHockeyLeagues();
-};
 
 window.apiDoAction = function(){
     if(_mode === 'results'){
@@ -757,10 +712,7 @@ function loadHockeyLeagues(){
     var statusEl = qs('#api-comps-status');
     var sel      = qs('#api-hockey-league-sel');
     if(statusEl) statusEl.textContent = '⏳ Načítám hokejové ligy…';
-    var url = _hockeySource === 'apisports'
-        ? '/admin/api/apisports-leagues'
-        : '/admin/api/hockey-leagues';
-    fetch(url)
+    fetch('/admin/api/hockey-leagues')
         .then(function(r){ return r.json(); })
         .then(function(data){
             if(!data.ok){
@@ -954,7 +906,6 @@ window.apiPreview = function(){
     var url = '/admin/api/preview?fd_code=' + encodeURIComponent(fdCode) + '&sport=' + encodeURIComponent(sport);
     if(matchday) url += '&matchday=' + encodeURIComponent(matchday);
     if(skipFinished === '1') url += '&skip_finished=1';
-    if(sport === 'hockey' && _hockeySource === 'apisports') url += '&source=apisports';
 
     fetch(url)
         .then(function(r){ return r.json(); })
@@ -970,7 +921,7 @@ window.apiPreview = function(){
             if(box) box.style.display = '';
             // Varování o kvalitě dat — jen pro TheSportsDB
             var warn = qs('#api-tsdb-warning');
-            if(warn) warn.style.display = (_currentSport === 'hockey' && _hockeySource !== 'apisports') ? '' : 'none';
+            if(warn) warn.style.display = _currentSport === 'hockey' ? '' : 'none';
             updateAttribution();
         })
         .catch(function(e){
@@ -1008,7 +959,6 @@ window.apiUpdateResults = function(){
     form.append('fd_code',        fdCode);
     form.append('matchday',       matchday);
     form.append('sport',          sport);
-    if(sport === 'hockey' && _hockeySource === 'apisports') form.append('source', 'apisports');
 
     fetch('/admin/api/update-results', { method:'POST', body: form })
         .then(function(r){ return r.json(); })

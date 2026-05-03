@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"tipovacka/config"
 	"tipovacka/db"
 	"tipovacka/middleware"
 	"tipovacka/models"
@@ -1096,7 +1095,7 @@ func AdminIO(tmpl *template.Template) http.HandlerFunc {
 			"User":               admin,
 			"Competitions":       competitions,
 			"ActiveCompetitions": activeCompetitions,
-			"HasHockeyAPIKey":    config.HockeySportsKey != "",
+
 		})
 	}
 }
