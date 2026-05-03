@@ -258,8 +258,8 @@ func ashPreview(leagueID, season string, skipFinished bool) ([]previewMatchItem,
 			continue
 		}
 		item := previewMatchItem{
-			Home:   e.StrHomeTeam,
-			Away:   e.StrAwayTeam,
+			Home:   cleanHockeyTeamName(e.StrHomeTeam),
+			Away:   cleanHockeyTeamName(e.StrAwayTeam),
 			Status: e.StrStatus,
 		}
 		if t := tsdbEventDate(e.DateEvent, e.StrTime); t != nil {
@@ -299,8 +299,8 @@ func ashImport(ctx context.Context, compID, roundID int, leagueID, season string
 		homeExtID, _ := strconv.Atoi(e.IDHomeTeam)
 		awayExtID, _ := strconv.Atoi(e.IDAwayTeam)
 
-		homeTeam := fdTeam{ID: homeExtID, Name: e.StrHomeTeam, ShortName: e.StrHomeTeam}
-		awayTeam := fdTeam{ID: awayExtID, Name: e.StrAwayTeam, ShortName: e.StrAwayTeam}
+		homeTeam := fdTeam{ID: homeExtID, Name: cleanHockeyTeamName(e.StrHomeTeam), ShortName: cleanHockeyTeamName(e.StrHomeTeam)}
+		awayTeam := fdTeam{ID: awayExtID, Name: cleanHockeyTeamName(e.StrAwayTeam), ShortName: cleanHockeyTeamName(e.StrAwayTeam)}
 
 		homeID, isNew := upsertTeam(ctx, homeTeam, "hockey")
 		if homeID == 0 {
@@ -427,9 +427,20 @@ func ashUpdateResults(ctx context.Context, roundID, compID int, leagueID, season
 	return updated, noScore, notFound, nil
 }
 
+// cleanHockeyTeamName odstraní suffix " Ice Hockey" který TheSportsDB přidává.
+// "Czech Republic Ice Hockey" → "Czech Republic"
+func cleanHockeyTeamName(s string) string {
+	for _, suf := range []string{" Ice Hockey", " ice hockey", " Ice hockey"} {
+		if strings.HasSuffix(s, suf) {
+			return strings.TrimSpace(s[:len(s)-len(suf)])
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
 // normTeamNameASH normalizuje název týmu pro porovnání.
 func normTeamNameASH(s string) string {
-	return strings.ToLower(strings.TrimSpace(s))
+	return strings.ToLower(strings.TrimSpace(cleanHockeyTeamName(s)))
 }
 
 // ashSeasonFromString vrátí sezónu z řetězce nebo aktuální rok.

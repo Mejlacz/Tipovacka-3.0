@@ -247,7 +247,7 @@
                 </div>
 
                 {{/* Sezóna / kolo */}}
-                <div class="api-form-group" style="margin-bottom:.5rem">
+                <div class="api-form-group" style="margin-bottom:.5rem" id="api-season-group">
                     <label class="api-label">
                         <span id="api-season-label-text">Kolo v API</span>
                         <span id="api-season-count" class="api-season-badge" style="display:none"></span>
@@ -256,9 +256,11 @@
                         <input type="text" name="matchday" id="api-matchday" placeholder="—" style="width:100%" maxlength="12" />
                     </div>
                     <div id="api-matchday-row-hockey" style="display:none">
+                        {{/* Dropdown schovaný pokud je jen 1 sezóna */}}
                         <select id="api-hockey-season-sel" style="width:100%">
                             <option value="">— vyber sezónu —</option>
                         </select>
+                        <div id="api-hockey-season-text" style="display:none;font-size:.88rem;padding:.3rem .5rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px"></div>
                         <input type="hidden" name="matchday" id="api-hockey-season-val" value="" />
                     </div>
                 </div>
@@ -326,6 +328,9 @@
                 </table>
             </div>
 
+            <div id="api-tsdb-warning" style="display:none;font-size:.75rem;color:#f59e0b;margin-top:.45rem;line-height:1.4">
+                ⚠ TheSportsDB (free tier) může mít nesprávné nebo chybějící termíny zápasů — zkontroluj data před importem.
+            </div>
             <div class="api-attribution">
                 Data: <a href="https://www.thesportsdb.com" target="_blank" rel="noopener" style="color:inherit">thesportsdb.com</a> (hokej) /
                 <a href="https://www.football-data.org" target="_blank" rel="noopener" style="color:inherit">football-data.org</a> (fotbal)
@@ -734,13 +739,22 @@ if(hockeyLeagueSel){
                 if(statusEl) statusEl.textContent = '';
                 // Season count badge
                 if(badge && seasons.length > 0){
-                    badge.textContent = '✓ ' + seasons.length + ' sezón';
+                    badge.textContent = '✓ ' + seasons.length + (seasons.length === 1 ? ' sezóna' : ' sezóny');
                     badge.style.display = '';
                 }
                 // Předvyber první (nejnovější) sezónu
                 if(seasons.length > 0){
                     seasonSel.value = seasons[0].season;
                     if(seasonVal) seasonVal.value = seasons[0].season;
+                }
+                // Pokud jen 1 sezóna — skryj dropdown, zobraz text
+                var seasonText = qs('#api-hockey-season-text');
+                if(seasons.length === 1){
+                    seasonSel.style.display = 'none';
+                    if(seasonText){ seasonText.textContent = seasons[0].season; seasonText.style.display = ''; }
+                } else {
+                    seasonSel.style.display = '';
+                    if(seasonText) seasonText.style.display = 'none';
                 }
             })
             .catch(function(e){
@@ -825,6 +839,9 @@ window.apiPreview = function(){
                 tbody.appendChild(tr);
             });
             if(box) box.style.display = '';
+            // Varování o kvalitě dat pro hokej
+            var warn = qs('#api-tsdb-warning');
+            if(warn) warn.style.display = _currentSport === 'hockey' ? '' : 'none';
         })
         .catch(function(e){
             if(statusEl) statusEl.textContent = '❌ Síťová chyba: ' + e.message;
