@@ -29,7 +29,7 @@
 
 {{if .Matches}}
 
-<div id="bulk-bar" style="display:none;margin-bottom:.6rem;display:flex;gap:.5rem;align-items:center">
+<div id="bulk-bar" style="display:none;margin-bottom:.6rem;gap:.5rem;align-items:center;flex-wrap:wrap">
     <span id="bulk-count" style="font-size:.85rem;color:var(--muted-d)"></span>
     <button class="btn btn-sm btn-danger" onclick="bulkDelete()">🗑 Smazat vybrané</button>
     <button class="btn btn-sm btn-secondary" onclick="clearSelection()">Zrušit výběr</button>
@@ -120,7 +120,18 @@
 {{end}}
 
 <script>
-var _csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+var _csrf = (document.querySelector('meta[name="csrf-token"]') || document.createElement('meta')).getAttribute('content') || '';
+
+// Pomocná funkce — DELETE zápasu přes AJAX (CSRF token v headeru)
+function matchDeleteFetch(id) {
+    return fetch('/admin/matches/' + id + '/delete', {
+        method: 'POST',
+        headers: {'X-CSRF-Token': _csrf}
+    }).then(function(r) {
+        if (r.status === 403) throw new Error('CSRF nebo přístup odmítnut (403) — obnovte stránku');
+        return r.json();
+    });
+}
 
 function toggleMatchEdit(id) {
     var row = document.getElementById('match-edit-' + id);
@@ -130,12 +141,7 @@ function toggleMatchEdit(id) {
 function deleteMatch(id, btn) {
     if(!confirm('Smazat zápas?')) return;
     btn.disabled = true;
-    fetch('/admin/matches/' + id + '/delete', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: '_csrf=' + encodeURIComponent(_csrf)
-    })
-    .then(function(r){ return r.json(); })
+    matchDeleteFetch(id)
     .then(function(data){
         if(data.ok){
             var row = document.getElementById('match-row-' + id);
@@ -150,7 +156,7 @@ function deleteMatch(id, btn) {
     })
     .catch(function(e){
         btn.disabled = false;
-        alert('Síťová chyba: ' + e.message);
+        alert('Chyba: ' + e.message);
     });
 }
 
@@ -183,27 +189,40 @@ function bulkDelete() {
     var cbs = document.querySelectorAll('.match-cb:checked');
     if(cbs.length === 0) return;
     if(!confirm('Smazat ' + cbs.length + ' zápasů?')) return;
+
     var ids = [];
     cbs.forEach(function(cb){ ids.push(parseInt(cb.getAttribute('data-id'))); });
-    var done = 0;
-    ids.forEach(function(id){
-        fetch('/admin/matches/' + id + '/delete', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: '_csrf=' + encodeURIComponent(_csrf)
-        })
-        .then(function(r){ return r.json(); })
+
+    var cnt = document.getElementById('bulk-count');
+    var deleted = 0, failed = 0, total = ids.length;
+
+    // Sekvenční mazání — jeden po druhém aby se předešlo race conditions
+    function next(i) {
+        if(i >= total) {
+            updateBulkBar();
+            if(failed > 0) alert('Smazáno ' + deleted + ' zápasů. ' + failed + ' se nepodařilo smazat.');
+            return;
+        }
+        if(cnt) cnt.textContent = (i + 1) + '/' + total + '…';
+        matchDeleteFetch(ids[i])
         .then(function(data){
             if(data.ok){
-                var row = document.getElementById('match-row-' + id);
-                var editRow = document.getElementById('match-edit-' + id);
+                var row = document.getElementById('match-row-' + ids[i]);
+                var editRow = document.getElementById('match-edit-' + ids[i]);
                 if(row) row.remove();
                 if(editRow) editRow.remove();
+                deleted++;
+            } else {
+                failed++;
             }
-            done++;
-            if(done === ids.length) updateBulkBar();
+            next(i + 1);
         })
-        .catch(function(){ done++; if(done === ids.length) updateBulkBar(); });
-    });
+        .catch(function(e){
+            failed++;
+            alert('Chyba při mazání zápasu ' + ids[i] + ': ' + e.message);
+            next(i + 1);
+        });
+    }
+    next(0);
 }
 </script>
