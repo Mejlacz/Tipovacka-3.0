@@ -1,5 +1,5 @@
 // handlers/admin_api_sports.go — Tipovačka 2.0
-// Hokejový import z api-sports.io (https://v3.api-sports.io).
+// Hokejový import z api-sports.io (https://v1.hockey.api-sports.io).
 // Používá se pro IIHF Mistrovství světa a Zimní olympijské hry.
 //
 // Config: API_SPORTS_HOCKEY_KEY (= config.HockeySportsKey)
@@ -65,13 +65,13 @@ type asioScoreDetail struct {
 // ── Hardcoded ligy ──────────────────────────────────────────────────────────
 
 // asioHardcodedLeagues obsahuje IIHF MS a Olympiádu na api-sports.io.
-// Platná ID ověř na: https://v3.api-sports.io/hockey/leagues
+// Platná ID ověř na: https://v1.hockey.api-sports.io/leagues
 var asioHardcodedLeagues = []struct {
 	ID   string
 	Name string
 }{
-	{"72", "Mistrovství světa v hokeji (IIHF)"},
-	{"60", "Zimní olympijské hry — lední hokej"},
+	{"111", "Mistrovství světa v hokeji (IIHF)"},
+	{"131", "Zimní olympijské hry — lední hokej"},
 }
 
 // ── asioCall — HTTP volání api-sports.io ──────────────────────────────────────
@@ -80,7 +80,7 @@ func asioCall(path string, dst interface{}) error {
 	if config.HockeySportsKey == "" {
 		return fmt.Errorf("API_SPORTS_HOCKEY_KEY není nastaven")
 	}
-	url := "https://v3.api-sports.io/" + strings.TrimPrefix(path, "/")
+	url := "https://v1.hockey.api-sports.io/" + strings.TrimPrefix(path, "/")
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
@@ -120,6 +120,29 @@ func AdminAPISportsLeagues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ?live=1 → zavolej api-sports.io a vrať raw odpověď (debug)
+	// ?live=1&path=games?league=111&season=2026  → libovolný endpoint
+	// ?live=1&search=world                        → /leagues?search=world
+	if r.URL.Query().Get("live") == "1" {
+		path := r.URL.Query().Get("path")
+		if path == "" {
+			search := r.URL.Query().Get("search")
+			path = "leagues"
+			if search != "" {
+				path += "?search=" + search
+			}
+		}
+		var raw interface{}
+		if err := asioCall(path, &raw); err != nil {
+			b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": err.Error()})
+			w.Write(b)
+			return
+		}
+		b, _ := json.Marshal(raw)
+		w.Write(b)
+		return
+	}
+
 	type leagueItem struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
@@ -135,7 +158,7 @@ func AdminAPISportsLeagues(w http.ResponseWriter, r *http.Request) {
 // ── asioPreview — vrátí náhled zápasů pro frontend ───────────────────────────
 
 func asioPreview(leagueID, season string, skipFinished bool) ([]previewMatchItem, int, error) {
-	path := fmt.Sprintf("hockey/games?league=%s&season=%s", leagueID, season)
+	path := fmt.Sprintf("games?league=%s&season=%s", leagueID, season)
 	var resp asioResponse
 	if err := asioCall(path, &resp); err != nil {
 		return nil, 0, err
@@ -176,7 +199,7 @@ func asioPreview(leagueID, season string, skipFinished bool) ([]previewMatchItem
 // ── asioUpdateResults — doplní výsledky z api-sports.io ──────────────────────
 
 func asioUpdateResults(ctx context.Context, roundID, compID int, leagueID, season string) (updated, noScore, notFound int, err error) {
-	path := fmt.Sprintf("hockey/games?league=%s&season=%s", leagueID, season)
+	path := fmt.Sprintf("games?league=%s&season=%s", leagueID, season)
 	var resp asioResponse
 	if ferr := asioCall(path, &resp); ferr != nil {
 		return 0, 0, 0, ferr
