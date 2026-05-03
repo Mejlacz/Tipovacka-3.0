@@ -230,70 +230,63 @@
             <form id="api-import-form" method="post" action="/admin/api/import">
                 <input type="hidden" name="sport" id="api-sport-val" value="football" />
 
-                <div class="api-form-grid">
-                    {{/* Left col: Liga + Sezóna */}}
-                    <div style="display:flex;flex-direction:column;gap:.5rem">
+                {{/* Liga / turnaj */}}
+                <div class="api-form-group" style="margin-bottom:.5rem">
+                    <label class="api-label">Liga / turnaj</label>
+                    <div id="api-league-football" style="display:flex;gap:.3rem;align-items:center">
+                        <select name="fd_code" id="api-fd-code-sel" style="flex:1;display:none"></select>
+                        <input type="text" name="fd_code" id="api-fd-code" placeholder="CL, PL, BL1…" style="flex:1;text-transform:uppercase" maxlength="10" />
+                        <button type="button" id="api-load-comps-btn" onclick="loadFdCompetitions()" class="btn btn-sm btn-secondary" title="Načíst dostupné soutěže z API" style="white-space:nowrap">↺ Načíst</button>
+                    </div>
+                    <div id="api-league-hockey" style="display:none">
+                        <select name="fd_code" id="api-hockey-league-sel" style="width:100%">
+                            <option value="">— načítám ligy… —</option>
+                        </select>
+                    </div>
+                    <div id="api-comps-status" class="api-hint"></div>
+                </div>
 
-                        <div class="api-form-group">
-                            <label class="api-label">Liga / turnaj</label>
-                            <div id="api-league-football" style="display:flex;gap:.3rem;align-items:center">
-                                <select name="fd_code" id="api-fd-code-sel" style="flex:1;display:none"></select>
-                                <input type="text" name="fd_code" id="api-fd-code" placeholder="CL, PL, BL1…" style="flex:1;text-transform:uppercase" maxlength="10" />
-                                <button type="button" id="api-load-comps-btn" onclick="loadFdCompetitions()" class="btn btn-sm btn-secondary" title="Načíst dostupné soutěže z API" style="white-space:nowrap">↺ Načíst</button>
-                            </div>
-                            <div id="api-league-hockey" style="display:none">
-                                <select name="fd_code" id="api-hockey-league-sel" style="width:100%">
-                                    <option value="">— načítám ligy… —</option>
-                                </select>
-                            </div>
-                            <div id="api-comps-status" class="api-hint"></div>
-                        </div>
+                {{/* Sezóna / kolo */}}
+                <div class="api-form-group" style="margin-bottom:.5rem">
+                    <label class="api-label">
+                        <span id="api-season-label-text">Kolo v API</span>
+                        <span id="api-season-count" class="api-season-badge" style="display:none"></span>
+                    </label>
+                    <div id="api-matchday-row-football">
+                        <input type="text" name="matchday" id="api-matchday" placeholder="—" style="width:100%" maxlength="12" />
+                    </div>
+                    <div id="api-matchday-row-hockey" style="display:none">
+                        <select id="api-hockey-season-sel" style="width:100%">
+                            <option value="">— vyber sezónu —</option>
+                        </select>
+                        <input type="hidden" name="matchday" id="api-hockey-season-val" value="" />
+                    </div>
+                </div>
 
-                        <div class="api-form-group">
-                            <label class="api-label">
-                                <span id="api-season-label-text">Kolo v API</span>
-                                <span id="api-season-count" class="api-season-badge" style="display:none"></span>
-                            </label>
-                            <div id="api-matchday-row-football">
-                                <input type="text" name="matchday" id="api-matchday" placeholder="—" style="width:100%" maxlength="12" />
-                            </div>
-                            <div id="api-matchday-row-hockey" style="display:none">
-                                <select id="api-hockey-season-sel" style="width:100%">
-                                    <option value="">— vyber sezónu —</option>
-                                </select>
-                                <input type="hidden" name="matchday" id="api-hockey-season-val" value="" />
-                            </div>
-                        </div>
+                {{/* Naše soutěž */}}
+                <div class="api-form-group" style="margin-bottom:.5rem">
+                    <label class="api-label">Naše soutěž (kam přiřadit)</label>
+                    <select name="competition_id" id="api-comp" required style="width:100%">
+                        <option value="">— vyber soutěž —</option>
+                        {{range .ActiveCompetitions}}
+                        <option value="{{.ID}}">{{.Name}}{{if .Season}} — {{.Season}}{{end}}</option>
+                        {{end}}
+                    </select>
+                </div>
 
-                    </div>{{/* /left col */}}
+                {{/* Kolo */}}
+                <div class="api-form-group" style="margin-bottom:.5rem">
+                    <label class="api-label">Kolo</label>
+                    <select name="round_id" id="api-round" style="width:100%">
+                        <option value="0">➕ Vytvořit nové kolo</option>
+                    </select>
+                </div>
 
-                    {{/* Right col: Soutěž + Kolo */}}
-                    <div style="display:flex;flex-direction:column;gap:.5rem">
-
-                        <div class="api-form-group">
-                            <label class="api-label">Naše soutěž</label>
-                            <select name="competition_id" id="api-comp" required style="width:100%">
-                                <option value="">— vyber soutěž —</option>
-                                {{range .ActiveCompetitions}}
-                                <option value="{{.ID}}">{{.Name}}{{if .Season}} — {{.Season}}{{end}}</option>
-                                {{end}}
-                            </select>
-                        </div>
-
-                        <div class="api-form-group">
-                            <label class="api-label">Kolo</label>
-                            <select name="round_id" id="api-round" style="width:100%">
-                                <option value="0">➕ Vytvořit nové kolo</option>
-                            </select>
-                        </div>
-
-                        <div id="api-new-round-row" class="api-form-group" style="display:none">
-                            <label class="api-label">Název nového kola</label>
-                            <input type="text" name="new_round_name" id="api-round-name" placeholder="např. Skupina A - kolo 3" style="width:100%" />
-                        </div>
-
-                    </div>{{/* /right col */}}
-                </div>{{/* /api-form-grid */}}
+                {{/* Název nového kola */}}
+                <div id="api-new-round-row" class="api-form-group" style="display:none;margin-bottom:.5rem">
+                    <label class="api-label">Název nového kola</label>
+                    <input type="text" name="new_round_name" id="api-round-name" placeholder="např. Skupina A - kolo 3" style="width:100%" />
+                </div>
 
                 {{/* Režim + přeskočit */}}
                 <div class="api-mode-row">

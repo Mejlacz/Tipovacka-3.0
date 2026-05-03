@@ -181,6 +181,19 @@ func AdminAPIHockeySeasons(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Zobraz jen posledních 5 let (aktuální ± 2) — historické sezóny jsou zbytečné.
+	minYear := now - 2
+	var recent []seasonItem
+	for _, it := range items {
+		yr, err := strconv.Atoi(strings.SplitN(it.Season, "/", 2)[0])
+		if err == nil && yr >= minYear && yr <= now+1 {
+			recent = append(recent, it)
+		}
+	}
+	if len(recent) > 0 {
+		items = recent
+	}
+
 	if items == nil {
 		items = []seasonItem{}
 	}
