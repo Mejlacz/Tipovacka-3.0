@@ -14,6 +14,7 @@
 
 <form method="post" action="/admin/rounds/{{.Round.ID}}/matches/new"
       style="display:flex;gap:.5rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
     <select name="home_team_id" required style="flex:1;min-width:140px">
         <option value="">Domácí</option>
         {{range .Teams}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
@@ -27,9 +28,19 @@
 </form>
 
 {{if .Matches}}
+
+<div id="bulk-bar" style="display:none;margin-bottom:.6rem;display:flex;gap:.5rem;align-items:center">
+    <span id="bulk-count" style="font-size:.85rem;color:var(--muted-d)"></span>
+    <button class="btn btn-sm btn-danger" onclick="bulkDelete()">🗑 Smazat vybrané</button>
+    <button class="btn btn-sm btn-secondary" onclick="clearSelection()">Zrušit výběr</button>
+</div>
+
 <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
     <thead>
         <tr style="background:var(--bg2)">
+            <th style="padding:.4rem .5rem;width:2rem;text-align:center">
+                <input type="checkbox" id="cb-all" title="Vybrat vše (jen neodehrané)" onchange="toggleAllCb(this.checked)" />
+            </th>
             <th style="text-align:left;padding:.4rem .5rem">Zápas</th>
             <th style="text-align:left;padding:.4rem .5rem">Datum</th>
             <th style="text-align:left;padding:.4rem .5rem">Výsledek</th>
@@ -39,6 +50,11 @@
     <tbody>
     {{range .Matches}}
     <tr id="match-row-{{.ID}}">
+        <td style="padding:.4rem .5rem;text-align:center">
+            {{if not .IsFinished}}
+            <input type="checkbox" class="match-cb" data-id="{{.ID}}" onchange="updateBulkBar()" />
+            {{end}}
+        </td>
         <td style="padding:.4rem .5rem;font-weight:600">
             {{if .HomeTeam}}{{coalesce .HomeTeam.DisplayName .HomeTeam.Name}}{{else}}tým {{.HomeTeamID}}{{end}}
             vs
@@ -52,10 +68,12 @@
                 <span style="margin-right:.3rem">{{intVal .HomeScore}}:{{intVal .AwayScore}} ✅</span>
                 <form style="display:inline" method="post" action="/admin/matches/{{.ID}}/clear-result"
                       onsubmit="return confirm('Smazat skóre {{intVal .HomeScore}}:{{intVal .AwayScore}}?')">
+                    <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
                     <button type="submit" class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem">🗑 skóre</button>
                 </form>
             {{else}}
                 <form style="display:inline-flex;align-items:center;gap:.3rem" method="post" action="/admin/matches/{{.ID}}/set-result">
+                    <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
                     <input type="number" name="home_score" min="0" max="99" placeholder="D" required style="width:3rem" />
                     <span>:</span>
                     <input type="number" name="away_score" min="0" max="99" placeholder="H" required style="width:3rem" />
@@ -66,17 +84,19 @@
         <td style="padding:.4rem .5rem;white-space:nowrap">
             <button type="button" class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.1rem .35rem"
                     onclick="toggleMatchEdit({{.ID}})">✏️</button>
-            <form style="display:inline" method="post" action="/admin/matches/{{.ID}}/delete"
-                  onsubmit="return confirm('Smazat zápas?')">
-                <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem">✕</button>
-            </form>
+            {{if not .IsFinished}}
+            <button type="button" class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem"
+                    onclick="deleteMatch({{.ID}}, this)">✕</button>
+            {{end}}
         </td>
     </tr>
     {{$homeID := .HomeTeamID}}{{$awayID := .AwayTeamID}}
     <tr id="match-edit-{{.ID}}" style="display:none;background:var(--bg3)">
+        <td></td>
         <td colspan="4" style="padding:.5rem">
             <form method="post" action="/admin/matches/{{.ID}}/edit"
                   style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
                 <select name="home_team_id" style="flex:1;min-width:120px">
                     {{range $.Teams}}<option value="{{.ID}}" {{if eq .ID $homeID}}selected{{end}}>{{.Name}}</option>{{end}}
                 </select>
@@ -100,8 +120,90 @@
 {{end}}
 
 <script>
+var _csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
 function toggleMatchEdit(id) {
     var row = document.getElementById('match-edit-' + id);
     row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+function deleteMatch(id, btn) {
+    if(!confirm('Smazat zápas?')) return;
+    btn.disabled = true;
+    fetch('/admin/matches/' + id + '/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: '_csrf=' + encodeURIComponent(_csrf)
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if(data.ok){
+            var row = document.getElementById('match-row-' + id);
+            var editRow = document.getElementById('match-edit-' + id);
+            if(row) row.remove();
+            if(editRow) editRow.remove();
+            updateBulkBar();
+        } else {
+            btn.disabled = false;
+            alert('Chyba: ' + (data.error || 'neznámá'));
+        }
+    })
+    .catch(function(e){
+        btn.disabled = false;
+        alert('Síťová chyba: ' + e.message);
+    });
+}
+
+function updateBulkBar() {
+    var cbs = document.querySelectorAll('.match-cb:checked');
+    var bar = document.getElementById('bulk-bar');
+    var cnt = document.getElementById('bulk-count');
+    if(!bar) return;
+    if(cbs.length > 0){
+        bar.style.display = 'flex';
+        if(cnt) cnt.textContent = cbs.length + ' vybráno';
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+function toggleAllCb(checked) {
+    document.querySelectorAll('.match-cb').forEach(function(cb){ cb.checked = checked; });
+    updateBulkBar();
+}
+
+function clearSelection() {
+    document.querySelectorAll('.match-cb').forEach(function(cb){ cb.checked = false; });
+    var cbAll = document.getElementById('cb-all');
+    if(cbAll) cbAll.checked = false;
+    updateBulkBar();
+}
+
+function bulkDelete() {
+    var cbs = document.querySelectorAll('.match-cb:checked');
+    if(cbs.length === 0) return;
+    if(!confirm('Smazat ' + cbs.length + ' zápasů?')) return;
+    var ids = [];
+    cbs.forEach(function(cb){ ids.push(parseInt(cb.getAttribute('data-id'))); });
+    var done = 0;
+    ids.forEach(function(id){
+        fetch('/admin/matches/' + id + '/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: '_csrf=' + encodeURIComponent(_csrf)
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(data.ok){
+                var row = document.getElementById('match-row-' + id);
+                var editRow = document.getElementById('match-edit-' + id);
+                if(row) row.remove();
+                if(editRow) editRow.remove();
+            }
+            done++;
+            if(done === ids.length) updateBulkBar();
+        })
+        .catch(function(){ done++; if(done === ids.length) updateBulkBar(); });
+    });
 }
 </script>
