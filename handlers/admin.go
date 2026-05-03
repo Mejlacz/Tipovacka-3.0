@@ -276,6 +276,13 @@ func AdminCompetitionDelete(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/admin/competitions", http.StatusSeeOther)
 			return
 		}
+		// Smaž v pořadí podle FK závislostí
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM extra_answers WHERE question_id IN (SELECT id FROM extra_questions WHERE competition_id=$1)`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM extra_questions WHERE competition_id=$1`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM tips WHERE match_id IN (SELECT m.id FROM matches m JOIN rounds r ON r.id=m.round_id WHERE r.competition_id=$1)`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM matches WHERE round_id IN (SELECT id FROM rounds WHERE competition_id=$1)`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM rounds WHERE competition_id=$1`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM notification_settings WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET competition_id=NULL WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM competitions WHERE id=$1`, compID)

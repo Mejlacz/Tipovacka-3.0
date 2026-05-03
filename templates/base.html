@@ -93,7 +93,7 @@
 <main class="container">
     {{if .Flash}}
     <div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}} toast-flash" style="margin-bottom:1rem">
-        {{index .Flash "msg"}}
+        {{index .Flash "msg" | safeHTML}}
         <button class="toast-close" onclick="this.parentElement.remove()" aria-label="Zavřít">✕</button>
     </div>
     {{end}}
