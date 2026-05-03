@@ -173,7 +173,7 @@ func AdminAPIHockeySeasons(w http.ResponseWriter, r *http.Request) {
 	// Přidej aktuální rok a rok příští, pokud v API chybí (TheSportsDB free tier
 	// nezahrnuje nejnovější sezóny dokud nejsou zpětně doplněny).
 	now := time.Now().Year()
-	for _, yr := range []int{now + 1, now, now - 1} {
+	for _, yr := range []int{now, now - 1} {
 		s := strconv.Itoa(yr)
 		if !seen[s] {
 			seen[s] = true
@@ -186,7 +186,7 @@ func AdminAPIHockeySeasons(w http.ResponseWriter, r *http.Request) {
 	var recent []seasonItem
 	for _, it := range items {
 		yr, err := strconv.Atoi(strings.SplitN(it.Season, "/", 2)[0])
-		if err == nil && yr >= minYear && yr <= now+1 {
+		if err == nil && yr >= minYear && yr <= now {
 			recent = append(recent, it)
 		}
 	}
