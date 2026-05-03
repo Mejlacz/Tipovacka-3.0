@@ -1000,7 +1000,9 @@ window.apiUpdateResults = function(){
     }
     if(statusEl) statusEl.textContent = '⏳ Doplňuji výsledky…';
 
+    var csrfToken = (qs('input[name="_csrf"]') || {}).value || '';
     var form = new FormData();
+    form.append('_csrf',          csrfToken);
     form.append('competition_id', compID);
     form.append('round_id',       roundID);
     form.append('fd_code',        fdCode);
