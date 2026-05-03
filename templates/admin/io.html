@@ -228,6 +228,7 @@
             </div>
 
             <form id="api-import-form" method="post" action="/admin/api/import">
+                <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
                 <input type="hidden" name="sport" id="api-sport-val" value="football" />
 
                 {{/* Liga / turnaj */}}
