@@ -35,6 +35,7 @@ var userCols struct {
 	LastName      bool
 	NotifyAccess  bool
 	BackgroundURL bool
+	UISettings    bool
 }
 
 // InitUserSchema zjistí dostupné sloupce tabulky users jednou při startu.
@@ -65,10 +66,11 @@ func InitUserSchema() {
 		case "last_name":      userCols.LastName = true
 		case "notify_access":  userCols.NotifyAccess = true
 		case "background_url": userCols.BackgroundURL = true
+		case "ui_settings":    userCols.UISettings = true
 		}
 	}
-	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v is_hidden=%v is_approved=%v is_inactive=%v lang=%v created_at=%v first_name=%v last_name=%v notify_access=%v background_url=%v",
-		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.IsApproved, userCols.IsInactive, userCols.Lang, userCols.CreatedAt, userCols.FirstName, userCols.LastName, userCols.NotifyAccess, userCols.BackgroundURL)
+	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v is_hidden=%v is_approved=%v is_inactive=%v lang=%v created_at=%v first_name=%v last_name=%v notify_access=%v background_url=%v ui_settings=%v",
+		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.IsApproved, userCols.IsInactive, userCols.Lang, userCols.CreatedAt, userCols.FirstName, userCols.LastName, userCols.NotifyAccess, userCols.BackgroundURL, userCols.UISettings)
 }
 
 // buildUserSelect vrátí SELECT sloupců + jejich scan cíle pro daného uživatele.
@@ -115,6 +117,9 @@ func buildUserSelect() (cols string, scanInto func(u *models.User) []interface{}
 	}
 	if userCols.BackgroundURL {
 		names = append(names, "background_url")
+	}
+	if userCols.UISettings {
+		names = append(names, "ui_settings")
 	}
 
 	cols = strings.Join(names, ", ")
@@ -203,11 +208,16 @@ func scanUser(u *models.User, row interface {
 	if userCols.BackgroundURL {
 		ptrs = append(ptrs, &backgroundURL)
 	}
+	var uiSettings *string
+	if userCols.UISettings {
+		ptrs = append(ptrs, &uiSettings)
+	}
 
 	if err := row.Scan(ptrs...); err != nil {
 		return err
 	}
 
+	u.UISettings = uiSettings
 	u.Email = email
 	u.IsAdmin = isAdmin || (config.AdminUsername != "" && u.Username == config.AdminUsername)
 	u.IsOwner = isOwner || (config.AdminUsername != "" && u.Username == config.AdminUsername)
@@ -353,7 +363,11 @@ func RenderTemplate(w http.ResponseWriter, r *http.Request, tmpl *template.Templ
 	}
 	data["CSRFToken"] = middleware.GetCSRFToken(w, r)
 	data["Lang"] = middleware.GetLang(r)
-	data["User"] = GetCurrentUser(r)
+	u := GetCurrentUser(r)
+	data["User"] = u
+	if u != nil {
+		data["UserUICSS"] = BuildUICSS(u.UISettings)
+	}
 
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {

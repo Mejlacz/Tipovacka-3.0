@@ -23,6 +23,12 @@
 
     --shadow:    0 2px 4px rgba(0,0,0,0.15), 0 6px 18px rgba(0,0,0,0.12);
     --shadow-lg: 0 4px 8px rgba(0,0,0,0.2), 0 12px 32px rgba(0,0,0,0.18);
+
+    /* ── Uživatelsky přizpůsobitelné barvy tipů ── */
+    --ui-exact-bg:  #14532d;   /* 3 body — přesný tip */
+    --ui-winner-bg: #3d2200;   /* 1 bod  — správný vítěz */
+    --ui-miss-bg:   #1e2a38;   /* 0 bodů — špatný tip */
+    --ui-row-hl:    transparent; /* zvýraznění vlastního řádku */
 }
 
 /* ── Reset & Base ── */
@@ -707,9 +713,9 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
 
 /* Tip colors ve highlight zachovat (o trochu světlejší) */
 .leaderboard-matrix tbody tr.highlight td.cell-tip { background: transparent; }
-.leaderboard-matrix tbody tr.highlight td.tip-exact  { background: #166534; color: #bbf7d0; font-weight: 700; }
-.leaderboard-matrix tbody tr.highlight td.tip-winner { background: #4a2a00; color: #ca8a04; font-weight: 600; }
-.leaderboard-matrix tbody tr.highlight td.tip-miss   { background: #263547; color: #64748b; }
+.leaderboard-matrix tbody tr.highlight td.tip-exact  { background: color-mix(in srgb, var(--ui-exact-bg,  #166534) 80%, #fff 20%); color: #bbf7d0; font-weight: 700; }
+.leaderboard-matrix tbody tr.highlight td.tip-winner { background: color-mix(in srgb, var(--ui-winner-bg, #4a2a00) 80%, #fff 20%); color: #ca8a04; font-weight: 600; }
+.leaderboard-matrix tbody tr.highlight td.tip-miss   { background: color-mix(in srgb, var(--ui-miss-bg,   #263547) 80%, #fff 20%); color: #64748b; }
 .leaderboard-matrix tbody tr.highlight td.tip-no-tip { background: #151f2b; color: #334155; }
 
 /* Hover */
@@ -753,9 +759,9 @@ h3 { font-size: 1rem; font-weight: 700; color: var(--text-d); }
 .cell-tip { font-size: 0.82rem; }
 .tip-hidden { color: #334155; font-size: 1rem; }
 /* Výrazné plné barvy — vyšší specificita, aby přebily .leaderboard-matrix tbody td */
-.leaderboard-matrix tbody td.tip-exact  { background: #14532d; color: #86efac; font-weight: 700; }   /* 🟢 přesné skóre */
-.leaderboard-matrix tbody td.tip-winner { background: #3d2200; color: #a16207; font-weight: 600; }   /* 🟡 správný vítěz — tlumená zlatohnědá */
-.leaderboard-matrix tbody td.tip-miss   { background: #1e2a38; color: #64748b; }                      /* ⬜ špatný tip — šedivý */
+.leaderboard-matrix tbody td.tip-exact  { background: var(--ui-exact-bg,  #14532d); color: #86efac; font-weight: 700; }
+.leaderboard-matrix tbody td.tip-winner { background: var(--ui-winner-bg, #3d2200); color: #a16207; font-weight: 600; }
+.leaderboard-matrix tbody td.tip-miss   { background: var(--ui-miss-bg,   #1e2a38); color: #64748b; }
 .leaderboard-matrix tbody td.tip-no-tip { background: #111a24; color: #334155; }                      /* ░ netipoval — tmavší šedá */
 
 /* ── Inline editace ── */

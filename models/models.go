@@ -29,6 +29,7 @@ type User struct {
 	IsApproved    bool
 	IsBlocked     bool
 	BackgroundURL *string
+	UISettings    *string // JSON: {"exact_bg":"#...","winner_bg":"#...",...}
 	Lang          string
 	CreatedAt     time.Time
 }

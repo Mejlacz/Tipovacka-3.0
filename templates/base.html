@@ -18,6 +18,7 @@
     {{if .User}}{{with .User.BackgroundURL}}<style>
         body { background-image: url('{{.}}'); background-size: cover; background-attachment: fixed; background-position: center; }
     </style>{{end}}{{end}}
+    {{if .UserUICSS}}<style>{{.UserUICSS}}</style>{{end}}
 </head>
 <body>
 

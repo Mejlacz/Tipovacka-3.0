@@ -40,6 +40,7 @@ func migrateSchema() {
 		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS notify_sent BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS can_see_deadline BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS fd_code VARCHAR(10) NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_settings TEXT`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
@@ -156,6 +157,9 @@ func main() {
 	r.Post("/profile/push-unsubscribe", handlers.ProfilePushUnsubscribe)
 	r.Post("/profile/push-test", handlers.ProfilePushTest)
 	r.Post("/profile/push-delete/{sub_id}", handlers.ProfilePushDelete)
+	r.Get("/profile/appearance", handlers.ProfileAppearance(tmpl))
+	r.Post("/profile/appearance", handlers.ProfileAppearanceSave)
+	r.Post("/profile/appearance/reset", handlers.ProfileAppearanceReset)
 	r.Post("/profile/avatar", handlers.ProfileAvatarUpload)
 	r.Post("/profile/avatar/delete", handlers.ProfileAvatarDelete)
 
