@@ -338,12 +338,28 @@
             <div id="api-tsdb-warning" style="display:none;font-size:.75rem;color:#f59e0b;margin-top:.45rem;line-height:1.4">
                 ⚠ TheSportsDB (free tier) může mít nesprávné nebo chybějící termíny zápasů — zkontroluj data před importem.
             </div>
+            <input type="hidden" name="team_mappings" id="api-team-mappings" value="" />
             <div class="api-attribution" id="api-attribution-text">
                 Data: <a href="https://www.thesportsdb.com" target="_blank" rel="noopener" style="color:inherit">thesportsdb.com</a> (hokej) /
                 <a href="https://www.football-data.org" target="_blank" rel="noopener" style="color:inherit">football-data.org</a> (fotbal)
             </div>
         </div>
 
+    </div>
+
+    {{/* ── Team resolve modal ── */}}
+    <div id="team-resolve-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;overflow-y:auto;padding:2rem 1rem">
+        <div style="max-width:640px;margin:0 auto;background:var(--bg2);border:1px solid var(--border-d);border-radius:12px;padding:1.5rem">
+            <h2 style="margin:0 0 .35rem;font-size:1.05rem">⚠️ Neznámé týmy — přiřazení před importem</h2>
+            <p style="margin:0 0 1.1rem;font-size:.83rem;color:var(--muted-d)">
+                Tyto týmy nebyly nalezeny v databázi. Přiřaď každý k existujícímu týmu, nebo potvrď vytvoření nového.
+            </p>
+            <div id="team-resolve-list" style="display:flex;flex-direction:column;gap:1rem"></div>
+            <div style="display:flex;gap:.6rem;margin-top:1.25rem;justify-content:flex-end">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="teamResolveCancel()">Zrušit</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="teamResolveConfirm()">✅ Potvrdit a importovat</button>
+            </div>
+        </div>
     </div>
 
     <div class="io-section" style="margin-top:1.75rem">👥 Týmy a uživatelé</div>
@@ -563,23 +579,213 @@ window.apiDoAction = function(){
         return;
     }
     var statusEl = qs('#api-preview-status');
-    // Pokud byl proveden náhled — použij jen vybrané zápasy
-    if(_previewMatches.length > 0){
-        var selected = getSelectedMatches();
-        if(selected.length === 0){
-            if(statusEl) statusEl.textContent = '⚠ Nevybral jsi žádný zápas.';
-            return;
-        }
-        var hidSel = qs('#api-selected-matches');
-        if(hidSel) hidSel.value = JSON.stringify(selected);
-        if(statusEl) statusEl.textContent = '⏳ Importuji ' + selected.length + ' zápasů…';
-    } else {
-        // Náhled nebyl proveden — varovat
+    if(_previewMatches.length === 0){
         if(statusEl) statusEl.textContent = '⚠ Nejdřív klikni na Náhled a vyber zápasy.';
         return;
     }
+    var selected = getSelectedMatches();
+    if(selected.length === 0){
+        if(statusEl) statusEl.textContent = '⚠ Nevybral jsi žádný zápas.';
+        return;
+    }
+
+    // Ulož vybrané zápasy do hidden pole
+    var hidSel = qs('#api-selected-matches');
+    if(hidSel) hidSel.value = JSON.stringify(selected);
+
+    // Sbírám unikátní jména týmů
+    var teamNames = [];
+    var seen = {};
+    selected.forEach(function(m){
+        if(m.home && !seen[m.home]){ seen[m.home]=1; teamNames.push(m.home); }
+        if(m.away && !seen[m.away]){ seen[m.away]=1; teamNames.push(m.away); }
+    });
+
+    // Zkontroluj neznámé týmy před importem
+    if(statusEl) statusEl.textContent = '⏳ Kontroluji týmy…';
+    var sport = _currentSport;
+    fetch('/admin/api/team-resolve?sport=' + encodeURIComponent(sport) +
+          '&names=' + encodeURIComponent(teamNames.join(',')))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(!data.ok){
+                if(statusEl) statusEl.textContent = '⚠ Chyba kontroly týmů, importuji přímo…';
+                submitImportForm(selected.length, statusEl);
+                return;
+            }
+            var unknowns = data.unknowns || [];
+            if(unknowns.length === 0){
+                // Všechny týmy v DB — rovnou importovat
+                submitImportForm(selected.length, statusEl);
+            } else {
+                // Zobrazit modal pro přiřazení
+                if(statusEl) statusEl.textContent = '⚠ ' + unknowns.length + ' neznámých týmů — vyřeš přiřazení.';
+                openTeamResolveModal(unknowns, data.all_teams || [], selected, statusEl);
+            }
+        })
+        .catch(function(){
+            // Při síťové chybě importovat bez kontroly
+            submitImportForm(selected.length, statusEl);
+        });
+};
+
+function submitImportForm(count, statusEl){
+    if(statusEl) statusEl.textContent = '⏳ Importuji ' + count + ' zápasů…';
     var form = qs('#api-import-form');
     if(form) form.submit();
+}
+
+// ── Team resolve modal ────────────────────────────────────────────────────────
+
+var _resolveAllTeams = [];   // [{id, name, display_name}]
+var _resolveSelected = [];   // vybrané zápasy (uložíme pro pozdější submit)
+var _resolveStatusEl = null;
+
+function openTeamResolveModal(unknowns, allTeams, selected, statusEl){
+    _resolveAllTeams  = allTeams;
+    _resolveSelected  = selected;
+    _resolveStatusEl  = statusEl;
+
+    var list = qs('#team-resolve-list');
+    if(!list) return;
+    list.innerHTML = '';
+
+    unknowns.forEach(function(u){
+        var card = document.createElement('div');
+        card.style.cssText = 'background:var(--bg3);border:1px solid var(--border-d);border-radius:8px;padding:.9rem';
+        card.dataset.teamName = u.name;
+
+        // Nadpis
+        var h = document.createElement('div');
+        h.style.cssText = 'font-weight:700;font-size:.9rem;margin-bottom:.6rem';
+        h.textContent = '❓ ' + u.name;
+        card.appendChild(h);
+
+        // Radio: přiřadit k existujícímu
+        var r1id = 'tr-map-' + btoa(u.name).replace(/=/g,'');
+        var r2id = 'tr-new-' + btoa(u.name).replace(/=/g,'');
+
+        card.innerHTML += '<label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;cursor:pointer;margin-bottom:.5rem">' +
+            '<input type="radio" name="tr-action-' + esc(u.name) + '" value="map" id="' + r1id + '" checked />' +
+            'Přiřadit k existujícímu týmu</label>';
+
+        // Searchable select
+        var filterWrap = document.createElement('div');
+        filterWrap.style.cssText = 'margin:.3rem 0 .6rem 1.2rem;display:flex;flex-direction:column;gap:.3rem';
+        filterWrap.id = 'tr-map-wrap-' + r1id;
+
+        var filterInp = document.createElement('input');
+        filterInp.type = 'text';
+        filterInp.placeholder = 'Hledat tým…';
+        filterInp.style.cssText = 'padding:.3rem .55rem;font-size:.82rem;background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;color:inherit';
+        filterWrap.appendChild(filterInp);
+
+        var sel = document.createElement('select');
+        sel.size = 6;
+        sel.style.cssText = 'width:100%;background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;color:inherit;font-size:.82rem;padding:.2rem';
+        sel.id = 'tr-sel-' + r1id;
+        buildTeamOptions(sel, allTeams, '');
+        filterWrap.appendChild(sel);
+        card.appendChild(filterWrap);
+
+        filterInp.addEventListener('input', function(){
+            buildTeamOptions(sel, allTeams, filterInp.value);
+        });
+
+        // Radio: vytvořit nový
+        card.innerHTML += '<label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;cursor:pointer;margin-bottom:.4rem">' +
+            '<input type="radio" name="tr-action-' + esc(u.name) + '" value="create" id="' + r2id + '" />' +
+            'Vytvořit nový tým</label>';
+
+        // Display name pro nový tým
+        var newWrap = document.createElement('div');
+        newWrap.style.cssText = 'margin:.2rem 0 0 1.2rem;display:none';
+        newWrap.id = 'tr-new-wrap-' + r2id;
+        newWrap.innerHTML = '<input type="text" placeholder="Zobrazovaný název (volitelné, např. Česko)" ' +
+            'style="width:100%;padding:.3rem .55rem;font-size:.82rem;background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;color:inherit" ' +
+            'id="tr-dn-' + r2id + '" />' +
+            '<div style="font-size:.72rem;color:var(--muted-d);margin-top:.2rem">Interní název bude: ' + esc(u.name) + '</div>';
+        card.appendChild(newWrap);
+
+        // Toggle map/create UI
+        card.querySelectorAll('input[type=radio]').forEach(function(rb){
+            rb.addEventListener('change', function(){
+                var mapWrap = card.querySelector('#tr-map-wrap-' + r1id);
+                var nwWrap  = card.querySelector('#tr-new-wrap-' + r2id);
+                if(!mapWrap || !nwWrap) return;
+                var val = card.querySelector('input[name="tr-action-' + esc(u.name) + '"]:checked');
+                var isMap = val && val.value === 'map';
+                mapWrap.style.display = isMap ? 'flex' : 'none';
+                mapWrap.style.flexDirection = 'column';
+                nwWrap.style.display  = isMap ? 'none' : 'block';
+            });
+        });
+
+        list.appendChild(card);
+    });
+
+    qs('#team-resolve-overlay').style.display = '';
+}
+
+function buildTeamOptions(sel, teams, filter){
+    var f = (filter || '').toLowerCase();
+    sel.innerHTML = '';
+    teams.forEach(function(t){
+        var label = t.display_name ? t.display_name + ' (' + t.name + ')' : t.name;
+        if(f && label.toLowerCase().indexOf(f) < 0) return;
+        var opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = label;
+        sel.appendChild(opt);
+    });
+    if(sel.options.length > 0) sel.options[0].selected = true;
+}
+
+window.teamResolveCancel = function(){
+    qs('#team-resolve-overlay').style.display = 'none';
+    if(_resolveStatusEl) _resolveStatusEl.textContent = '⚠ Import zrušen.';
+};
+
+window.teamResolveConfirm = function(){
+    var overlay = qs('#team-resolve-overlay');
+    var cards   = overlay.querySelectorAll('[data-team-name]');
+    var mappings = {};
+    var valid = true;
+
+    cards.forEach(function(card){
+        var teamName = card.dataset.teamName;
+        var radios   = card.querySelectorAll('input[type=radio]');
+        var chosen   = null;
+        radios.forEach(function(r){ if(r.checked) chosen = r.value; });
+
+        if(chosen === 'map'){
+            var r1id  = 'tr-map-' + btoa(teamName).replace(/=/g,'');
+            var selEl = card.querySelector('#tr-sel-' + r1id);
+            var tid   = selEl ? parseInt(selEl.value, 10) : 0;
+            if(!tid || isNaN(tid)){
+                alert('Vyber existující tým pro: ' + teamName);
+                valid = false;
+                return;
+            }
+            mappings[teamName] = { action: 'map', team_id: tid };
+        } else {
+            // create
+            var r2id = 'tr-new-' + btoa(teamName).replace(/=/g,'');
+            var dnEl = card.querySelector('#tr-dn-' + r2id);
+            var dn   = dnEl ? dnEl.value.trim() : '';
+            mappings[teamName] = { action: 'create', display_name: dn };
+        }
+    });
+
+    if(!valid) return;
+
+    overlay.style.display = 'none';
+
+    // Nastav team_mappings a odešli form
+    var tmEl = qs('#api-team-mappings');
+    if(tmEl) tmEl.value = JSON.stringify(mappings);
+
+    submitImportForm(_resolveSelected.length, _resolveStatusEl);
 };
 
 function loadRounds(compID){
@@ -664,7 +870,7 @@ window.setApiSport = function(sport) {
     if(sport === 'hockey'){
         var hkSelEl = qs('#api-hockey-league-sel');
         if(hkSelEl && hkSelEl.options.length <= 1 && (hkSelEl.options[0]||{}).value === ''){
-            setHockeySource(_hockeySource);
+            loadHockeyLeagues();
         }
     }
     updateAttribution();

@@ -399,7 +399,12 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 	if selectedJSON := strings.TrimSpace(r.FormValue("selected_matches")); selectedJSON != "" {
 		var items []selMatchItem
 		if jsonErr := json.Unmarshal([]byte(selectedJSON), &items); jsonErr == nil && len(items) > 0 {
-			created, teamsNew, skipped, importErr := importFromSelectedMatches(ctx, items, compID, roundID, sport)
+			// Parsuj přiřazení týmů pokud admin prošel resolve dialog
+			var teamMappings map[string]teamResolution
+			if tm := strings.TrimSpace(r.FormValue("team_mappings")); tm != "" {
+				_ = json.Unmarshal([]byte(tm), &teamMappings)
+			}
+			created, teamsNew, skipped, importErr := importFromSelectedMatches(ctx, items, compID, roundID, sport, teamMappings)
 			if importErr != nil {
 				middleware.SetFlash(w, r, "error", "Chyba importu: "+importErr.Error())
 				http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
@@ -550,6 +555,35 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/rounds", compID), http.StatusSeeOther)
 }
 
+// ── teamResolution — instrukce pro přiřazení/vytvoření týmu ─────────────────
+// Posílá frontend jako JSON v poli "team_mappings".
+type teamResolution struct {
+	// action = "map"    → použij TeamID (existující tým)
+	// action = "create" → vytvoř nový tým, volitelně s DisplayName
+	// Pokud je TeamID > 0 a Action = "", interpretujeme jako "map"
+	Action      string `json:"action"`
+	TeamID      int    `json:"team_id"`
+	DisplayName string `json:"display_name"`
+}
+
+// resolveOrUpsertTeam — použije teamMappings pokud existují, jinak standardní upsertTeam.
+func resolveOrUpsertTeam(ctx context.Context, name, sport string, mappings map[string]teamResolution) (id int, isNew bool) {
+	if mappings != nil {
+		if res, ok := mappings[name]; ok {
+			if res.Action == "map" || (res.Action == "" && res.TeamID > 0) {
+				// Přiřazení k existujícímu týmu
+				return res.TeamID, false
+			}
+			if res.Action == "create" {
+				// Explicitní vytvoření — upsert s display_name
+				ft := fdTeam{Name: name, ShortName: res.DisplayName}
+				return upsertTeam(ctx, ft, sport)
+			}
+		}
+	}
+	return upsertTeam(ctx, fdTeam{Name: name, ShortName: name}, sport)
+}
+
 // ── importFromSelectedMatches — import z JSON (předaný z frontend preview) ───
 
 type selMatchItem struct {
@@ -561,7 +595,7 @@ type selMatchItem struct {
 	ScoreA  *int   `json:"score_a"`
 }
 
-func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID, roundID int, sport string) (created, teamsNew, skipped int, err error) {
+func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID, roundID int, sport string, mappings map[string]teamResolution) (created, teamsNew, skipped int, err error) {
 	for _, m := range items {
 		if m.Home == "" || m.Away == "" {
 			skipped++
@@ -569,10 +603,7 @@ func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID
 		}
 		isFinished := m.ScoreH != nil && m.ScoreA != nil
 
-		homeTeam := fdTeam{Name: m.Home, ShortName: m.Home}
-		awayTeam := fdTeam{Name: m.Away, ShortName: m.Away}
-
-		homeID, isNew := upsertTeam(ctx, homeTeam, sport)
+		homeID, isNew := resolveOrUpsertTeam(ctx, m.Home, sport, mappings)
 		if homeID == 0 {
 			skipped++
 			continue
@@ -580,7 +611,7 @@ func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID
 		if isNew {
 			teamsNew++
 		}
-		awayID, isNew := upsertTeam(ctx, awayTeam, sport)
+		awayID, isNew := resolveOrUpsertTeam(ctx, m.Away, sport, mappings)
 		if awayID == 0 {
 			skipped++
 			continue
