@@ -243,6 +243,8 @@ func main() {
 	r.Post("/admin/teams/{team_id}/merge", handlers.AdminTeamMerge)
 	r.Post("/admin/teams/import-csv", handlers.AdminTeamsImportCSV)
 	r.Post("/admin/teams/import-xlsx", handlers.AdminTeamsImportXLSX)
+	r.Get("/admin/teams/orphans", handlers.AdminTeamOrphans(tmpl))
+	r.Post("/admin/teams/orphans/bulk", handlers.AdminTeamOrphansBulk)
 	r.Get("/admin/competitions/{competition_id}/teams", handlers.AdminCompetitionTeamsForm(tmpl))
 	r.Post("/admin/competitions/{competition_id}/teams", handlers.AdminCompetitionTeamsSave)
 	r.Get("/admin/roster", handlers.AdminRosterMatrix(tmpl))

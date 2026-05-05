@@ -5,6 +5,7 @@ package handlers
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -195,6 +196,176 @@ func AdminTeamMerge(w http.ResponseWriter, r *http.Request) {
 	LogAction(&admin.ID, admin.Username, "team_merge", "team", &sourceID, desc, nil, nil)
 
 	flash("ok", desc)
+}
+
+// ── GET /admin/teams/orphans ──────────────────────────────────────────────────
+// Zobrazí týmy, které nejsou přiřazeny k žádné soutěži.
+
+type OrphanTeam struct {
+	ID          int
+	Name        string
+	Sport       string
+	DisplayName string
+	Alias       string
+	MatchCount  int // počet zápasů kde tým hraje
+}
+
+func AdminTeamOrphans(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin := RequireAdmin(w, r)
+		if admin == nil {
+			return
+		}
+		ctx := context.Background()
+
+		rows, err := db.Pool.Query(ctx, `
+			SELECT t.id, t.name, t.sport,
+			       COALESCE(t.display_name,''), COALESCE(t.alias,''),
+			       (SELECT COUNT(*) FROM matches m WHERE m.home_team_id=t.id OR m.away_team_id=t.id)
+			FROM teams t
+			WHERE NOT EXISTS (
+			    SELECT 1 FROM competition_teams ct WHERE ct.team_id = t.id
+			)
+			ORDER BY t.sport, LOWER(COALESCE(t.display_name, t.name))`)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		defer rows.Close()
+
+		var orphans []OrphanTeam
+		for rows.Next() {
+			var o OrphanTeam
+			if err := rows.Scan(&o.ID, &o.Name, &o.Sport, &o.DisplayName, &o.Alias, &o.MatchCount); err == nil {
+				orphans = append(orphans, o)
+			}
+		}
+
+		// Načti všechny ostatní týmy (cíle pro merge), seskupené po sportu
+		type teamOpt struct {
+			ID          int    `json:"id"`
+			Name        string `json:"name"`
+			DisplayName string `json:"display_name"`
+			Sport       string `json:"sport"`
+		}
+		optRows, _ := db.Pool.Query(ctx, `
+			SELECT t.id, t.name, COALESCE(t.display_name,''), t.sport
+			FROM teams t
+			WHERE EXISTS (SELECT 1 FROM competition_teams ct WHERE ct.team_id = t.id)
+			ORDER BY t.sport, LOWER(COALESCE(NULLIF(t.display_name,''), t.name))`)
+		var allTeams []teamOpt
+		if optRows != nil {
+			for optRows.Next() {
+				var t teamOpt
+				if err := optRows.Scan(&t.ID, &t.Name, &t.DisplayName, &t.Sport); err == nil {
+					allTeams = append(allTeams, t)
+				}
+			}
+			optRows.Close()
+		}
+		allTeamsJSON, _ := json.Marshal(allTeams)
+
+		RenderTemplate(w, r, tmpl, "admin/team_orphans.html", TemplateData{
+			"User":         admin,
+			"Orphans":      orphans,
+			"AllTeamsJSON": string(allTeamsJSON),
+			"Flash":        middleware.GetFlash(w, r),
+		})
+	}
+}
+
+// ── POST /admin/teams/orphans/bulk ────────────────────────────────────────────
+// Hromadné zpracování orphan týmů.
+// Tělo: JSON pole [{id:X, action:"merge", target_id:Y} | {id:X, action:"delete"}]
+
+func AdminTeamOrphansBulk(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		w.Write([]byte(`{"ok":false,"error":"bad form"}`))
+		return
+	}
+
+	type action struct {
+		ID       int    `json:"id"`
+		Action   string `json:"action"`    // "merge" | "delete" | "skip"
+		TargetID int    `json:"target_id"` // pro merge
+	}
+	var actions []action
+	if raw := strings.TrimSpace(r.FormValue("actions")); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &actions); err != nil {
+			b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": "bad JSON: " + err.Error()})
+			w.Write(b)
+			return
+		}
+	}
+
+	ctx := context.Background()
+	merged, deleted, skipped := 0, 0, 0
+	var errs []string
+
+	for _, a := range actions {
+		if a.Action == "skip" || a.ID == 0 {
+			skipped++
+			continue
+		}
+
+		// Ověř že tým je stále orphan (nemá competition_teams)
+		var sourceID = a.ID
+		var sourceName string
+		if err := db.Pool.QueryRow(ctx, `SELECT name FROM teams WHERE id=$1`, sourceID).Scan(&sourceName); err != nil {
+			errs = append(errs, fmt.Sprintf("Tým ID %d nenalezen", sourceID))
+			continue
+		}
+
+		if a.Action == "delete" {
+			// Smažeme jen pokud nemá žádné zápasy
+			var mc int
+			_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM matches WHERE home_team_id=$1 OR away_team_id=$1`, sourceID).Scan(&mc)
+			if mc > 0 {
+				errs = append(errs, fmt.Sprintf("Tym '%s' ma %d zapasu - nelze smazat, pouzij slouceni", sourceName, mc))
+				continue
+			}
+			_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, sourceID)
+			_, _ = db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, sourceID)
+			LogAction(&admin.ID, admin.Username, "team_delete", "team", &sourceID,
+				fmt.Sprintf("Orphan tym '%s' (ID %d) smazan z cleanup stranky", sourceName, sourceID), nil, nil)
+			deleted++
+			continue
+		}
+
+		if a.Action == "merge" {
+			if a.TargetID == 0 || a.TargetID == sourceID {
+				errs = append(errs, fmt.Sprintf("Tym '%s': neplatny cil slouceni", sourceName))
+				continue
+			}
+			var targetName string
+			if err := db.Pool.QueryRow(ctx, `SELECT name FROM teams WHERE id=$1`, a.TargetID).Scan(&targetName); err != nil {
+				errs = append(errs, fmt.Sprintf("Tym '%s': cilovy tym ID %d nenalezen", sourceName, a.TargetID))
+				continue
+			}
+			// Merge: přepiš zápasy, přenes competition_teams, smaž zdroj
+			_, _ = db.Pool.Exec(ctx, `UPDATE matches SET home_team_id=$1 WHERE home_team_id=$2`, a.TargetID, sourceID)
+			_, _ = db.Pool.Exec(ctx, `UPDATE matches SET away_team_id=$1 WHERE away_team_id=$2`, a.TargetID, sourceID)
+			_, _ = db.Pool.Exec(ctx, `
+				INSERT INTO competition_teams (competition_id, team_id)
+				SELECT competition_id, $1 FROM competition_teams WHERE team_id=$2
+				ON CONFLICT DO NOTHING`, a.TargetID, sourceID)
+			_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, sourceID)
+			_, _ = db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, sourceID)
+			desc := fmt.Sprintf("Orphan '%s' (ID %d) sloučen do '%s' (ID %d)", sourceName, sourceID, targetName, a.TargetID)
+			LogAction(&admin.ID, admin.Username, "team_merge", "team", &sourceID, desc, nil, nil)
+			merged++
+		}
+	}
+
+	msg := fmt.Sprintf("Hotovo: %d sloučeno, %d smazáno, %d přeskočeno.", merged, deleted, skipped)
+	b, _ := json.Marshal(map[string]interface{}{"ok": true, "message": msg, "errors": errs})
+	w.Write(b)
 }
 
 // TeamGroup — skupína týmů podle category pro šablonu competition_teams.html

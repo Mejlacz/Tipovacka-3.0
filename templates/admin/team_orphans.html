@@ -1,0 +1,228 @@
+{{define "title"}}Nezařazené týmy{{end}}
+<div class="page-header">
+    <h1>🧹 Nezařazené týmy</h1>
+    <div style="display:flex;gap:.5rem">
+        <a href="/admin/teams" class="btn btn-secondary btn-sm">← Týmy</a>
+        <a href="/admin/roster" class="btn btn-secondary btn-sm">Roster →</a>
+    </div>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+{{if not .Orphans}}
+<div class="alert alert-success">✅ Žádné nezařazené týmy — databáze je v pořádku.</div>
+{{else}}
+
+<p style="color:var(--muted-d);font-size:.87rem;margin-bottom:1rem">
+    Níže jsou týmy, které nejsou přiřazeny k žádné soutěži.
+    Pro každý zvol: <strong>sloučit</strong> s existujícím týmem (zápasy se přepíší na cílový tým, zdroj se smaže),
+    <strong>smazat</strong> (jen pokud nemá zápasy), nebo <strong>přeskočit</strong>.
+</p>
+
+<div style="display:flex;gap:.6rem;align-items:center;margin-bottom:1.1rem;flex-wrap:wrap">
+    <button type="button" class="btn btn-primary" onclick="submitAll()">✅ Zpracovat vše</button>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="setAllAction('merge')">Všechny → Sloučit</button>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="setAllAction('delete')">Všechny → Smazat</button>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="setAllAction('skip')">Všechny → Přeskočit</button>
+    <span id="bulk-status" style="font-size:.83rem;color:var(--muted-d)"></span>
+</div>
+
+<div id="orphan-list" style="display:flex;flex-direction:column;gap:.85rem">
+{{range .Orphans}}
+<div class="orphan-card" data-id="{{.ID}}" data-match-count="{{.MatchCount}}"
+     style="background:var(--bg2);border:1px solid var(--border-d);border-radius:9px;padding:.95rem 1.1rem">
+
+    {{/* Hlavička */}}
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:.95rem">
+            {{if .DisplayName}}{{.DisplayName}} <span style="font-weight:400;color:var(--muted-d);font-size:.8rem">({{.Name}})</span>
+            {{else}}{{.Name}}{{end}}
+        </span>
+        <span style="font-size:.75rem;padding:.1rem .45rem;border-radius:12px;background:rgba(99,102,241,.15);color:#818cf8">{{.Sport}}</span>
+        {{if gt .MatchCount 0}}
+        <span style="font-size:.75rem;color:#f59e0b">⚠ {{.MatchCount}} zápasů</span>
+        {{else}}
+        <span style="font-size:.75rem;color:var(--muted-d)">bez zápasů</span>
+        {{end}}
+        {{if .Alias}}<span style="font-size:.72rem;color:var(--muted-d)">alias: {{.Alias}}</span>{{end}}
+    </div>
+
+    {{/* Akce — radio buttons */}}
+    <div style="display:flex;gap:1.2rem;align-items:flex-start;flex-wrap:wrap">
+
+        {{/* Sloučit */}}
+        <label style="display:flex;align-items:center;gap:.35rem;font-size:.85rem;cursor:pointer;white-space:nowrap">
+            <input type="radio" name="action-{{.ID}}" value="merge" class="action-radio" data-id="{{.ID}}" checked />
+            Sloučit s →
+        </label>
+
+        {{/* Smazat */}}
+        {{if eq .MatchCount 0}}
+        <label style="display:flex;align-items:center;gap:.35rem;font-size:.85rem;cursor:pointer;white-space:nowrap">
+            <input type="radio" name="action-{{.ID}}" value="delete" class="action-radio" data-id="{{.ID}}" />
+            🗑 Smazat
+        </label>
+        {{end}}
+
+        {{/* Přeskočit */}}
+        <label style="display:flex;align-items:center;gap:.35rem;font-size:.85rem;cursor:pointer;white-space:nowrap">
+            <input type="radio" name="action-{{.ID}}" value="skip" class="action-radio" data-id="{{.ID}}" />
+            Přeskočit
+        </label>
+
+    </div>
+
+    {{/* Dropdown pro sloučení — defaultně viditelný */}}
+    <div class="merge-section" data-id="{{.ID}}"
+         style="margin-top:.65rem;display:flex;flex-direction:column;gap:.3rem">
+        <input type="text" class="merge-filter" data-id="{{.ID}}"
+               placeholder="Hledat tým…"
+               style="padding:.3rem .55rem;font-size:.82rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;max-width:360px" />
+        <select class="merge-sel" data-id="{{.ID}}" data-sport="{{.Sport}}" size="5"
+                style="max-width:360px;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;font-size:.82rem;padding:.2rem">
+        </select>
+    </div>
+
+</div>
+{{end}}
+</div>
+
+<div style="margin-top:1.25rem;display:flex;gap:.6rem">
+    <button type="button" class="btn btn-primary" onclick="submitAll()">✅ Zpracovat vše</button>
+</div>
+
+{{end}}{{/* /if .Orphans */}}
+
+<script>
+(function(){
+    var allTeams = {{.AllTeamsJSON}};
+
+    // Naplníme selecty pro každou kartu
+    document.querySelectorAll('.merge-sel').forEach(function(sel){
+        var sport = sel.dataset.sport;
+        buildOpts(sel, sport, '');
+    });
+
+    // Filter
+    document.querySelectorAll('.merge-filter').forEach(function(inp){
+        var id   = inp.dataset.id;
+        var sel  = document.querySelector('.merge-sel[data-id="'+id+'"]');
+        if(!sel) return;
+        var sport = sel.dataset.sport;
+        inp.addEventListener('input', function(){
+            buildOpts(sel, sport, inp.value);
+        });
+    });
+
+    // Radio toggle: skrýt/zobrazit merge section
+    document.querySelectorAll('.action-radio').forEach(function(rb){
+        rb.addEventListener('change', function(){
+            var id = rb.dataset.id;
+            var ms = document.querySelector('.merge-section[data-id="'+id+'"]');
+            if(ms) ms.style.display = rb.value === 'merge' ? 'flex' : 'none';
+        });
+    });
+
+    function buildOpts(sel, sport, filter){
+        var f = (filter || '').toLowerCase();
+        sel.innerHTML = '';
+        allTeams.forEach(function(t){
+            if(t.sport !== sport) return;
+            var label = t.display_name ? t.display_name + ' (' + t.name + ')' : t.name;
+            if(f && label.toLowerCase().indexOf(f) < 0) return;
+            var opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = label;
+            sel.appendChild(opt);
+        });
+        if(sel.options.length > 0) sel.options[0].selected = true;
+    }
+
+    window.setAllAction = function(action){
+        document.querySelectorAll('.action-radio').forEach(function(rb){
+            if(rb.value === action) rb.checked = true;
+        });
+        // Sync merge section visibility
+        document.querySelectorAll('.orphan-card').forEach(function(card){
+            var id = card.dataset.id;
+            var ms = document.querySelector('.merge-section[data-id="'+id+'"]');
+            if(ms) ms.style.display = action === 'merge' ? 'flex' : 'none';
+        });
+    };
+
+    window.submitAll = function(){
+        var actions = [];
+        document.querySelectorAll('.orphan-card').forEach(function(card){
+            var id      = parseInt(card.dataset.id, 10);
+            var checked = card.querySelector('.action-radio:checked');
+            var action  = checked ? checked.value : 'skip';
+            var entry   = { id: id, action: action, target_id: 0 };
+            if(action === 'merge'){
+                var sel = card.querySelector('.merge-sel');
+                entry.target_id = sel ? parseInt(sel.value, 10) : 0;
+                if(!entry.target_id){
+                    alert('Vyber cílový tým pro: ' + (card.querySelector('[style*="font-weight:700"]') || {}).textContent);
+                    return;
+                }
+            }
+            if(action === 'delete'){
+                var mc = parseInt(card.dataset.matchCount, 10);
+                if(mc > 0){
+                    alert('Tým má zápasy — nelze smazat. Použij sloučení.');
+                    return;
+                }
+            }
+            actions.push(entry);
+        });
+
+        var toProcess = actions.filter(function(a){ return a.action !== 'skip'; });
+        if(toProcess.length === 0){
+            alert('Nic ke zpracování — všechny týmy jsou nastaveny na Přeskočit.');
+            return;
+        }
+        if(!confirm('Zpracovat ' + toProcess.length + ' týmů? Tato akce je nevratná.')) return;
+
+        var statusEl = document.getElementById('bulk-status');
+        if(statusEl) statusEl.textContent = '⏳ Zpracovávám…';
+
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrf = csrfMeta ? csrfMeta.content : '';
+        var form = new FormData();
+        if(csrf) form.append('_csrf', csrf);
+        form.append('actions', JSON.stringify(actions));
+
+        fetch('/admin/teams/orphans/bulk', { method:'POST', body: form })
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+                if(data.ok){
+                    var msg = data.message || 'Hotovo.';
+                    if(data.errors && data.errors.length > 0){
+                        msg += ' ⚠ ' + data.errors.join('; ');
+                    }
+                    if(statusEl) statusEl.textContent = '✅ ' + msg;
+                    // Reload za 1.5s aby se stránka obnovila
+                    setTimeout(function(){ location.reload(); }, 1500);
+                } else {
+                    if(statusEl) statusEl.textContent = '❌ ' + (data.error || 'Chyba');
+                }
+            })
+            .catch(function(e){
+                if(statusEl) statusEl.textContent = '❌ Síťová chyba: ' + e.message;
+            });
+    };
+
+    // Najdi CSRF token z formuláře na stránce pokud není v meta
+    var csrfInp = document.querySelector('input[name="_csrf"]');
+    if(csrfInp){
+        var meta = document.createElement('meta');
+        meta.name = 'csrf-token';
+        meta.content = csrfInp.value;
+        document.head.appendChild(meta);
+    }
+
+})();
+</script>
