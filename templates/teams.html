@@ -1,86 +1,145 @@
+{{define "title"}}Správa týmů{{end}}
 <div class="page-header">
-    <h1 style="font-size:1.15rem">⚽ Týmy</h1>
-    <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+    <h1>⚽ Správa týmů</h1>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
         <a href="/admin/export/csv?type=teams" class="btn btn-secondary btn-sm">⬇ CSV</a>
-        <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+        <a href="/admin/roster"                class="btn btn-secondary btn-sm">🗂 Roster</a>
+        <a href="/admin"                       class="btn btn-secondary btn-sm">← Admin</a>
     </div>
 </div>
-<nav style="display:flex;gap:.35rem;margin-bottom:1rem;flex-wrap:wrap">
-    <a href="/admin/teams"         class="btn btn-sm btn-primary"  style="font-size:.78rem">📋 Katalog týmů</a>
-    <a href="/admin/roster"        class="btn btn-sm btn-secondary" style="font-size:.78rem">🗂️ Roster (matice)</a>
-    <a href="/admin/teams/orphans" class="btn btn-sm btn-secondary" style="font-size:.78rem">🧹 Nezařazené</a>
-</nav>
 
 {{if .Flash}}
 <div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
     {{index .Flash "msg" | safeHTML}}
 </div>
 {{end}}
-{{if .Msg}}<div class="alert alert-success" style="margin-bottom:1rem">{{.Msg}}</div>{{end}}
-{{if .Error}}<div class="alert alert-error" style="margin-bottom:1rem">{{.Error}}</div>{{end}}
 
-<form method="post" action="/admin/teams/new"
-      style="display:flex;gap:.5rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;background:var(--bg2);padding:1rem;border-radius:8px">
-    <input type="text" name="name" placeholder="Název týmu" required style="flex:2;min-width:150px" />
-    <select name="sport" style="flex:1;min-width:100px">
-        <option value="football">⚽ Fotbal</option>
-        <option value="hockey">🏒 Hokej</option>
-    </select>
-    <input type="text" name="display_name" placeholder="Zkrácené jméno" style="flex:1;min-width:100px" />
-    <input type="text" name="category" placeholder="Kategorie" style="flex:1;min-width:80px" />
-    <button type="submit" class="btn btn-primary btn-sm">+ Přidat tým</button>
-</form>
+{{/* ── Orphan banner ── */}}
+{{if gt .OrphanCount 0}}
+<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap">
+    <span style="color:#f59e0b;font-size:.88rem">
+        ⚠ <strong>{{.OrphanCount}}</strong> {{if eq .OrphanCount 1}}tým není přiřazen{{else}}týmů není přiřazeno{{end}} k žádné soutěži
+    </span>
+    <button class="btn btn-sm" style="background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.4);font-size:.78rem"
+            onclick="filterOrphans()">Zobrazit jen nezařazené</button>
+</div>
+{{end}}
+
+{{/* ── Přidat tým ── */}}
+<details style="margin-bottom:1rem">
+    <summary style="cursor:pointer;font-size:.88rem;color:var(--muted-d);padding:.4rem 0">+ Přidat nový tým</summary>
+    <form method="post" action="/admin/teams/new"
+          style="display:flex;gap:.5rem;align-items:center;margin-top:.6rem;flex-wrap:wrap;background:var(--bg2);padding:.85rem;border-radius:8px">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+        <input type="text" name="name"         placeholder="Název (interní)" required  style="flex:2;min-width:140px" />
+        <input type="text" name="display_name" placeholder="Zobrazovaný název"          style="flex:1;min-width:110px" />
+        <input type="text" name="alias"        placeholder="Zkratka / alias"            style="flex:1;min-width:80px" />
+        <select name="sport" style="flex:0 0 auto">
+            <option value="football">⚽ Fotbal</option>
+            <option value="hockey">🏒 Hokej</option>
+        </select>
+        <input type="text" name="category"    placeholder="Kategorie"                   style="flex:1;min-width:80px" />
+        <button type="submit" class="btn btn-primary btn-sm">Přidat</button>
+    </form>
+</details>
+
+{{/* ── Filtr + hledání ── */}}
+<div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;flex-wrap:wrap">
+    <input type="search" id="team-search" placeholder="🔍 Hledat tým…"
+           oninput="filterTeams()"
+           style="flex:1;min-width:180px;padding:.38rem .65rem;background:var(--bg2);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.88rem" />
+    <div style="display:flex;gap:.25rem">
+        <button class="filter-sport-btn active" data-sport="" onclick="setSportFilter('')">Vše</button>
+        <button class="filter-sport-btn" data-sport="football"  onclick="setSportFilter('football')">⚽</button>
+        <button class="filter-sport-btn" data-sport="hockey"    onclick="setSportFilter('hockey')">🏒</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:.35rem;font-size:.83rem;cursor:pointer;color:var(--muted-d)">
+        <input type="checkbox" id="orphan-only" onchange="filterTeams()" /> Jen nezařazené
+    </label>
+    <span id="team-count" style="font-size:.78rem;color:var(--muted-d)"></span>
+</div>
+
+<style>
+.filter-sport-btn{padding:.25rem .65rem;font-size:.8rem;border:1px solid var(--border-d);background:var(--bg2);color:var(--muted-d);border-radius:5px;cursor:pointer}
+.filter-sport-btn.active{background:var(--accent,#10b981);color:#fff;border-color:var(--accent,#10b981)}
+.team-row{border-bottom:1px solid var(--border-d)}
+.team-row:hover{background:rgba(255,255,255,.03)}
+.team-row.is-orphan td:first-child{border-left:3px solid #f59e0b}
+.team-edit-row{display:none;background:var(--bg3)}
+.comp-badge{display:inline-block;font-size:.68rem;padding:.05rem .4rem;border-radius:10px;background:rgba(99,102,241,.18);color:#a5b4fc;white-space:nowrap;margin:.1rem .1rem 0 0}
+</style>
 
 {{if .Teams}}
 <div style="overflow-x:auto">
-<table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+<table id="teams-table" style="width:100%;border-collapse:collapse;font-size:.84rem">
     <thead>
-        <tr style="background:var(--bg2)">
-            <th style="text-align:left;padding:.4rem .5rem">ID</th>
-            <th style="text-align:left;padding:.4rem .5rem">Název</th>
-            <th style="text-align:left;padding:.4rem .5rem">Sport</th>
-            <th style="text-align:left;padding:.4rem .5rem">Zkrácené jméno</th>
-            <th style="text-align:left;padding:.4rem .5rem">Zkratka</th>
-            <th style="text-align:left;padding:.4rem .5rem">Kategorie</th>
-            <th style="padding:.4rem .5rem">Akce</th>
+        <tr style="background:var(--bg2);font-size:.75rem;color:var(--muted-d)">
+            <th style="padding:.4rem .6rem;text-align:left;width:26%">Název</th>
+            <th style="padding:.4rem .6rem;text-align:left;width:14%">Zobrazovaný</th>
+            <th style="padding:.4rem .6rem;text-align:left;width:7%">Sport</th>
+            <th style="padding:.4rem .6rem;text-align:left;width:7%">Alias</th>
+            <th style="padding:.4rem .6rem;text-align:left;width:26%">Soutěže</th>
+            <th style="padding:.4rem .6rem;text-align:center;width:6%">Zápasy</th>
+            <th style="padding:.4rem .6rem;text-align:right;width:14%">Akce</th>
         </tr>
     </thead>
     <tbody>
     {{range .Teams}}
-    <tr id="team-row-{{.ID}}">
-        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.75rem">{{.ID}}</td>
-        <td style="padding:.3rem .5rem;font-weight:600">{{.Name}}</td>
-        <td style="padding:.3rem .5rem;font-size:.8rem">{{.Sport}}</td>
-        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">{{if .DisplayName}}{{.DisplayName}}{{else}}—{{end}}</td>
-        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">{{if .Alias}}{{.Alias}}{{else}}—{{end}}</td>
-        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">{{if .Category}}{{.Category}}{{else}}—{{end}}</td>
-        <td style="padding:.3rem .5rem;white-space:nowrap">
-            <button type="button" class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.1rem .35rem"
-                    onclick="toggleTeamEdit({{.ID}})">✏️</button>
-            <button type="button" class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.1rem .35rem"
-                    title="Sloučit do jiného týmu"
-                    onclick="openMergeModal({{.ID}}, '{{.Name}}')">⛓️</button>
+    <tr class="team-row{{if .IsOrphan}} is-orphan{{end}}"
+        data-name="{{.Name}} {{if .DisplayName}}{{.DisplayName}}{{end}} {{if .Alias}}{{.Alias}}{{end}}"
+        data-sport="{{.Sport}}"
+        data-orphan="{{if .IsOrphan}}1{{else}}0{{end}}"
+        data-id="{{.ID}}">
+        <td style="padding:.35rem .6rem;font-weight:600">
+            {{.Name}}
+            {{if .IsOrphan}}<span style="font-size:.68rem;color:#f59e0b;margin-left:.3rem">⚠ nezař.</span>{{end}}
+        </td>
+        <td style="padding:.35rem .6rem;color:var(--muted-d)">{{if .DisplayName}}{{.DisplayName}}{{else}}<span style="opacity:.35">—</span>{{end}}</td>
+        <td style="padding:.35rem .6rem">
+            {{if eq .Sport "football"}}⚽{{else if eq .Sport "hockey"}}🏒{{else}}{{.Sport}}{{end}}
+        </td>
+        <td style="padding:.35rem .6rem;color:var(--muted-d);font-size:.78rem">{{if .Alias}}{{.Alias}}{{else}}<span style="opacity:.35">—</span>{{end}}</td>
+        <td style="padding:.35rem .6rem">
+            {{if .CompNames}}
+                {{range .CompNames}}<span class="comp-badge">{{.}}</span>{{end}}
+            {{else}}
+                <span style="font-size:.75rem;color:#f59e0b;opacity:.8">Nepřiřazen</span>
+            {{end}}
+        </td>
+        <td style="padding:.35rem .6rem;text-align:center;color:var(--muted-d);font-size:.8rem">{{.MatchCount}}</td>
+        <td style="padding:.35rem .6rem;text-align:right;white-space:nowrap">
+            <button class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.15rem .4rem"
+                    onclick="openEditRow({{.ID}})" title="Upravit">✏</button>
+            <button class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.15rem .4rem"
+                    onclick="openMerge({{.ID}},'{{.Name}}')" title="Sloučit s jiným týmem">⛓</button>
+            {{if eq .MatchCount 0}}
             <form style="display:inline" method="post" action="/admin/teams/{{.ID}}/delete"
-                  onsubmit="return confirm('Smazat tým {{.Name}}?')">
-                <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem">✕</button>
+                  onsubmit="return confirm('Smazat tým {{.Name}}? Tato akce je nevratná.')">
+                <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
+                <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.15rem .4rem" title="Smazat">✕</button>
             </form>
+            {{else}}
+            <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.15rem .4rem;opacity:.35;cursor:not-allowed"
+                    title="Nelze smazat — má {{.MatchCount}} zápasů (sloučit nejdřív)" disabled>✕</button>
+            {{end}}
         </td>
     </tr>
-    <tr id="team-edit-{{.ID}}" style="display:none;background:var(--bg3)">
-        <td colspan="7" style="padding:.5rem">
+    <tr class="team-edit-row" id="edit-row-{{.ID}}">
+        <td colspan="7" style="padding:.55rem .7rem">
             <form method="post" action="/admin/teams/{{.ID}}/edit"
-                  style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-                <input type="text" name="name" required value="{{.Name}}"
-                       style="flex:2;min-width:140px" placeholder="Název" />
+                  style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+                <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
+                <input type="text" name="name"         value="{{.Name}}"
+                       placeholder="Interní název" required  style="flex:2;min-width:130px;font-size:.83rem" />
                 <input type="text" name="display_name" value="{{if .DisplayName}}{{.DisplayName}}{{end}}"
-                       style="flex:1;min-width:100px" placeholder="Zkrácené jméno" />
-                <input type="text" name="alias" value="{{if .Alias}}{{.Alias}}{{end}}"
-                       style="flex:1;min-width:60px" placeholder="Zkratka" />
-                <input type="text" name="category" value="{{if .Category}}{{.Category}}{{end}}"
-                       style="flex:1;min-width:80px" placeholder="Kategorie" />
-                <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">Uložit</button>
-                <button type="button" class="btn btn-sm btn-secondary" style="font-size:.78rem"
-                        onclick="toggleTeamEdit({{.ID}})">Zrušit</button>
+                       placeholder="Zobrazovaný název" style="flex:1;min-width:110px;font-size:.83rem" />
+                <input type="text" name="alias"        value="{{if .Alias}}{{.Alias}}{{end}}"
+                       placeholder="Alias (pro API matching)" style="flex:1;min-width:90px;font-size:.83rem" />
+                <input type="text" name="category"     value="{{if .Category}}{{.Category}}{{end}}"
+                       placeholder="Kategorie"         style="flex:1;min-width:80px;font-size:.83rem" />
+                <button type="submit" class="btn btn-primary btn-sm" style="font-size:.78rem">Uložit</button>
+                <button type="button" class="btn btn-secondary btn-sm" style="font-size:.78rem"
+                        onclick="closeEditRow({{.ID}})">Zrušit</button>
             </form>
         </td>
     </tr>
@@ -88,105 +147,179 @@
     </tbody>
 </table>
 </div>
+<p id="teams-empty-msg" style="display:none;color:var(--muted-d);padding:.75rem 0">Žádný tým nevyhovuje filtru.</p>
 {{else}}
-<p class="empty">Žádné týmy.</p>
+<p style="color:var(--muted-d)">Žádné týmy.</p>
 {{end}}
 
 {{/* ── Merge modal ── */}}
 <div id="merge-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:2000;align-items:center;justify-content:center">
-    <div style="background:var(--bg2);border:2px solid #f59e0b;border-radius:14px;padding:1.5rem 1.6rem;width:min(440px,94vw);box-shadow:0 8px 40px rgba(0,0,0,.6)">
-        <h3 style="margin:0 0 .3rem;font-size:1rem;color:#f59e0b">⛓️ Sloučit tým</h3>
-        <p style="font-size:.82rem;color:var(--muted-d);margin:.0 0 1rem">
-            Tým <strong id="merge-source-name"></strong> bude trvale odstraněn.<br>
-            Všechny jeho zápasy a soutěže přejdou na cílový tým.
+    <div style="background:var(--bg2);border:2px solid var(--border-d);border-radius:12px;padding:1.4rem 1.5rem;width:min(460px,94vw);box-shadow:0 8px 40px rgba(0,0,0,.6)">
+        <h3 style="margin:0 0 .25rem;font-size:1rem">⛓ Sloučit tým</h3>
+        <p style="font-size:.82rem;color:var(--muted-d);margin:0 0 1rem;line-height:1.45">
+            Tým <strong id="merge-src-name" style="color:var(--text-d)"></strong> bude smazán.<br>
+            Všechny zápasy a přiřazení přejdou na vybraný cílový tým.
         </p>
         <form id="merge-form" method="post">
-            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
-            <div style="margin-bottom:.75rem">
-                <label style="font-size:.82rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Sloučit DO tohoto týmu:</label>
-                <select name="target_team_id" id="merge-target" required
-                        style="width:100%;background:var(--bg3);color:var(--text-d);border:1px solid var(--border-d);border-radius:6px;padding:.4rem .6rem;font-size:.85rem"
-                        onchange="updateMergeHint()">
-                    <option value="">— vyber cílový tým —</option>
-                    {{range .Teams}}
-                    <option value="{{.ID}}" data-name="{{.Name}}">{{.Name}} ({{.Sport}}{{if .Category}} · {{.Category}}{{end}})</option>
-                    {{end}}
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+            <input type="hidden" name="confirm_name" id="merge-confirm-hidden" value="" />
+            <div style="margin-bottom:.7rem">
+                <input type="text" id="merge-search"
+                       placeholder="Hledat cílový tým…"
+                       oninput="filterMergeOpts()"
+                       style="width:100%;box-sizing:border-box;padding:.38rem .6rem;font-size:.85rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:inherit;margin-bottom:.4rem" />
+                <select name="target_team_id" id="merge-target" required size="6"
+                        onchange="onMergeTargetChange()"
+                        style="width:100%;background:var(--bg3);color:var(--text-d);border:1px solid var(--border-d);border-radius:6px;font-size:.84rem;padding:.2rem">
                 </select>
+                <div id="merge-sel-hint" style="font-size:.73rem;color:var(--muted-d);margin-top:.25rem"></div>
             </div>
-            <div style="margin-bottom:1rem">
-                <label style="font-size:.82rem;color:var(--muted-d);display:block;margin-bottom:.3rem">
-                    Pro potvrzení opište <strong>přesný název</strong> cílového týmu:
-                </label>
-                <input type="text" name="confirm_name" id="merge-confirm" required autocomplete="off"
-                       placeholder="Název cílového týmu…"
-                       style="width:100%;box-sizing:border-box;background:var(--bg3);color:var(--text-d);border:1px solid #f59e0b;border-radius:6px;padding:.4rem .6rem;font-size:.9rem" />
-                <div id="merge-hint" style="font-size:.75rem;color:var(--muted-d);margin-top:.25rem"></div>
-            </div>
-            <div style="display:flex;gap:.5rem;justify-content:flex-end">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="closeMergeModal()">Zrušit</button>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeMerge()">Zrušit</button>
                 <button type="submit" class="btn btn-primary btn-sm" id="merge-submit"
-                        style="background:#f59e0b;border-color:#f59e0b;color:#000;font-weight:700">⛓️ Sloučit</button>
+                        style="background:#f59e0b;border-color:#f59e0b;color:#1a1a1a;font-weight:700">⛓ Sloučit</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-function toggleTeamEdit(id) {
-    var row = document.getElementById('team-edit-' + id);
-    row.style.display = row.style.display === 'none' ? '' : 'none';
-}
-
+(function(){
+var allTeams = {{.TeamsJSON}};
+var _sportFilter = '';
 var _mergeSourceID = 0;
+var _mergeSport    = '';
 
-function openMergeModal(sourceId, sourceName) {
-    _mergeSourceID = sourceId;
-    document.getElementById('merge-source-name').textContent = sourceName;
-    document.getElementById('merge-form').action = '/admin/teams/' + sourceId + '/merge';
-    document.getElementById('merge-confirm').value = '';
-    document.getElementById('merge-hint').textContent = '';
-    // Skryj zdrojový tým z dropdownu
-    var sel = document.getElementById('merge-target');
-    sel.value = '';
-    Array.from(sel.options).forEach(function(opt) {
-        opt.disabled = (opt.value == sourceId);
-        opt.style.display = (opt.value == sourceId) ? 'none' : '';
+// ── Inline edit ──────────────────────────────────────────────────────────────
+window.openEditRow = function(id){
+    var r = document.getElementById('edit-row-'+id);
+    if(!r) return;
+    // Zavři ostatní
+    document.querySelectorAll('.team-edit-row').forEach(function(x){ x.style.display='none'; });
+    r.style.display = '';
+    r.querySelector('input[name="name"]').focus();
+};
+window.closeEditRow = function(id){
+    var r = document.getElementById('edit-row-'+id);
+    if(r) r.style.display = 'none';
+};
+
+// ── Filter ───────────────────────────────────────────────────────────────────
+window.setSportFilter = function(sport){
+    _sportFilter = sport;
+    document.querySelectorAll('.filter-sport-btn').forEach(function(b){
+        b.classList.toggle('active', b.dataset.sport === sport);
     });
+    filterTeams();
+};
+
+window.filterOrphans = function(){
+    document.getElementById('orphan-only').checked = true;
+    filterTeams();
+};
+
+window.filterTeams = function(){
+    var q        = (document.getElementById('team-search').value || '').toLowerCase();
+    var orphOnly = document.getElementById('orphan-only').checked;
+    var rows     = document.querySelectorAll('#teams-table tbody tr.team-row');
+    var visible  = 0;
+    rows.forEach(function(row){
+        var sport   = row.dataset.sport;
+        var name    = (row.dataset.name || '').toLowerCase();
+        var isOrph  = row.dataset.orphan === '1';
+        var show    = true;
+        if(_sportFilter && sport !== _sportFilter) show = false;
+        if(q && name.indexOf(q) < 0) show = false;
+        if(orphOnly && !isOrph) show = false;
+        row.style.display = show ? '' : 'none';
+        // Skryj i edit row
+        var id = row.dataset.id;
+        var er = document.getElementById('edit-row-'+id);
+        if(er) er.style.display = 'none';
+        if(show) visible++;
+    });
+    var cnt = document.getElementById('team-count');
+    if(cnt) cnt.textContent = visible + ' / ' + rows.length + ' týmů';
+    var emp = document.getElementById('teams-empty-msg');
+    if(emp) emp.style.display = visible === 0 ? '' : 'none';
+};
+
+// Inicializace počítadla
+filterTeams();
+
+// ── Merge modal ───────────────────────────────────────────────────────────────
+window.openMerge = function(id, name){
+    _mergeSourceID = id;
+    // Zjisti sport ze řádku
+    var row = document.querySelector('tr.team-row[data-id="'+id+'"]');
+    _mergeSport = row ? row.dataset.sport : '';
+
+    document.getElementById('merge-src-name').textContent = name;
+    document.getElementById('merge-form').action = '/admin/teams/'+id+'/merge';
+    document.getElementById('merge-search').value = '';
+    document.getElementById('merge-sel-hint').textContent = '';
+    document.getElementById('merge-confirm-hidden').value = '';
+    buildMergeOpts('');
     document.getElementById('merge-modal').style.display = 'flex';
-    setTimeout(function() { sel.focus(); }, 80);
-}
+    setTimeout(function(){ document.getElementById('merge-search').focus(); }, 80);
+};
 
-function closeMergeModal() {
+window.closeMerge = function(){
     document.getElementById('merge-modal').style.display = 'none';
+};
+
+window.filterMergeOpts = function(){
+    buildMergeOpts(document.getElementById('merge-search').value);
+};
+
+function buildMergeOpts(filter){
+    var sel = document.getElementById('merge-target');
+    var f   = (filter||'').toLowerCase();
+    sel.innerHTML = '';
+    allTeams.forEach(function(t){
+        if(t.id === _mergeSourceID) return;       // přeskoč sebe
+        if(_mergeSport && t.sport !== _mergeSport) return; // jiný sport
+        var label = t.display_name ? t.display_name + '  (' + t.name + ')' : t.name;
+        if(f && label.toLowerCase().indexOf(f) < 0) return;
+        var opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = label;
+        opt.dataset.name = t.name;
+        sel.appendChild(opt);
+    });
+    if(sel.options.length > 0){
+        sel.options[0].selected = true;
+        onMergeTargetChange();
+    } else {
+        document.getElementById('merge-sel-hint').textContent = 'Žádný tým nevyhovuje filtru.';
+        document.getElementById('merge-confirm-hidden').value = '';
+    }
 }
 
-function updateMergeHint() {
+window.onMergeTargetChange = function(){
     var sel = document.getElementById('merge-target');
     var opt = sel.options[sel.selectedIndex];
-    var hint = document.getElementById('merge-hint');
-    if (opt && opt.value) {
-        hint.textContent = 'Očekávaný název: „' + opt.getAttribute('data-name') + '"';
-        hint.style.color = '#f59e0b';
+    var hint = document.getElementById('merge-sel-hint');
+    if(opt && opt.value){
+        hint.textContent = 'Cíl: ' + opt.textContent.trim();
+        // Auto-vyplní confirm_name pro backend (bez nutnosti psát)
+        document.getElementById('merge-confirm-hidden').value = opt.dataset.name || '';
     } else {
         hint.textContent = '';
+        document.getElementById('merge-confirm-hidden').value = '';
     }
-}
+};
 
-document.getElementById('merge-modal').addEventListener('click', function(e) {
-    if (e.target === this) closeMergeModal();
-});
-
-document.getElementById('merge-form').addEventListener('submit', function(e) {
+document.getElementById('merge-form').addEventListener('submit', function(e){
     var sel = document.getElementById('merge-target');
-    var opt = sel.options[sel.selectedIndex];
-    if (!opt || !opt.value) { e.preventDefault(); alert('Vyber cílový tým.'); return; }
-    var targetName = opt.getAttribute('data-name');
-    var typed = document.getElementById('merge-confirm').value.trim();
-    if (typed.toLowerCase() !== targetName.toLowerCase()) {
-        e.preventDefault();
-        document.getElementById('merge-confirm').style.borderColor = '#ef4444';
-        document.getElementById('merge-hint').textContent = '✗ Název nesouhlasí — očekáváno: „' + targetName + '"';
-        document.getElementById('merge-hint').style.color = '#ef4444';
-    }
+    if(!sel.value){ e.preventDefault(); alert('Vyber cílový tým.'); return; }
+    var targetLabel = (sel.options[sel.selectedIndex]||{}).textContent || sel.value;
+    if(!confirm('Sloučit do "' + targetLabel.trim() + '"? Zdrojový tým bude trvale smazán.')){ e.preventDefault(); }
 });
+
+document.getElementById('merge-modal').addEventListener('click', function(e){
+    if(e.target === this) closeMerge();
+});
+
+})();
 </script>

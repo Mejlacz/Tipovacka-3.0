@@ -1,4 +1,4 @@
-// handlers/admin_teams.go — Tipovačka 2.0
+// handlers/admin_teams.go - Tipovačka 2.0
 // Správa týmů.
 package handlers
 
@@ -19,6 +19,14 @@ import (
 	"tipovacka/models"
 )
 
+// TeamRow holds a team with extra display data for the admin teams page.
+type TeamRow struct {
+	models.Team
+	MatchCount int
+	CompNames  []string
+	IsOrphan   bool
+}
+
 // GET /admin/teams
 func AdminTeamsList(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -27,32 +35,104 @@ func AdminTeamsList(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		ctx := context.Background()
-		rows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, sport, alias, display_name, logo_url, category, competition_id FROM teams ORDER BY name`)
-		var teams []*models.Team
+
+		// Load all teams with match count and orphan flag
+		rows, err := db.Pool.Query(ctx, `
+			SELECT t.id, t.name, t.sport,
+			       COALESCE(t.alias,''), COALESCE(t.display_name,''),
+			       COALESCE(t.logo_url,''), COALESCE(t.category,''),
+			       (SELECT COUNT(*) FROM matches m WHERE m.home_team_id=t.id OR m.away_team_id=t.id),
+			       EXISTS(SELECT 1 FROM competition_teams ct WHERE ct.team_id=t.id)
+			FROM teams t
+			ORDER BY t.sport, LOWER(COALESCE(NULLIF(t.display_name,''), t.name))`)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		var teamRows []*TeamRow
+		teamByID := map[int]*TeamRow{}
 		for rows.Next() {
-			t := &models.Team{}
-			_ = rows.Scan(&t.ID, &t.Name, &t.Sport, &t.Alias, &t.DisplayName, &t.LogoURL, &t.Category, &t.CompetitionID)
-			teams = append(teams, t)
+			tr := &TeamRow{}
+			var alias, displayName, logoURL, category string
+			var hasComp bool
+			if err := rows.Scan(&tr.ID, &tr.Name, &tr.Sport, &alias, &displayName,
+				&logoURL, &category, &tr.MatchCount, &hasComp); err != nil {
+				continue
+			}
+			if alias != "" {
+				tr.Alias = &alias
+			}
+			if displayName != "" {
+				tr.DisplayName = &displayName
+			}
+			if logoURL != "" {
+				tr.LogoURL = &logoURL
+			}
+			if category != "" {
+				tr.Category = &category
+			}
+			tr.IsOrphan = !hasComp
+			teamRows = append(teamRows, tr)
+			teamByID[tr.ID] = tr
 		}
 		rows.Close()
 
-		compRows, _ := db.Pool.Query(ctx, `SELECT id, name, season FROM competitions ORDER BY id DESC`)
-		var comps []*models.Competition
-		for compRows.Next() {
-			c := &models.Competition{}
-			_ = compRows.Scan(&c.ID, &c.Name, &c.Season)
-			comps = append(comps, c)
+		// Load competition names per team
+		compRows, _ := db.Pool.Query(ctx, `
+			SELECT ct.team_id, c.name, c.season
+			FROM competition_teams ct
+			JOIN competitions c ON c.id = ct.competition_id
+			ORDER BY c.id DESC`)
+		if compRows != nil {
+			for compRows.Next() {
+				var tid int
+				var cname, cseason string
+				if err := compRows.Scan(&tid, &cname, &cseason); err == nil {
+					if tr, ok := teamByID[tid]; ok {
+						label := cname
+						if cseason != "" {
+							label += " " + cseason
+						}
+						tr.CompNames = append(tr.CompNames, label)
+					}
+				}
+			}
+			compRows.Close()
 		}
-		compRows.Close()
+
+		// Count orphans
+		orphanCount := 0
+		for _, tr := range teamRows {
+			if tr.IsOrphan {
+				orphanCount++
+			}
+		}
+
+		// Build JSON for merge modal
+		type teamJSON struct {
+			ID          int    `json:"id"`
+			Name        string `json:"name"`
+			DisplayName string `json:"display_name"`
+			Sport       string `json:"sport"`
+		}
+		var teamsForJSON []teamJSON
+		for _, tr := range teamRows {
+			dn := ""
+			if tr.DisplayName != nil {
+				dn = *tr.DisplayName
+			}
+			teamsForJSON = append(teamsForJSON, teamJSON{
+				ID: tr.ID, Name: tr.Name, DisplayName: dn, Sport: tr.Sport,
+			})
+		}
+		teamsJSON, _ := json.Marshal(teamsForJSON)
 
 		RenderTemplate(w, r, tmpl, "teams.html", TemplateData{
-			"User":   admin,
-			"Teams":  teams,
-			"Comps":  comps,
-			"Msg":    r.URL.Query().Get("msg"),
-			"Error":  r.URL.Query().Get("error"),
-			"Flash":  middleware.GetFlash(w, r),
+			"User":        admin,
+			"Teams":       teamRows,
+			"OrphanCount": orphanCount,
+			"TeamsJSON":   string(teamsJSON),
+			"Flash":       middleware.GetFlash(w, r),
 		})
 	}
 }
@@ -119,7 +199,7 @@ func AdminTeamDelete(w http.ResponseWriter, r *http.Request) {
 	_ = db.Pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM matches WHERE home_team_id=$1 OR away_team_id=$1`, teamID).Scan(&count)
 	if count > 0 {
-		middleware.SetFlash(w, r, "error", "Tým nelze smazat — má přiřazené zápasy.")
+		middleware.SetFlash(w, r, "error", "Tým nelze smazat - má přiřazené zápasy.")
 		http.Redirect(w, r, "/admin/teams", http.StatusSeeOther)
 		return
 	}
@@ -172,9 +252,9 @@ func AdminTeamMerge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Bezpečnostní kontrola: opis názvu cílového týmu
-	if !strings.EqualFold(confirmName, targetName) {
-		flash("error", fmt.Sprintf("Název nesouhlasí — očekáváno „%s”.", targetName))
+	// Safety check: confirm_name is optional - empty string skips the check
+	if confirmName != "" && !strings.EqualFold(confirmName, targetName) {
+		flash("error", "Name mismatch - expected: "+targetName)
 		return
 	}
 
@@ -182,7 +262,7 @@ func AdminTeamMerge(w http.ResponseWriter, r *http.Request) {
 	_, _ = db.Pool.Exec(ctx, `UPDATE matches SET home_team_id=$1 WHERE home_team_id=$2`, targetID, sourceID)
 	_, _ = db.Pool.Exec(ctx, `UPDATE matches SET away_team_id=$1 WHERE away_team_id=$2`, targetID, sourceID)
 
-	// 2. Přenes competition_teams (přeskoč konflikty — target tam už může být)
+	// 2. Přenes competition_teams (přeskoč konflikty - target tam už může být)
 	_, _ = db.Pool.Exec(ctx, `
 		INSERT INTO competition_teams (competition_id, team_id)
 		SELECT competition_id, $1 FROM competition_teams WHERE team_id=$2
@@ -192,7 +272,7 @@ func AdminTeamMerge(w http.ResponseWriter, r *http.Request) {
 	_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, sourceID)
 	_, _ = db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, sourceID)
 
-	desc := fmt.Sprintf("Tým „%s” (ID %d) sloučen do „%s” (ID %d)", sourceName, sourceID, targetName, targetID)
+	desc := fmt.Sprintf("Tym '%s' (ID %d) sloucen do '%s' (ID %d)", sourceName, sourceID, targetName, targetID)
 	LogAction(&admin.ID, admin.Username, "team_merge", "team", &sourceID, desc, nil, nil)
 
 	flash("ok", desc)
@@ -368,7 +448,7 @@ func AdminTeamOrphansBulk(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-// TeamGroup — skupína týmů podle category pro šablonu competition_teams.html
+// TeamGroup - skupína týmů podle category pro šablonu competition_teams.html
 type TeamGroup struct {
 	Category string // "" → "Bez kategorie"
 	Teams    []*models.Team
@@ -556,7 +636,7 @@ func AdminTeamsImportCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Detekuj hlavičku — pokud první řádek má "name" nebo "Name"
+	// Detekuj hlavičku - pokud první řádek má "name" nebo "Name"
 	startRow := 0
 	if len(rows[0]) > 0 && strings.EqualFold(strings.TrimSpace(rows[0][0]), "name") {
 		startRow = 1
@@ -665,7 +745,7 @@ func AdminTeamsImportXLSX(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Detekuj záhlaví — pokud první buňka je "name" nebo "Name"
+	// Detekuj záhlaví - pokud první buňka je "name" nebo "Name"
 	startRow := 0
 	if len(rows[0]) > 0 && strings.EqualFold(strings.TrimSpace(rows[0][0]), "name") {
 		startRow = 1
