@@ -268,7 +268,10 @@ func AdminTeamMerge(w http.ResponseWriter, r *http.Request) {
 		SELECT competition_id, $1 FROM competition_teams WHERE team_id=$2
 		ON CONFLICT DO NOTHING`, targetID, sourceID)
 
-	// 3. Smaž zdroj
+	// 3. Ulož jméno zdroje jako alias na cílovém týmu (pro budoucí API matching)
+	appendTeamAlias(ctx, sourceName, targetID)
+
+	// 4. Smaž zdroj
 	_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, sourceID)
 	_, _ = db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, sourceID)
 
@@ -428,13 +431,14 @@ func AdminTeamOrphansBulk(w http.ResponseWriter, r *http.Request) {
 				errs = append(errs, fmt.Sprintf("Tym '%s': cilovy tym ID %d nenalezen", sourceName, a.TargetID))
 				continue
 			}
-			// Merge: přepiš zápasy, přenes competition_teams, smaž zdroj
+			// Merge: přepiš zápasy, přenes competition_teams, ulož alias, smaž zdroj
 			_, _ = db.Pool.Exec(ctx, `UPDATE matches SET home_team_id=$1 WHERE home_team_id=$2`, a.TargetID, sourceID)
 			_, _ = db.Pool.Exec(ctx, `UPDATE matches SET away_team_id=$1 WHERE away_team_id=$2`, a.TargetID, sourceID)
 			_, _ = db.Pool.Exec(ctx, `
 				INSERT INTO competition_teams (competition_id, team_id)
 				SELECT competition_id, $1 FROM competition_teams WHERE team_id=$2
 				ON CONFLICT DO NOTHING`, a.TargetID, sourceID)
+			appendTeamAlias(ctx, sourceName, a.TargetID)
 			_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, sourceID)
 			_, _ = db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, sourceID)
 			desc := fmt.Sprintf("Orphan '%s' (ID %d) sloučen do '%s' (ID %d)", sourceName, sourceID, targetName, a.TargetID)
@@ -928,4 +932,83 @@ func AdminRosterToggle(w http.ResponseWriter, r *http.Request) {
 	_ = admin
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"ok":true}`))
+}
+
+// ── appendTeamAlias ────────────────────────────────────────────────────────────
+// Appends name as an alias on a team (comma-separated in the alias column).
+// If the name is already present (case-insensitive), it is skipped.
+// This is called after every merge and after every import resolve so that
+// future API imports can find the team without showing the modal again.
+func appendTeamAlias(ctx context.Context, name string, teamID int) {
+	if name == "" || teamID == 0 {
+		return
+	}
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE teams SET alias = CASE
+		    WHEN COALESCE(alias,'') = '' THEN $1
+		    WHEN LOWER($1) = ANY(string_to_array(LOWER(alias), ',')) THEN alias
+		    ELSE alias || ',' || $1
+		END
+		WHERE id=$2`, name, teamID)
+}
+
+// ── GET /admin/teams/dupes ─────────────────────────────────────────────────────
+// Zobrazí páry týmů které jsou pravděpodobně duplicitní.
+
+type DupePair struct {
+	ID1, ID2     int
+	Name1, Name2 string
+	DN1, DN2     string
+	Sport        string
+	MC1, MC2     int
+}
+
+func AdminTeamDupes(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin := RequireAdmin(w, r)
+		if admin == nil {
+			return
+		}
+		ctx := context.Background()
+
+		rows, err := db.Pool.Query(ctx, `
+			SELECT
+			    t1.id, t1.name, COALESCE(t1.display_name,''), t1.sport,
+			    (SELECT COUNT(*) FROM matches m WHERE m.home_team_id=t1.id OR m.away_team_id=t1.id),
+			    t2.id, t2.name, COALESCE(t2.display_name,''),
+			    (SELECT COUNT(*) FROM matches m WHERE m.home_team_id=t2.id OR m.away_team_id=t2.id)
+			FROM teams t1
+			JOIN teams t2 ON t1.id < t2.id AND t1.sport = t2.sport
+			WHERE (
+			    LOWER(t1.name) = LOWER(t2.name)
+			    OR (COALESCE(t1.display_name,'') != '' AND LOWER(t1.display_name) = LOWER(COALESCE(t2.display_name,'')))
+			    OR (LENGTH(t1.name) >= 4 AND (
+			        LOWER(t2.name) LIKE LOWER(t1.name) || ' %'
+			        OR LOWER(t1.name) LIKE LOWER(t2.name) || ' %'
+			    ))
+			)
+			ORDER BY t1.sport, t1.name`)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		defer rows.Close()
+
+		var pairs []DupePair
+		for rows.Next() {
+			var p DupePair
+			if err := rows.Scan(
+				&p.ID1, &p.Name1, &p.DN1, &p.Sport, &p.MC1,
+				&p.ID2, &p.Name2, &p.DN2, &p.MC2,
+			); err == nil {
+				pairs = append(pairs, p)
+			}
+		}
+
+		RenderTemplate(w, r, tmpl, "admin/team_dupes.html", TemplateData{
+			"User":  admin,
+			"Pairs": pairs,
+			"Flash": middleware.GetFlash(w, r),
+		})
+	}
 }

@@ -571,7 +571,8 @@ func resolveOrUpsertTeam(ctx context.Context, name, sport string, mappings map[s
 	if mappings != nil {
 		if res, ok := mappings[name]; ok {
 			if res.Action == "map" || (res.Action == "" && res.TeamID > 0) {
-				// Přiřazení k existujícímu týmu
+				// Prirazeni k existujicimu tymu — uloz alias pro pristi import
+				appendTeamAlias(context.Background(), name, res.TeamID)
 				return res.TeamID, false
 			}
 			if res.Action == "create" {
@@ -897,9 +898,13 @@ func upsertTeam(ctx context.Context, ft fdTeam, sport string) (int, bool) {
 		return id, false
 	}
 
-	// 2. Shoda přes alias (case-insensitive) — admin nastaví alias "Czech Republic" na tým "Česko"
+	// 2. Shoda přes alias (case-insensitive, comma-separated support)
+	// Admin muze ulozit vice aliasu oddelene carkou, napr. "Czech Republic,CZE"
 	err = db.Pool.QueryRow(ctx,
-		`SELECT id FROM teams WHERE LOWER(alias)=LOWER($1) AND sport=$2`, ft.Name, sport).Scan(&id)
+		`SELECT id FROM teams
+		 WHERE COALESCE(alias,'') != ''
+		   AND LOWER($1) = ANY(string_to_array(LOWER(alias), ','))
+		   AND sport=$2`, ft.Name, sport).Scan(&id)
 	if err == nil {
 		return id, false
 	}
