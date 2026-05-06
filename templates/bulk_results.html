@@ -40,7 +40,7 @@
                 {{if .HomeTeam}}{{coalesce .HomeTeam.DisplayName .HomeTeam.Name}}{{else}}tým {{.HomeTeamID}}{{end}}
                 vs
                 {{if .AwayTeam}}{{coalesce .AwayTeam.DisplayName .AwayTeam.Name}}{{else}}tým {{.AwayTeamID}}{{end}}
-                {{if .MatchDate}}<span style="color:var(--muted-d);font-size:.78rem;margin-left:.4rem">{{.MatchDate.Format "02.01. 15:04"}}</span>{{end}}
+                {{if .MatchDate}}<span style="color:var(--muted-d);font-size:.78rem;margin-left:.4rem">{{formatPrague .MatchDate "02.01. 15:04"}}</span>{{end}}
             </td>
             <td style="padding:.3rem .4rem;text-align:center">
                 <input type="number" name="home_{{.ID}}" min="0" max="99"

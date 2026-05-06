@@ -61,7 +61,7 @@
             {{if .AwayTeam}}{{coalesce .AwayTeam.DisplayName .AwayTeam.Name}}{{else}}tým {{.AwayTeamID}}{{end}}
         </td>
         <td style="padding:.4rem .5rem;color:var(--muted-d);font-size:.8rem">
-            {{if .MatchDate}}{{.MatchDate.Format "02.01. 15:04"}}{{else}}—{{end}}
+            {{if .MatchDate}}{{formatPrague .MatchDate "02.01. 15:04"}}{{else}}—{{end}}
         </td>
         <td style="padding:.4rem .5rem">
             {{if .HomeScore}}
@@ -83,10 +83,10 @@
         </td>
         <td style="padding:.4rem .5rem;white-space:nowrap">
             <button type="button" class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.1rem .35rem"
-                    onclick="toggleMatchEdit({{.ID}})">✏️</button>
+                    onclick="toggleMatchEdit('{{.ID}}')">✏️</button>
             {{if not .IsFinished}}
             <button type="button" class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.1rem .35rem"
-                    onclick="deleteMatch({{.ID}}, this)">✕</button>
+                    onclick="deleteMatch('{{.ID}}', this)">✕</button>
             {{end}}
         </td>
     </tr>
@@ -105,7 +105,7 @@
                     {{range $.Teams}}<option value="{{.ID}}" {{if eq .ID $awayID}}selected{{end}}>{{.Name}}</option>{{end}}
                 </select>
                 <input type="datetime-local" name="match_date"
-                       value="{{if .MatchDate}}{{.MatchDate.Format "2006-01-02T15:04"}}{{end}}" />
+                       value="{{if .MatchDate}}{{formatPrague .MatchDate "2006-01-02T15:04"}}{{end}}" />
                 <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">Uložit</button>
                 <button type="button" class="btn btn-sm btn-secondary" style="font-size:.78rem"
                         onclick="toggleMatchEdit({{.ID}})">Zrušit</button>
@@ -120,13 +120,11 @@
 {{end}}
 
 <script>
-var _csrf = (document.querySelector('meta[name="csrf-token"]') || document.createElement('meta')).getAttribute('content') || '';
-
-// Pomocná funkce — DELETE zápasu přes AJAX (CSRF token v headeru)
+// Pomocná funkce — DELETE zápasu přes AJAX
+// X-CSRF-Token přidává automaticky interceptor v base.html (window.fetch patch)
 function matchDeleteFetch(id) {
     return fetch('/admin/matches/' + id + '/delete', {
-        method: 'POST',
-        headers: {'X-CSRF-Token': _csrf}
+        method: 'POST'
     }).then(function(r) {
         if (r.status === 403) throw new Error('CSRF nebo přístup odmítnut (403) — obnovte stránku');
         return r.json();
@@ -191,7 +189,7 @@ function bulkDelete() {
     if(!confirm('Smazat ' + cbs.length + ' zápasů?')) return;
 
     var ids = [];
-    cbs.forEach(function(cb){ ids.push(parseInt(cb.getAttribute('data-id'))); });
+    cbs.forEach(function(cb){ ids.push(cb.getAttribute('data-id')); });
 
     var cnt = document.getElementById('bulk-count');
     var deleted = 0, failed = 0, total = ids.length;

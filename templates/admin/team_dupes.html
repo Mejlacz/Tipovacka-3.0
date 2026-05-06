@@ -275,7 +275,7 @@ function fillSelect(selEl, teams, sportFilter, query, excludeID){
                 if(t.display_name) lbl += ' (' + t.name + ')';
                 if(t.match_count>0) lbl += '  [' + t.match_count + ']';
                 opt.textContent = lbl;
-                if(String(t.id)===oldVal) opt.selected = true;
+                if(t.id===oldVal) opt.selected = true;
                 og.appendChild(opt);
                 totalCount++;
             });
@@ -305,7 +305,7 @@ window.buildSrcSel = function(){
 
 window.onSrcChange = function(){
     var selEl = document.getElementById('src-sel');
-    var id    = parseInt(selEl.value||'0',10);
+    var id    = selEl.value||'';
     var info  = document.getElementById('src-info');
     if(!id){
         if(info) info.textContent = '';
@@ -352,7 +352,7 @@ window.buildTgtSel = function(){
 
 window.onTgtChange = function(){
     var selEl = document.getElementById('tgt-sel');
-    var id    = parseInt(selEl.value||'0',10);
+    var id    = selEl.value||'';
     var info  = document.getElementById('tgt-info');
     if(!id){
         if(info) info.textContent = '';
@@ -367,8 +367,8 @@ window.onTgtChange = function(){
     checkAddBtn();
 };
 
-function getSrcID(){ return parseInt((document.getElementById('src-sel').value||'0'),10); }
-function getTgtID(){ return parseInt((document.getElementById('tgt-sel').value||'0'),10); }
+function getSrcID(){ return document.getElementById('src-sel').value||''; }
+function getTgtID(){ return document.getElementById('tgt-sel').value||''; }
 
 function checkAddBtn(){
     var srcID = getSrcID();
@@ -501,10 +501,15 @@ window.executeMerge = function(){
     .then(function(data){
         if(data.ok){
             var msg = '✅ Sloučeno: '+data.merged+' párů.';
-            if(data.errors&&data.errors.length) msg += ' Chyby: '+data.errors.join('; ');
+            if(data.errors&&data.errors.length) msg += ' ⚠️ Chyby: '+data.errors.join('; ');
             if(status) status.textContent = msg;
-            // Odeber z fronty a ze seznamu allTeams
+            // Odeber úspěšně sloučené z fronty a ze seznamu allTeams
             var done = new Set(pairs.map(function(x){ return x.source_id; }));
+            // Pokud byly chyby, nechej pouze selhaná v UI; úspěšná vždy odeber
+            if(data.errors && data.errors.length) {
+                // Ponech modal otevřený aby uživatel viděl chyby
+                if(btn) btn.disabled = false;
+            }
             _queue = _queue.filter(function(p){ return !done.has(p.srcID); });
             done.forEach(function(id){
                 delete _inQueue[id];
@@ -514,7 +519,7 @@ window.executeMerge = function(){
             buildSrcSel();
             buildTgtSel();
             renderQueue();
-            setTimeout(closeConfirm, 1800);
+            if(!data.errors || !data.errors.length) setTimeout(closeConfirm, 1800);
         } else {
             if(status) status.textContent = '❌ Chyba: '+(data.error||'Neznámá chyba');
             if(btn) btn.disabled = false;

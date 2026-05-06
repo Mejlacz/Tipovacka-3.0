@@ -1005,9 +1005,10 @@ func AdminTeamDupes(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
-		// All teams JSON for merge UI — includes comp_names and match_count
+		// All teams JSON for merge UI — includes comp_names and match_count.
+		// ID is a string to avoid JS Number precision loss for large CockroachDB int64 IDs.
 		type dupeTeamJSON struct {
-			ID          int      `json:"id"`
+			ID          string   `json:"id"`
 			Name        string   `json:"name"`
 			DisplayName string   `json:"display_name"`
 			Sport       string   `json:"sport"`
@@ -1020,13 +1021,15 @@ func AdminTeamDupes(tmpl *template.Template) http.HandlerFunc {
 			FROM teams t
 			ORDER BY t.sport, LOWER(COALESCE(NULLIF(t.display_name,''), t.name))`)
 		allTeams := []dupeTeamJSON{} // never nil — marshals as [] not null
-		teamIdxByID := map[int]int{}
+		teamIdxByID := map[int64]int{}
 		if atRows != nil {
 			for atRows.Next() {
+				var rawID int64
 				var t dupeTeamJSON
-				if err := atRows.Scan(&t.ID, &t.Name, &t.DisplayName, &t.Sport, &t.MatchCount); err == nil {
+				if err := atRows.Scan(&rawID, &t.Name, &t.DisplayName, &t.Sport, &t.MatchCount); err == nil {
+					t.ID = strconv.FormatInt(rawID, 10)
 					t.CompNames = []string{}
-					teamIdxByID[t.ID] = len(allTeams)
+					teamIdxByID[rawID] = len(allTeams)
 					allTeams = append(allTeams, t)
 				}
 			}
@@ -1040,7 +1043,7 @@ func AdminTeamDupes(tmpl *template.Template) http.HandlerFunc {
 			ORDER BY c.id DESC`)
 		if dtCompRows != nil {
 			for dtCompRows.Next() {
-				var tid int
+				var tid int64
 				var cname, cseason string
 				if err := dtCompRows.Scan(&tid, &cname, &cseason); err == nil {
 					if idx, ok := teamIdxByID[tid]; ok {
@@ -1076,9 +1079,10 @@ func AdminTeamMergeBulk(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
 		return
 	}
+	// IDs are sent as strings from JS to avoid JS Number precision loss for large int64 CockroachDB IDs.
 	type mergePair struct {
-		SourceID int `json:"source_id"`
-		TargetID int `json:"target_id"`
+		SourceID string `json:"source_id"`
+		TargetID string `json:"target_id"`
 	}
 	var pairs []mergePair
 	if err := json.NewDecoder(r.Body).Decode(&pairs); err != nil {
@@ -1092,35 +1096,53 @@ func AdminTeamMergeBulk(w http.ResponseWriter, r *http.Request) {
 	var errs []string
 
 	for _, p := range pairs {
-		if p.SourceID == 0 || p.TargetID == 0 || p.SourceID == p.TargetID {
-			errs = append(errs, fmt.Sprintf("neplatny par %d->%d", p.SourceID, p.TargetID))
+		sourceID, srcErr := strconv.ParseInt(p.SourceID, 10, 64)
+		targetID, tgtErr := strconv.ParseInt(p.TargetID, 10, 64)
+		if srcErr != nil || tgtErr != nil || sourceID == 0 || targetID == 0 || sourceID == targetID {
+			errs = append(errs, fmt.Sprintf("neplatny par '%s'->'%s'", p.SourceID, p.TargetID))
 			continue
 		}
 		var sourceName, targetName string
-		if err := db.Pool.QueryRow(ctx, `SELECT name FROM teams WHERE id=$1`, p.SourceID).Scan(&sourceName); err != nil {
-			errs = append(errs, fmt.Sprintf("zdrojovy tym ID %d nenalezen", p.SourceID))
+		if err := db.Pool.QueryRow(ctx, `SELECT name FROM teams WHERE id=$1`, sourceID).Scan(&sourceName); err != nil {
+			errs = append(errs, fmt.Sprintf("zdrojovy tym ID %s nenalezen", p.SourceID))
 			continue
 		}
-		if err := db.Pool.QueryRow(ctx, `SELECT name FROM teams WHERE id=$1`, p.TargetID).Scan(&targetName); err != nil {
-			errs = append(errs, fmt.Sprintf("cilovy tym ID %d nenalezen", p.TargetID))
+		if err := db.Pool.QueryRow(ctx, `SELECT name FROM teams WHERE id=$1`, targetID).Scan(&targetName); err != nil {
+			errs = append(errs, fmt.Sprintf("cilovy tym ID %s nenalezen", p.TargetID))
 			continue
 		}
 		// 1. Přepiš zápasy
-		_, _ = db.Pool.Exec(ctx, `UPDATE matches SET home_team_id=$1 WHERE home_team_id=$2`, p.TargetID, p.SourceID)
-		_, _ = db.Pool.Exec(ctx, `UPDATE matches SET away_team_id=$1 WHERE away_team_id=$2`, p.TargetID, p.SourceID)
+		if _, err := db.Pool.Exec(ctx, `UPDATE matches SET home_team_id=$1 WHERE home_team_id=$2`, targetID, sourceID); err != nil {
+			errs = append(errs, fmt.Sprintf("'%s'->home_team update: %v", sourceName, err))
+			continue
+		}
+		if _, err := db.Pool.Exec(ctx, `UPDATE matches SET away_team_id=$1 WHERE away_team_id=$2`, targetID, sourceID); err != nil {
+			errs = append(errs, fmt.Sprintf("'%s'->away_team update: %v", sourceName, err))
+			continue
+		}
 		// 2. Přenes competition_teams
-		_, _ = db.Pool.Exec(ctx, `
+		if _, err := db.Pool.Exec(ctx, `
 			INSERT INTO competition_teams (competition_id, team_id)
 			SELECT competition_id, $1 FROM competition_teams WHERE team_id=$2
-			ON CONFLICT DO NOTHING`, p.TargetID, p.SourceID)
+			ON CONFLICT DO NOTHING`, targetID, sourceID); err != nil {
+			errs = append(errs, fmt.Sprintf("'%s'->competition_teams transfer: %v", sourceName, err))
+			continue
+		}
 		// 3. Ulož alias
-		appendTeamAlias(ctx, sourceName, p.TargetID)
+		appendTeamAlias(ctx, sourceName, int(targetID))
 		// 4. Smaž zdroj
-		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, p.SourceID)
-		_, _ = db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, p.SourceID)
+		if _, err := db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, sourceID); err != nil {
+			errs = append(errs, fmt.Sprintf("'%s'->delete competition_teams: %v", sourceName, err))
+			continue
+		}
+		if _, err := db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, sourceID); err != nil {
+			errs = append(errs, fmt.Sprintf("'%s'->delete team: %v", sourceName, err))
+			continue
+		}
 
-		desc := fmt.Sprintf("Bulk merge: '%s' (ID %d) sloucen do '%s' (ID %d)", sourceName, p.SourceID, targetName, p.TargetID)
-		LogAction(&admin.ID, admin.Username, "team_merge", "team", &p.SourceID, desc, nil, nil)
+		desc := fmt.Sprintf("Bulk merge: '%s' (ID %s) sloucen do '%s' (ID %s)", sourceName, p.SourceID, targetName, p.TargetID)
+		sourceIDInt := int(sourceID)
+		LogAction(&admin.ID, admin.Username, "team_merge", "team", &sourceIDInt, desc, nil, nil)
 		merged++
 	}
 

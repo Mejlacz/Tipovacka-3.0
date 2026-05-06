@@ -138,16 +138,21 @@ func AdminMatchEdit(w http.ResponseWriter, r *http.Request) {
 	awayTeamID, _ := strconv.Atoi(r.FormValue("away_team_id"))
 	roundID, _ := strconv.Atoi(r.FormValue("round_id"))
 	matchDateStr := r.FormValue("match_date")
-	var matchDate *time.Time
 	if matchDateStr != "" {
-		t, err := time.ParseInLocation("2006-01-02T15:04", matchDateStr, pragueLocation)
-		if err == nil {
+		// Datum zadáno — aktualizuj vč. data
+		var matchDate *time.Time
+		if t, err := time.ParseInLocation("2006-01-02T15:04", matchDateStr, pragueLocation); err == nil {
 			matchDate = &t
 		}
+		_, _ = db.Pool.Exec(context.Background(),
+			`UPDATE matches SET home_team_id=$1, away_team_id=$2, round_id=$3, match_date=$4 WHERE id=$5`,
+			homeTeamID, awayTeamID, roundID, matchDate, matchID)
+	} else {
+		// Datum nevyplněno — zachovej existující datum (nesmaž ho)
+		_, _ = db.Pool.Exec(context.Background(),
+			`UPDATE matches SET home_team_id=$1, away_team_id=$2, round_id=$3 WHERE id=$4`,
+			homeTeamID, awayTeamID, roundID, matchID)
 	}
-	_, _ = db.Pool.Exec(context.Background(),
-		`UPDATE matches SET home_team_id=$1, away_team_id=$2, round_id=$3, match_date=$4 WHERE id=$5`,
-		homeTeamID, awayTeamID, roundID, matchDate, matchID)
 	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
 }
 
