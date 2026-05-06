@@ -1,37 +1,17 @@
 {{define "title"}}Sloučení týmů{{end}}
 
 <style>
-/* ── Left panel: team list ── */
-.tl-sport-hdr {
-    position:sticky;top:0;z-index:5;
-    background:var(--bg);padding:.3rem .7rem;
-    font-size:.75rem;font-weight:800;letter-spacing:.04em;
-    color:var(--muted-d);border-bottom:1px solid var(--border-d);
-    display:flex;align-items:center;gap:.35rem;
+.merge-select {
+    width:100%;background:var(--bg3);border:1px solid var(--border-d);
+    border-radius:6px;color:inherit;font-size:.83rem;padding:.2rem;
 }
-.tl-comp-hdr {
-    padding:.22rem .9rem;font-size:.72rem;color:var(--muted-d);
-    background:rgba(99,102,241,.07);border-bottom:1px solid rgba(99,102,241,.1);
-    font-style:italic;
-}
-.tl-row {
-    display:flex;align-items:center;gap:.35rem;
-    padding:.3rem .7rem;border-bottom:1px solid rgba(255,255,255,.04);
-    cursor:pointer;transition:background .1s;
-}
-.tl-row:hover { background:rgba(255,255,255,.05); }
-.tl-row.tl-selected { background:rgba(248,113,113,.12);border-left:3px solid #f87171; }
-.tl-row.tl-in-queue { background:rgba(99,102,241,.1); }
-.tl-name { flex:1;font-size:.83rem;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
-.tl-sub  { font-weight:400;font-size:.76rem;color:var(--muted-d) }
-.tl-mc   { font-size:.7rem;color:var(--muted-d);background:var(--bg3);border-radius:10px;padding:.05rem .38rem;white-space:nowrap;flex-shrink:0 }
-.tl-orphan { font-size:.65rem;color:#f59e0b;margin-left:.15rem }
+.merge-select option        { padding:.2rem .4rem; }
+.merge-select optgroup      { color:var(--muted-d);font-size:.76rem;font-style:normal;font-weight:700 }
+.merge-select option:checked{ background:rgba(99,102,241,.35) }
 
-/* ── Filters ── */
-.sp-btn { padding:.2rem .65rem;font-size:.78rem;border:1px solid var(--border-d);background:var(--bg2);color:var(--muted-d);border-radius:5px;cursor:pointer;transition:background .12s }
+.sp-btn { padding:.2rem .65rem;font-size:.78rem;border:1px solid var(--border-d);background:var(--bg2);color:var(--muted-d);border-radius:5px;cursor:pointer }
 .sp-btn.active { background:var(--accent,#10b981);color:#fff;border-color:var(--accent,#10b981) }
 
-/* ── Queue items ── */
 .queue-item { display:flex;align-items:center;gap:.3rem;padding:.28rem .45rem;background:var(--bg3);border-radius:5px;font-size:.78rem }
 </style>
 
@@ -49,54 +29,54 @@
 </div>
 {{end}}
 
-<p style="font-size:.82rem;color:var(--muted-d);margin:.0 0 .85rem">
-    <strong>Postup:</strong> Klikni na tým vlevo → napravo vyber cílový tým → <em>Přidat do fronty</em> → opakuj → <em>Hromadně sloučit</em> → potvrď.
+<p style="font-size:.82rem;color:var(--muted-d);margin:0 0 .85rem">
+    <strong>Postup:</strong> Vlevo vyber tým ke smazání → vpravo cílový tým → <em>Přidat do fronty</em> → opakuj → <em>Hromadně sloučit</em> → potvrď.
 </p>
 
-{{/* ════════════════════════════════════════════════════
-     HLAVNÍ LAYOUT: vlevo seznam, vpravo picker + fronta
-════════════════════════════════════════════════════ */}}
-<div style="display:grid;grid-template-columns:1fr 370px;gap:1rem;align-items:start">
+{{/* ══════════════════════════════════════════════
+     HLAVNÍ GRID: vlevo zdroj, vpravo cíl + fronta
+══════════════════════════════════════════════ */}}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start">
 
-  {{/* ═══════ LEFT: seznam týmů ═══════ */}}
+  {{/* ═══ VLEVO: zdrojový tým ═══ */}}
   <div>
-    {{/* Filtr */}}
-    <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
-        <input type="search" id="tl-q" placeholder="🔍 Hledat tým…"
-               style="flex:1;min-width:160px;padding:.32rem .6rem;background:var(--bg2);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.85rem" />
-        <div style="display:flex;gap:.2rem">
-            <button class="sp-btn active" data-sport="" onclick="setSport('')">Vše</button>
-            <button class="sp-btn" data-sport="football" onclick="setSport('football')">⚽ Fotbal</button>
-            <button class="sp-btn" data-sport="hockey"   onclick="setSport('hockey')">🏒 Hokej</button>
-        </div>
-        <span id="tl-count" style="font-size:.75rem;color:var(--muted-d)"></span>
+    <div style="font-size:.78rem;font-weight:700;color:#f87171;margin-bottom:.35rem">🗑 Ke smazání — vyber tým:</div>
+
+    {{/* Sport filtr */}}
+    <div style="display:flex;gap:.25rem;margin-bottom:.4rem;flex-wrap:wrap;align-items:center">
+        <button class="sp-btn active" data-sport="" onclick="setSrcSport('')">Vše</button>
+        <button class="sp-btn" data-sport="football" onclick="setSrcSport('football')">⚽ Fotbal</button>
+        <button class="sp-btn" data-sport="hockey"   onclick="setSrcSport('hockey')">🏒 Hokej</button>
+        <input type="search" id="src-q" placeholder="Hledat…"
+               oninput="buildSrcSel()"
+               style="flex:1;min-width:120px;padding:.28rem .5rem;background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;color:inherit;font-size:.82rem" />
+        <span id="src-count" style="font-size:.72rem;color:var(--muted-d)"></span>
     </div>
 
-    {{/* Seznam */}}
-    <div id="team-list"
-         style="height:76vh;overflow-y:auto;border:1px solid var(--border-d);border-radius:8px;background:var(--bg2)">
-    </div>
+    <select id="src-sel" class="merge-select" size="18" onchange="onSrcChange()"></select>
+
+    {{/* Info o vybraném */}}
+    <div id="src-info" style="font-size:.73rem;color:var(--muted-d);margin-top:.3rem;min-height:1.1em"></div>
   </div>
 
-  {{/* ═══════ RIGHT: picker + fronta ═══════ */}}
-  <div style="position:sticky;top:68px;display:flex;flex-direction:column;gap:.7rem">
-
-    {{/* Vybraný zdroj */}}
-    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:.75rem .9rem">
-        <div style="font-size:.72rem;color:#f87171;font-weight:700;margin-bottom:.3rem">🗑 Ke smazání (zdroj)</div>
-        <div id="src-display" style="font-size:.85rem;color:var(--muted-d)">← Klikni na tým ze seznamu vlevo</div>
-    </div>
+  {{/* ═══ VPRAVO: cíl + fronta ═══ */}}
+  <div style="display:flex;flex-direction:column;gap:.7rem">
 
     {{/* Cílový tým */}}
-    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:.75rem .9rem">
-        <div style="font-size:.72rem;color:#10b981;font-weight:700;margin-bottom:.35rem">✅ Zachovat (cíl)</div>
-        <input type="text" id="tgt-q" placeholder="Hledat cílový tým…" oninput="buildTgtSel()"
-               style="width:100%;box-sizing:border-box;padding:.3rem .55rem;font-size:.82rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;margin-bottom:.3rem" />
-        <select id="tgt-sel" size="7" onchange="onTgtChange()"
-                style="width:100%;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;font-size:.82rem;padding:.2rem"></select>
-        <div id="tgt-info" style="font-size:.72rem;color:var(--muted-d);margin-top:.25rem;min-height:.9em"></div>
+    <div>
+        <div style="font-size:.78rem;font-weight:700;color:#10b981;margin-bottom:.35rem">✅ Zachovat — vyber cílový tým:</div>
+        <div style="display:flex;gap:.25rem;margin-bottom:.4rem;flex-wrap:wrap;align-items:center">
+            <button class="sp-btn" id="tsp-all"      data-sport="" onclick="setTgtSport('')">Vše</button>
+            <button class="sp-btn" data-sport="football" onclick="setTgtSport('football')">⚽ Fotbal</button>
+            <button class="sp-btn" data-sport="hockey"   onclick="setTgtSport('hockey')">🏒 Hokej</button>
+            <input type="search" id="tgt-q" placeholder="Hledat…"
+                   oninput="buildTgtSel()"
+                   style="flex:1;min-width:120px;padding:.28rem .5rem;background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;color:inherit;font-size:.82rem" />
+        </div>
+        <select id="tgt-sel" class="merge-select" size="10" onchange="onTgtChange()"></select>
+        <div id="tgt-info" style="font-size:.73rem;color:var(--muted-d);margin-top:.3rem;min-height:1.1em"></div>
         <button id="add-btn" class="btn btn-primary btn-sm"
-                style="margin-top:.55rem;width:100%;font-weight:700" onclick="addToQueue()" disabled>
+                style="margin-top:.5rem;width:100%;font-weight:700" onclick="addToQueue()" disabled>
             ➕ Přidat do fronty
         </button>
     </div>
@@ -107,11 +87,11 @@
             <span style="font-size:.78rem;font-weight:700">📋 Fronta ke sloučení</span>
             <span id="queue-count" style="font-size:.72rem;background:rgba(99,102,241,.2);color:#a5b4fc;border-radius:10px;padding:.05rem .42rem;font-weight:700">0</span>
         </div>
-        <div id="queue-list" style="display:flex;flex-direction:column;gap:.28rem;max-height:220px;overflow-y:auto;min-height:2rem">
+        <div id="queue-list" style="display:flex;flex-direction:column;gap:.28rem;max-height:230px;overflow-y:auto;min-height:2rem">
             <div style="font-size:.78rem;color:var(--muted-d);text-align:center;padding:.4rem">Fronta je prázdná</div>
         </div>
         <button id="bulk-btn" class="btn btn-sm"
-                style="margin-top:.6rem;width:100%;background:#f59e0b;border-color:#f59e0b;color:#1a1a1a;font-weight:800;letter-spacing:.01em"
+                style="margin-top:.6rem;width:100%;background:#f59e0b;border-color:#f59e0b;color:#1a1a1a;font-weight:800"
                 onclick="showConfirmModal()" disabled>
             ⛓ Hromadně sloučit (0)
         </button>
@@ -120,15 +100,14 @@
   </div>
 </div>
 
-{{/* ════════════════════════════════════════════════════
+{{/* ═══════════════════════════════════════════════════
      POTVRZOVACÍ MODAL
-════════════════════════════════════════════════════ */}}
+═══════════════════════════════════════════════════ */}}
 <div id="confirm-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;overflow-y:auto;padding:2rem 1rem">
-    <div style="max-width:620px;margin:0 auto;background:var(--bg2);border:1px solid var(--border-d);border-radius:12px;padding:1.5rem">
+    <div style="max-width:640px;margin:0 auto;background:var(--bg2);border:1px solid var(--border-d);border-radius:12px;padding:1.5rem">
         <h2 style="margin:0 0 .25rem;font-size:1.05rem">⛓ Potvrdit hromadné sloučení</h2>
         <p style="margin:0 0 1rem;font-size:.83rem;color:var(--muted-d)">
-            Zdrojové týmy budou <strong style="color:#f87171">trvale smazány</strong> — jejich zápasy a aliasy přejdou na cílové týmy.
-            Zaškrtni nebo odškrtni páry dle potřeby.
+            Zdrojové týmy budou <strong style="color:#f87171">trvale smazány</strong> — jejich zápasy a aliasy přejdou na cílové. Odškrtni páry, které nechceš provést.
         </p>
         <div style="overflow-x:auto;margin-bottom:.85rem">
         <table style="width:100%;border-collapse:collapse;font-size:.82rem">
@@ -156,10 +135,10 @@
     </div>
 </div>
 
-{{/* ════════════════════════════════════════════════════
+{{/* ═══════════════════════════════════════════════════
      AUTO-DETEKOVANÉ PÁRY
-════════════════════════════════════════════════════ */}}
-<h2 style="font-size:.9rem;font-weight:700;margin:1.5rem 0 .45rem;color:var(--muted-d)">
+═══════════════════════════════════════════════════ */}}
+<h2 style="font-size:.9rem;font-weight:700;margin:1.75rem 0 .45rem;color:var(--muted-d)">
     🤖 Automaticky nalezené páry ({{len .Pairs}})
 </h2>
 
@@ -183,7 +162,7 @@
             {{if .DN1}}<div style="font-size:.75rem;color:var(--muted-d)">{{.DN1}}</div>{{end}}
             <div style="font-size:.72rem;margin-top:.2rem;color:{{if gt .MC1 .MC2}}#10b981{{else}}var(--muted-d){{end}}">{{.MC1}} zápasů</div>
             <form method="post" action="/admin/teams/{{.ID2}}/merge" style="margin-top:.35rem"
-                  onsubmit="return confirm('Sloučit {{.Name2}} → {{.Name1}}? Tým {{.Name2}} bude smazán.')">
+                  onsubmit="return confirm('Sloučit {{.Name2}} do {{.Name1}}? Tým {{.Name2}} bude smazán.')">
                 <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
                 <input type="hidden" name="target_team_id" value="{{.ID1}}" />
                 <button type="submit" class="btn btn-sm"
@@ -198,7 +177,7 @@
             {{if .DN2}}<div style="font-size:.75rem;color:var(--muted-d)">{{.DN2}}</div>{{end}}
             <div style="font-size:.72rem;margin-top:.2rem;color:{{if gt .MC2 .MC1}}#10b981{{else}}var(--muted-d){{end}}">{{.MC2}} zápasů</div>
             <form method="post" action="/admin/teams/{{.ID1}}/merge" style="margin-top:.35rem"
-                  onsubmit="return confirm('Sloučit {{.Name1}} → {{.Name2}}? Tým {{.Name1}} bude smazán.')">
+                  onsubmit="return confirm('Sloučit {{.Name1}} do {{.Name2}}? Tým {{.Name1}} bude smazán.')">
                 <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
                 <input type="hidden" name="target_team_id" value="{{.ID2}}" />
                 <button type="submit" class="btn btn-sm"
@@ -215,236 +194,217 @@
 
 <script>
 (function(){
-/* ─── Data ─── */
-var allTeams   = {{.AllTeamsJSON}};
+/* ─── Data z Go ─── */
+var _raw = {{.AllTeamsJSON}};
+var allTeams = (Array.isArray(_raw)) ? _raw : [];
+
 var _csrfToken = '{{.CSRFToken}}';
 
-var _sport  = '';    // aktuální sport filtr
-var _srcID  = 0;     // vybraný zdrojový tým
-var _queue  = [];    // fronta: [{srcID, srcLabel, srcSport, tgtID, tgtLabel, tgtSport}]
-var _inQueue = {};   // srcID → true
+var _srcSport = '';
+var _tgtSport = '';
+var _queue    = [];   // [{srcID, srcLabel, srcSport, tgtID, tgtLabel, tgtSport}]
+var _inQueue  = {};   // srcID → true
 
 /* ─── Utils ─── */
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function sportEmoji(s){ return s==='football'?'⚽':s==='hockey'?'🏒':'🏆'; }
-function teamLabel(t){ return (t.display_name||t.name); }
+function teamLabel(t){ return t.display_name || t.name; }
 
-/* ─── Left panel ─── */
-window.setSport = function(s){
-    _sport = s;
-    document.querySelectorAll('.sp-btn').forEach(function(b){
-        b.classList.toggle('active', b.dataset.sport === s);
-    });
-    renderTeamList();
-    buildTgtSel();
-};
+/* ─── Buildujeme optgroups ze seznamu týmů ─── */
+// Vrátí {sportKey → {compKey → [teams]}}
+function groupTeams(teams, sportFilter, query){
+    var q = (query||'').toLowerCase();
+    var sportGroups = {};  // sport → {comp → [t]}
+    var sportOrder  = [];
+    var compOrder   = {};  // sport → [comp]
 
-function renderTeamList(){
-    var q    = (document.getElementById('tl-q').value||'').toLowerCase();
-    var list = document.getElementById('team-list');
-    if(!list) return;
-
-    // Seřadit sport: football → hockey → ostatní
-    var sportOrder = {football:0, hockey:1};
-    function sportKey(s){ return (sportOrder[s]!==undefined ? sportOrder[s] : 99) + '|' + s; }
-
-    // Skupiny: sport → {compKey → [teams]}
-    var sportGroups = {};   // {sport: {compKey: [t,...]}}
-    var sportOrderMap = {}; // sport → [compKey, ...]
-    var sportList = [];     // unique sports in order
-
-    var count = 0;
-    allTeams.forEach(function(t){
-        if(_sport && t.sport !== _sport) return;
+    teams.forEach(function(t){
+        if(sportFilter && t.sport !== sportFilter) return;
+        if(_inQueue[t.id]) return; // ve frontě → skryjeme ze zdrojového listu
         var label = teamLabel(t);
         if(q && label.toLowerCase().indexOf(q)<0 && t.name.toLowerCase().indexOf(q)<0) return;
 
         var sp = t.sport;
         if(!sportGroups[sp]){
             sportGroups[sp] = {};
-            sportOrderMap[sp] = [];
-            sportList.push(sp);
+            compOrder[sp]   = [];
+            sportOrder.push(sp);
         }
-
-        // Primární soutěž pro seskupení
-        var compKey = (t.comp_names && t.comp_names.length>0) ? t.comp_names[0] : '';
-        if(!sportGroups[sp][compKey]){
-            sportGroups[sp][compKey] = [];
-            sportOrderMap[sp].push(compKey);
+        var ck = (t.comp_names && t.comp_names.length>0) ? t.comp_names[0] : '';
+        if(!sportGroups[sp][ck]){
+            sportGroups[sp][ck] = [];
+            compOrder[sp].push(ck);
         }
-        sportGroups[sp][compKey].push(t);
-        count++;
+        sportGroups[sp][ck].push(t);
     });
 
-    sportList.sort(function(a,b){ return sportKey(a).localeCompare(sportKey(b)); });
-
-    var html = '';
-    sportList.forEach(function(sp){
-        var spLabel = sp==='football'?'Fotbal':sp==='hockey'?'Hokej':sp;
-        html += '<div class="tl-sport-hdr">' + sportEmoji(sp) + ' ' + esc(spLabel) + '</div>';
-
-        // Seřadit soutěže: pojmenované A-Z, pak Nezařazené
-        var compKeys = sportOrderMap[sp].slice();
-        compKeys.sort(function(a,b){
-            if(a==='' && b!=='') return 1;
-            if(a!=='' && b==='') return -1;
-            return a.localeCompare(b, 'cs');
-        });
-
-        compKeys.forEach(function(ck){
-            var teams = sportGroups[sp][ck];
-            var compLabel = ck || 'Nezařazené';
-            html += '<div class="tl-comp-hdr">' + esc(compLabel) + ' <span style="font-size:.67rem;opacity:.7">(' + teams.length + ')</span></div>';
-
-            teams.forEach(function(t){
-                var isSelected = t.id === _srcID;
-                var inQueue    = !!_inQueue[t.id];
-                var label = teamLabel(t);
-                var sub   = t.display_name ? t.name : '';
-                var cls   = 'tl-row' + (isSelected?' tl-selected':'') + (inQueue?' tl-in-queue':'');
-                html += '<div class="' + cls + '" data-id="' + t.id + '" onclick="selectSrc(' + t.id + ')">' +
-                    '<span style="font-size:.75rem;flex-shrink:0">' + sportEmoji(t.sport) + '</span>' +
-                    '<span class="tl-name">' + esc(label) +
-                        (sub ? '<span class="tl-sub"> (' + esc(sub) + ')</span>' : '') +
-                        (inQueue ? ' <span style="font-size:.67rem;color:#818cf8">↗</span>' : '') +
-                    '</span>' +
-                    (t.match_count>0 ? '<span class="tl-mc">' + t.match_count + '</span>' : '') +
-                    ((!t.comp_names||t.comp_names.length===0) ? '<span class="tl-orphan">⚠</span>' : '') +
-                '</div>';
-            });
+    // Sport order: football → hockey → ostatní
+    sportOrder.sort(function(a,b){
+        var o={football:0,hockey:1}; return (o[a]||9)-(o[b]||9);
+    });
+    // Comp order: named A-Z, pak ""
+    Object.keys(compOrder).forEach(function(sp){
+        compOrder[sp].sort(function(a,b){
+            if(a===''&&b!=='') return 1;
+            if(a!==''&&b==='') return -1;
+            return a.localeCompare(b,'cs');
         });
     });
 
-    list.innerHTML = html || '<div style="padding:1.5rem;color:var(--muted-d);text-align:center">Žádné týmy</div>';
-    var el = document.getElementById('tl-count');
-    if(el) el.textContent = count + ' týmů';
-
-    // Scroll vybraného do pohledu
-    if(_srcID){
-        var sel = list.querySelector('.tl-selected');
-        if(sel) sel.scrollIntoView({block:'nearest'});
-    }
+    return {sportGroups:sportGroups, sportOrder:sportOrder, compOrder:compOrder};
 }
 
-/* ─── Výběr zdroje ─── */
-window.selectSrc = function(id){
-    if(_inQueue[id]){ return; } // už ve frontě
-    _srcID = id;
+function fillSelect(selEl, teams, sportFilter, query, excludeID){
+    var filtered = teams.filter(function(t){ return t.id !== excludeID; });
+    var g = groupTeams(filtered, sportFilter, query);
+    var oldVal = selEl.value;
+    selEl.innerHTML = '';
+    var totalCount = 0;
+
+    g.sportOrder.forEach(function(sp){
+        var spLabel = sp==='football'?('⚽ Fotbal'):sp==='hockey'?('🏒 Hokej'):sp;
+        g.compOrder[sp].forEach(function(ck){
+            var teams2 = g.sportGroups[sp][ck];
+            var grpLabel = spLabel + (ck ? ' — ' + ck : ' — Nezařazené');
+            var og = document.createElement('optgroup');
+            og.label = grpLabel;
+            teams2.forEach(function(t){
+                var opt = document.createElement('option');
+                opt.value = t.id;
+                var lbl = teamLabel(t);
+                if(t.display_name) lbl += ' (' + t.name + ')';
+                if(t.match_count>0) lbl += '  [' + t.match_count + ']';
+                opt.textContent = lbl;
+                if(String(t.id)===oldVal) opt.selected = true;
+                og.appendChild(opt);
+                totalCount++;
+            });
+            selEl.appendChild(og);
+        });
+    });
+    return totalCount;
+}
+
+/* ─── Zdrojový select ─── */
+window.setSrcSport = function(s){
+    _srcSport = s;
+    document.querySelectorAll('.sp-btn[onclick^="setSrcSport"]').forEach(function(b){
+        b.classList.toggle('active', b.dataset.sport===s);
+    });
+    buildSrcSel();
+};
+
+window.buildSrcSel = function(){
+    var selEl = document.getElementById('src-sel');
+    var q     = document.getElementById('src-q').value;
+    var cnt   = fillSelect(selEl, allTeams, _srcSport, q, 0);
+    var el    = document.getElementById('src-count');
+    if(el) el.textContent = cnt + ' týmů';
+    onSrcChange();
+};
+
+window.onSrcChange = function(){
+    var selEl = document.getElementById('src-sel');
+    var id    = parseInt(selEl.value||'0',10);
+    var info  = document.getElementById('src-info');
+    if(!id){
+        if(info) info.textContent = '';
+        checkAddBtn();
+        return;
+    }
     var t = allTeams.find(function(x){ return x.id===id; });
-    var el = document.getElementById('src-display');
-    if(el && t){
-        var comps = (t.comp_names && t.comp_names.length) ? t.comp_names.join(', ') : 'Nezařazený';
-        el.innerHTML =
-            '<strong>' + sportEmoji(t.sport) + ' ' + esc(teamLabel(t)) + '</strong>' +
-            (t.display_name ? '<br><span style="font-size:.75rem;color:var(--muted-d)">' + esc(t.name) + '</span>' : '') +
-            '<br><span style="font-size:.71rem;color:var(--muted-d)">' + esc(comps) + ' · ' + t.match_count + ' zápasů</span>';
+    if(info && t){
+        var comps = (t.comp_names&&t.comp_names.length) ? t.comp_names.join(', ') : 'Nezařazený';
+        info.textContent = sportEmoji(t.sport) + ' ' + comps + ' · ' + t.match_count + ' zápasů';
+    }
+    // Auto-nastav sport filtr pro cílový select
+    if(t && _tgtSport !== t.sport){
+        setTgtSportSilent(t.sport);
     }
     buildTgtSel();
-    renderTeamList();
     checkAddBtn();
 };
 
 /* ─── Cílový select ─── */
-window.buildTgtSel = function(){
-    var q   = (document.getElementById('tgt-q').value||'').toLowerCase();
-    var sel = document.getElementById('tgt-sel');
-    if(!sel) return;
-    var old = sel.value;
-    sel.innerHTML = '';
-
-    // Grouped option elements: same sport first, then others
-    var srcTeam = _srcID ? allTeams.find(function(x){ return x.id===_srcID; }) : null;
-    var sameSport = [], otherSport = [];
-
-    allTeams.forEach(function(t){
-        if(t.id === _srcID) return;
-        var label = sportEmoji(t.sport) + ' ' + teamLabel(t);
-        if(t.display_name) label += ' (' + t.name + ')';
-        if(q && label.toLowerCase().indexOf(q)<0) return;
-        if(srcTeam && t.sport === srcTeam.sport) sameSport.push({t:t, label:label});
-        else otherSport.push({t:t, label:label});
+window.setTgtSport = function(s){
+    _tgtSport = s;
+    document.querySelectorAll('.sp-btn[onclick^="setTgtSport"]').forEach(function(b){
+        b.classList.toggle('active', b.dataset.sport===s);
     });
+    buildTgtSel();
+};
 
-    function addGroup(items, groupLabel){
-        if(!items.length) return;
-        var og = document.createElement('optgroup');
-        og.label = groupLabel;
-        items.forEach(function(item){
-            var opt = document.createElement('option');
-            opt.value = item.t.id;
-            opt.textContent = item.label;
-            if(String(item.t.id)===old) opt.selected=true;
-            og.appendChild(opt);
-        });
-        sel.appendChild(og);
+function setTgtSportSilent(s){
+    _tgtSport = s;
+    // Aktualizuj active stav tlačítek cílového sportu
+    document.querySelectorAll('.sp-btn[onclick^="setTgtSport"]').forEach(function(b){
+        b.classList.toggle('active', b.dataset.sport===s);
+    });
+}
+
+window.buildTgtSel = function(){
+    var selEl   = document.getElementById('tgt-sel');
+    var q       = document.getElementById('tgt-q').value;
+    var srcID   = parseInt((document.getElementById('src-sel').value||'0'),10);
+    fillSelect(selEl, allTeams, _tgtSport, q, srcID);
+    onTgtChange();
+};
+
+window.onTgtChange = function(){
+    var selEl = document.getElementById('tgt-sel');
+    var id    = parseInt(selEl.value||'0',10);
+    var info  = document.getElementById('tgt-info');
+    if(!id){
+        if(info) info.textContent = '';
+        checkAddBtn();
+        return;
     }
-
-    if(srcTeam){
-        var spLabel = srcTeam.sport==='football'?'⚽ Fotbal':srcTeam.sport==='hockey'?'🏒 Hokej':'Stejný sport';
-        addGroup(sameSport, spLabel);
-        addGroup(otherSport, 'Ostatní sporty');
-    } else {
-        var all = sameSport.concat(otherSport);
-        all.forEach(function(item){
-            var opt = document.createElement('option');
-            opt.value = item.t.id;
-            opt.textContent = item.label;
-            if(String(item.t.id)===old) opt.selected=true;
-            sel.appendChild(opt);
-        });
+    var t = allTeams.find(function(x){ return x.id===id; });
+    if(info && t){
+        var comps = (t.comp_names&&t.comp_names.length) ? t.comp_names.join(', ') : 'Nezařazený';
+        info.textContent = sportEmoji(t.sport) + ' ' + comps + ' · ' + t.match_count + ' zápasů';
     }
-
-    updateTgtInfo();
     checkAddBtn();
 };
 
-window.onTgtChange = function(){ updateTgtInfo(); checkAddBtn(); };
-
-function getTgtID(){
-    var sel = document.getElementById('tgt-sel');
-    return sel ? parseInt(sel.value||'0',10) : 0;
-}
-
-function updateTgtInfo(){
-    var id  = getTgtID();
-    var el  = document.getElementById('tgt-info');
-    if(!el) return;
-    if(!id){ el.textContent=''; return; }
-    var t = allTeams.find(function(x){ return x.id===id; });
-    if(!t){ el.textContent=''; return; }
-    var comps = (t.comp_names && t.comp_names.length) ? t.comp_names.join(', ') : 'Nezařazený';
-    el.textContent = sportEmoji(t.sport) + ' ' + comps + ' · ' + t.match_count + ' zápasů';
-}
+function getSrcID(){ return parseInt((document.getElementById('src-sel').value||'0'),10); }
+function getTgtID(){ return parseInt((document.getElementById('tgt-sel').value||'0'),10); }
 
 function checkAddBtn(){
+    var srcID = getSrcID();
     var tgtID = getTgtID();
-    var ok = _srcID && tgtID && _srcID !== tgtID && !_inQueue[_srcID];
-    document.getElementById('add-btn').disabled = !ok;
+    document.getElementById('add-btn').disabled = !(srcID && tgtID && srcID!==tgtID && !_inQueue[srcID]);
 }
 
 /* ─── Přidat do fronty ─── */
 window.addToQueue = function(){
+    var srcID = getSrcID();
     var tgtID = getTgtID();
-    if(!_srcID || !tgtID || _srcID===tgtID) return;
-    if(_inQueue[_srcID]){ alert('Tento tým je již ve frontě.'); return; }
+    if(!srcID || !tgtID || srcID===tgtID) return;
+    if(_inQueue[srcID]){ alert('Tento tým je již ve frontě.'); return; }
 
-    var src = allTeams.find(function(x){ return x.id===_srcID; });
-    var tgt = allTeams.find(function(x){ return x.id===tgtID;  });
-    if(!src || !tgt) return;
+    var src = allTeams.find(function(x){ return x.id===srcID; });
+    var tgt = allTeams.find(function(x){ return x.id===tgtID; });
+    if(!src||!tgt) return;
 
     _queue.push({
-        srcID:   src.id, srcLabel: teamLabel(src), srcSport: src.sport,
-        tgtID:   tgt.id, tgtLabel: teamLabel(tgt), tgtSport: tgt.sport
+        srcID: src.id, srcLabel: teamLabel(src), srcSport: src.sport,
+        tgtID: tgt.id, tgtLabel: teamLabel(tgt), tgtSport: tgt.sport
     });
     _inQueue[src.id] = true;
 
-    // Reset výběru
-    _srcID = 0;
-    document.getElementById('src-display').innerHTML = '← Klikni na tým ze seznamu vlevo';
-    document.getElementById('tgt-q').value = '';
+    // Reset zdrojového výběru
+    document.getElementById('src-sel').value  = '';
+    document.getElementById('tgt-sel').value  = '';
+    document.getElementById('src-q').value    = '';
+    document.getElementById('tgt-q').value    = '';
+    document.getElementById('src-info').textContent = '';
+    document.getElementById('tgt-info').textContent = '';
+
+    buildSrcSel();
     buildTgtSel();
-    renderTeamList();
     renderQueue();
+    checkAddBtn();
 };
 
 /* ─── Fronta ─── */
@@ -454,7 +414,7 @@ function renderQueue(){
     var btn  = document.getElementById('bulk-btn');
     if(cnt) cnt.textContent = _queue.length;
     if(btn){
-        btn.disabled    = _queue.length === 0;
+        btn.disabled    = _queue.length===0;
         btn.textContent = '⛓ Hromadně sloučit (' + _queue.length + ')';
     }
     if(!list) return;
@@ -463,27 +423,27 @@ function renderQueue(){
         return;
     }
     list.innerHTML = '';
-    _queue.forEach(function(p, i){
+    _queue.forEach(function(p,i){
         var div = document.createElement('div');
         div.className = 'queue-item';
         div.innerHTML =
-            '<span style="color:#f87171;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(p.srcLabel) + '">' +
-                sportEmoji(p.srcSport) + ' ' + esc(p.srcLabel) + '</span>' +
-            '<span style="color:var(--muted-d);flex-shrink:0">→</span>' +
-            '<span style="color:#10b981;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(p.tgtLabel) + '">' +
-                sportEmoji(p.tgtSport) + ' ' + esc(p.tgtLabel) + '</span>' +
-            '<button onclick="removeFromQueue(' + i + ')" title="Odebrat" ' +
-                'style="flex-shrink:0;background:none;border:none;color:var(--muted-d);cursor:pointer;font-size:.88rem;padding:0;line-height:1">✕</button>';
+            '<span style="color:#f87171;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(p.srcLabel)+'">' +
+                sportEmoji(p.srcSport)+' '+esc(p.srcLabel)+'</span>'+
+            '<span style="color:var(--muted-d);flex-shrink:0">→</span>'+
+            '<span style="color:#10b981;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(p.tgtLabel)+'">' +
+                sportEmoji(p.tgtSport)+' '+esc(p.tgtLabel)+'</span>'+
+            '<button onclick="removeFromQueue('+i+')" title="Odebrat" '+
+                'style="flex-shrink:0;background:none;border:none;color:var(--muted-d);cursor:pointer;font-size:.9rem;padding:0;line-height:1">✕</button>';
         list.appendChild(div);
     });
 }
 
 window.removeFromQueue = function(i){
-    if(i<0 || i>=_queue.length) return;
+    if(i<0||i>=_queue.length) return;
     delete _inQueue[_queue[i].srcID];
-    _queue.splice(i, 1);
+    _queue.splice(i,1);
+    buildSrcSel(); // vrátí tým zpět do zdrojového listu
     renderQueue();
-    renderTeamList();
 };
 
 /* ─── Potvrzovací modal ─── */
@@ -492,20 +452,17 @@ window.showConfirmModal = function(){
     var tbody = document.getElementById('confirm-tbody');
     if(!tbody) return;
     tbody.innerHTML = '';
-    _queue.forEach(function(p, i){
+    _queue.forEach(function(p,i){
         var tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid rgba(255,255,255,.05)';
         tr.innerHTML =
-            '<td style="padding:.3rem .4rem;text-align:center">' +
-                '<input type="checkbox" class="conf-cb" data-idx="' + i + '" checked />' +
-            '</td>' +
-            '<td style="padding:.3rem .6rem;color:#f87171;font-weight:600">' +
-                sportEmoji(p.srcSport) + ' ' + esc(p.srcLabel) +
-            '</td>' +
-            '<td style="padding:.3rem .4rem;text-align:center;color:var(--muted-d)">→</td>' +
-            '<td style="padding:.3rem .6rem;color:#10b981;font-weight:600">' +
-                sportEmoji(p.tgtSport) + ' ' + esc(p.tgtLabel) +
-            '</td>';
+            '<td style="padding:.3rem .4rem;text-align:center">'+
+                '<input type="checkbox" class="conf-cb" data-idx="'+i+'" checked /></td>'+
+            '<td style="padding:.3rem .6rem;color:#f87171;font-weight:600">'+
+                sportEmoji(p.srcSport)+' '+esc(p.srcLabel)+'</td>'+
+            '<td style="padding:.3rem .4rem;text-align:center;color:var(--muted-d)">→</td>'+
+            '<td style="padding:.3rem .6rem;color:#10b981;font-weight:600">'+
+                sportEmoji(p.tgtSport)+' '+esc(p.tgtLabel)+'</td>';
         tbody.appendChild(tr);
     });
     document.getElementById('confirm-status').textContent = '';
@@ -518,64 +475,59 @@ window.closeConfirm = function(){
 };
 
 window.toggleConfirmAll = function(checked){
-    document.querySelectorAll('.conf-cb').forEach(function(cb){ cb.checked = checked; });
+    document.querySelectorAll('.conf-cb').forEach(function(cb){ cb.checked=checked; });
 };
 
 /* ─── Provést sloučení ─── */
 window.executeMerge = function(){
     var pairs = [];
     document.querySelectorAll('.conf-cb:checked').forEach(function(cb){
-        var i = parseInt(cb.getAttribute('data-idx'), 10);
-        if(_queue[i]) pairs.push({source_id: _queue[i].srcID, target_id: _queue[i].tgtID});
+        var i = parseInt(cb.getAttribute('data-idx'),10);
+        if(_queue[i]) pairs.push({source_id:_queue[i].srcID, target_id:_queue[i].tgtID});
     });
     if(pairs.length===0){ alert('Žádné páry k sloučení.'); return; }
 
     var btn    = document.getElementById('exec-btn');
     var status = document.getElementById('confirm-status');
     if(btn) btn.disabled = true;
-    if(status) status.textContent = '⏳ Slučuji ' + pairs.length + ' párů…';
+    if(status) status.textContent = '⏳ Slučuji '+pairs.length+' párů…';
 
     fetch('/admin/teams/merge-bulk', {
         method: 'POST',
-        headers: {
-            'Content-Type':  'application/json',
-            'X-CSRF-Token':  _csrfToken
-        },
+        headers: {'Content-Type':'application/json','X-CSRF-Token':_csrfToken},
         body: JSON.stringify(pairs)
     })
     .then(function(r){ return r.json(); })
     .then(function(data){
         if(data.ok){
-            var msg = '✅ Sloučeno: ' + data.merged + ' párů.';
-            if(data.errors && data.errors.length) msg += ' Chyby: ' + data.errors.join('; ');
+            var msg = '✅ Sloučeno: '+data.merged+' párů.';
+            if(data.errors&&data.errors.length) msg += ' Chyby: '+data.errors.join('; ');
             if(status) status.textContent = msg;
-            // Odeber sloučené z fronty a ze seznamu týmů
-            var mergedSrcIDs = new Set(pairs.map(function(x){ return x.source_id; }));
-            _queue = _queue.filter(function(p){ return !mergedSrcIDs.has(p.srcID); });
-            mergedSrcIDs.forEach(function(id){
+            // Odeber z fronty a ze seznamu allTeams
+            var done = new Set(pairs.map(function(x){ return x.source_id; }));
+            _queue = _queue.filter(function(p){ return !done.has(p.srcID); });
+            done.forEach(function(id){
                 delete _inQueue[id];
                 var idx = allTeams.findIndex(function(t){ return t.id===id; });
-                if(idx>=0) allTeams.splice(idx, 1);
+                if(idx>=0) allTeams.splice(idx,1);
             });
-            renderQueue();
-            renderTeamList();
+            buildSrcSel();
             buildTgtSel();
+            renderQueue();
             setTimeout(closeConfirm, 1800);
         } else {
-            if(status) status.textContent = '❌ Chyba: ' + (data.error||'Neznámá chyba');
+            if(status) status.textContent = '❌ Chyba: '+(data.error||'Neznámá chyba');
             if(btn) btn.disabled = false;
         }
     })
     .catch(function(e){
-        if(status) status.textContent = '❌ Síťová chyba: ' + e.message;
+        if(status) status.textContent = '❌ Síťová chyba: '+e.message;
         if(btn) btn.disabled = false;
     });
 };
 
 /* ─── Init ─── */
-document.getElementById('tl-q').addEventListener('input', renderTeamList);
-document.getElementById('tgt-sel').addEventListener('change', onTgtChange);
-renderTeamList();
+buildSrcSel();
 buildTgtSel();
 renderQueue();
 })();

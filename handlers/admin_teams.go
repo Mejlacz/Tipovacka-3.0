@@ -1019,7 +1019,7 @@ func AdminTeamDupes(tmpl *template.Template) http.HandlerFunc {
 			       (SELECT COUNT(*) FROM matches m WHERE m.home_team_id=t.id OR m.away_team_id=t.id)
 			FROM teams t
 			ORDER BY t.sport, LOWER(COALESCE(NULLIF(t.display_name,''), t.name))`)
-		var allTeams []dupeTeamJSON
+		allTeams := []dupeTeamJSON{} // never nil — marshals as [] not null
 		teamIdxByID := map[int]int{}
 		if atRows != nil {
 			for atRows.Next() {
