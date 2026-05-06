@@ -1054,12 +1054,12 @@ func AdminTeamDupes(tmpl *template.Template) http.HandlerFunc {
 			}
 			dtCompRows.Close()
 		}
-		allTeamsJSON, _ := json.Marshal(allTeams)
+		allTeamsJSONBytes, _ := json.Marshal(allTeams)
 
 		RenderTemplate(w, r, tmpl, "admin/team_dupes.html", TemplateData{
 			"User":         admin,
 			"Pairs":        pairs,
-			"AllTeamsJSON": string(allTeamsJSON),
+			"AllTeamsJSON": template.JS(allTeamsJSONBytes), // template.JS = no escaping in <script>
 			"Flash":        middleware.GetFlash(w, r),
 		})
 	}
