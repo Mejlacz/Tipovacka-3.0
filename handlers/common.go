@@ -334,9 +334,13 @@ func init() {
 	}
 }
 
-// NowPrague vrátí aktuální čas v pražském časovém pásmu jako naive (bez TZ).
+// NowPrague vrátí aktuální pražský čas jako naive timestamp (UTC location,
+// Praha wall-clock hodnoty). DB ukládá match_date jako TIMESTAMP WITHOUT TIME ZONE —
+// pgx vrátí "21:00" jako time.Time{21:00 UTC}. Pro správné porovnání musí mít
+// "teď" stejný formát: Praha wall-clock hodnoty s UTC location.
 func NowPrague() time.Time {
-	return time.Now().In(pragueLocation)
+	t := time.Now().In(pragueLocation)
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
 }
 
 // IsBeforeDeadline vrátí true pokud tipování ještě není uzavřeno.

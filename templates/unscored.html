@@ -29,7 +29,7 @@
                 {{if .Round}}{{.Round.Name}}{{end}}
             </td>
             <td style="padding:.4rem .5rem;color:var(--muted-d);font-size:.8rem">
-                {{if .MatchDate}}{{formatPrague .MatchDate "02.01. 15:04"}}{{else}}—{{end}}
+                {{if .MatchDate}}{{.MatchDate.Format "02.01. 15:04"}}{{else}}—{{end}}
             </td>
             <td style="padding:.4rem .5rem">
                 <form style="display:inline-flex;align-items:center;gap:.3rem" method="post" action="/admin/matches/{{.ID}}/set-result">

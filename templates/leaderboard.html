@@ -147,7 +147,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             {{$htName := coalesce .HomeTeam.DisplayName .HomeTeam.Name}}
             {{$atName := coalesce .AwayTeam.DisplayName .AwayTeam.Name}}
             <th class="col-match"
-                title="{{.HomeTeam.Name}} – {{.AwayTeam.Name}}{{if .MatchDate}} · {{formatPrague .MatchDate "02.01.2006 15:04"}}{{end}}{{if or $.User.IsAdmin $.User.IsOwner}}{{if not (index $.StartedMatchIDs .ID)}} · 🟢 otevřeno{{else}} · 🔒 uzavřeno{{end}}{{end}}">
+                title="{{.HomeTeam.Name}} – {{.AwayTeam.Name}}{{if .MatchDate}} · {{.MatchDate.Format "02.01.2006 15:04"}}{{end}}{{if or $.User.IsAdmin $.User.IsOwner}}{{if not (index $.StartedMatchIDs .ID)}} · 🟢 otevřeno{{else}} · 🔒 uzavřeno{{end}}{{end}}">
                 {{if or $.User.IsAdmin $.User.IsOwner}}
                 <span style="display:block;width:7px;height:7px;border-radius:50%;margin:0 auto 2px;background:{{if not (index $.StartedMatchIDs .ID)}}#22c55e{{else}}#f59e0b{{end}}"></span>
                 {{end}}
@@ -156,11 +156,11 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                     {{if and $.User.IsAdmin (not .IsFinished)}}
                     <span class="match-date-edit"
                           data-match-id="{{.ID}}"
-                          data-iso="{{formatPrague .MatchDate "2006-01-02T15:04"}}"
-                          title="Klikni pro změnu data: {{formatPrague .MatchDate "02.01.2006 15:04"}}"
-                          style="font-size:0.62rem;color:var(--muted-d);cursor:pointer;opacity:.9">{{formatPrague .MatchDate "02.01."}}</span>
+                          data-iso="{{.MatchDate.Format "2006-01-02T15:04"}}"
+                          title="Klikni pro změnu data: {{.MatchDate.Format "02.01.2006 15:04"}}"
+                          style="font-size:0.62rem;color:var(--muted-d);cursor:pointer;opacity:.9">{{.MatchDate.Format "02.01."}}</span>
                     {{else}}
-                    <span style="font-size:0.62rem;color:var(--muted-d);opacity:.8" title="{{formatPrague .MatchDate "02.01.2006 15:04"}}">{{formatPrague .MatchDate "02.01."}}</span>
+                    <span style="font-size:0.62rem;color:var(--muted-d);opacity:.8" title="{{.MatchDate.Format "02.01.2006 15:04"}}">{{.MatchDate.Format "02.01."}}</span>
                     {{end}}
                     <span style="color:var(--muted-d);opacity:.35"> · </span>
                     {{end}}

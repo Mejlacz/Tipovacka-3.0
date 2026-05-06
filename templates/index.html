@@ -25,7 +25,7 @@
                 {{coalesce .Match.AwayTeam.DisplayName .Match.AwayTeam.Name}}
             </span>
             {{if .Match.MatchDate}}
-            <span class="qt-date">{{formatPrague .Match.MatchDate "02.01. 15:04"}}</span>
+            <span class="qt-date">{{.Match.MatchDate.Format "02.01. 15:04"}}</span>
             {{end}}
             <div class="qt-inputs">
                 <input type="number" name="home_score" min="0" max="99"

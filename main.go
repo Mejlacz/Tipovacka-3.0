@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -412,17 +411,6 @@ func globRecursive(root, pattern string) []string {
 
 func templateFuncs() template.FuncMap {
 	return template.FuncMap{
-		// formatPrague formátuje *time.Time v pražském časovém pásmu
-		"formatPrague": func(t *time.Time, layout string) string {
-			if t == nil {
-				return ""
-			}
-			loc, err := time.LoadLocation("Europe/Prague")
-			if err != nil {
-				loc = time.UTC
-			}
-			return t.In(loc).Format(layout)
-		},
 		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
 		"add":      func(a, b int) int { return a + b },
 		"sub":      func(a, b int) int { return a - b },
