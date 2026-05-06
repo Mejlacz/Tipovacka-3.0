@@ -217,6 +217,45 @@ func AdminAPICompetitions(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
+// ── resolveTeamNamesForDisplay ────────────────────────────────────────────────
+// Pro seznam jmen z API vrátí mapu api_jmeno → český název (display_name nebo name).
+// Jedno SQL na celý sport, pak lokální lookup přes jméno i aliasy.
+func resolveTeamNamesForDisplay(ctx context.Context, apiNames []string, sport string) map[string]string {
+	result := map[string]string{}
+	if len(apiNames) == 0 {
+		return result
+	}
+	rows, err := db.Pool.Query(ctx,
+		`SELECT name, COALESCE(NULLIF(display_name,''), name), COALESCE(alias,'')
+		 FROM teams WHERE sport = $1`, sport)
+	if err != nil {
+		return result
+	}
+	defer rows.Close()
+
+	// lowercase variant → display label
+	lookup := map[string]string{}
+	for rows.Next() {
+		var dbName, displayName, alias string
+		if err := rows.Scan(&dbName, &displayName, &alias); err != nil {
+			continue
+		}
+		lookup[strings.ToLower(dbName)] = displayName
+		for _, a := range strings.Split(alias, ",") {
+			a = strings.TrimSpace(a)
+			if a != "" {
+				lookup[strings.ToLower(a)] = displayName
+			}
+		}
+	}
+	for _, apiName := range apiNames {
+		if resolved, ok := lookup[strings.ToLower(apiName)]; ok {
+			result[apiName] = resolved
+		}
+	}
+	return result
+}
+
 // ── GET /admin/api/preview ────────────────────────────────────────────────────
 // Vrátí JSON seznam zápasů z football-data.org pro zobrazení náhledu.
 // Query params: fd_code, matchday (nepovinné), skip_finished=1 (nepovinné)
@@ -243,6 +282,20 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 			b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": err.Error()})
 			w.Write(b)
 			return
+		}
+		// Přeložit anglická jména na česká dle DB
+		hockeyNames := make([]string, 0, len(items)*2)
+		for _, it := range items {
+			hockeyNames = append(hockeyNames, it.Home, it.Away)
+		}
+		nameMap := resolveTeamNamesForDisplay(r.Context(), hockeyNames, "hockey")
+		for i := range items {
+			if v, ok := nameMap[items[i].Home]; ok {
+				items[i].Home = v
+			}
+			if v, ok := nameMap[items[i].Away]; ok {
+				items[i].Away = v
+			}
 		}
 		b, _ := json.Marshal(map[string]interface{}{"ok": true, "matches": items, "skipped": skipped})
 		w.Write(b)
@@ -285,6 +338,19 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 		ScoreH   *int   `json:"score_h"`
 		ScoreA   *int   `json:"score_a"`
 	}
+	// Přeložit anglická jména na česká dle DB (jeden dotaz pro celý sport)
+	footballNames := make([]string, 0, len(list.Matches)*2)
+	for _, m := range list.Matches {
+		footballNames = append(footballNames, m.HomeTeam.Name, m.AwayTeam.Name)
+	}
+	nameMap := resolveTeamNamesForDisplay(r.Context(), footballNames, "football")
+	resolveName := func(apiName string) string {
+		if v, ok := nameMap[apiName]; ok {
+			return v
+		}
+		return apiName
+	}
+
 	var preview []previewMatch
 	skipped := 0
 	for _, m := range list.Matches {
@@ -294,8 +360,8 @@ func AdminAPIPreview(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		pm := previewMatch{
-			Home:     m.HomeTeam.Name,
-			Away:     m.AwayTeam.Name,
+			Home:     resolveName(m.HomeTeam.Name),
+			Away:     resolveName(m.AwayTeam.Name),
 			Status:   m.Status,
 			Duration: m.Score.Duration,
 		}
