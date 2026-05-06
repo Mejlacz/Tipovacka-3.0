@@ -309,6 +309,7 @@
                 </div>
 
                 <input type="hidden" name="selected_matches" id="api-selected-matches" value="" />
+                <input type="hidden" name="team_mappings" id="api-team-mappings" value="" />
 
                 <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.35rem">
                     <button type="button" class="btn btn-sm btn-secondary" onclick="apiPreview()">🔍 Náhled</button>
@@ -338,7 +339,6 @@
             <div id="api-tsdb-warning" style="display:none;font-size:.75rem;color:#f59e0b;margin-top:.45rem;line-height:1.4">
                 ⚠ TheSportsDB (free tier) může mít nesprávné nebo chybějící termíny zápasů — zkontroluj data před importem.
             </div>
-            <input type="hidden" name="team_mappings" id="api-team-mappings" value="" />
             <div class="api-attribution" id="api-attribution-text">
                 Data: <a href="https://www.thesportsdb.com" target="_blank" rel="noopener" style="color:inherit">thesportsdb.com</a> (hokej) /
                 <a href="https://www.football-data.org" target="_blank" rel="noopener" style="color:inherit">football-data.org</a> (fotbal)

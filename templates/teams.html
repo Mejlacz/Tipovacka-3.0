@@ -196,7 +196,7 @@ window.openEditRow = function(id){
     if(!r) return;
     // Zavři ostatní
     document.querySelectorAll('.team-edit-row').forEach(function(x){ x.style.display='none'; });
-    r.style.display = '';
+    r.style.display = 'table-row';
     r.querySelector('input[name="name"]').focus();
 };
 window.closeEditRow = function(id){
