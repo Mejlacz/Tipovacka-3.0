@@ -1057,11 +1057,46 @@ window.toggleAllMatches = function(checked){
     document.querySelectorAll('.api-match-cb').forEach(function(cb){ cb.checked = checked; });
 };
 
+var _statusMap = {
+    'NS':   'Nehrané',
+    'FT':   'Odehrano',
+    'AET':  'Po prodl.',
+    'PEN':  'Po pen.',
+    'LIVE': 'LIVE',
+    'HT':   'Polocas',
+    '1H':   '1. pol.',
+    '2H':   '2. pol.',
+    'ET':   'Prodl.',
+    'BT':   'Prest.',
+    'P':    'Penalty',
+    'SUSP': 'Preruseno',
+    'INT':  'Preruseno',
+    'PST':  'Odlozeno',
+    'CANC': 'Zruseno',
+    'ABD':  'Nedohrano',
+    'AWD':  'Kontumace',
+    'WO':   'Walkover',
+    'TBD':  'Neurcem.'
+};
+
+function statusLabel(s){
+    return _statusMap[s] || s || '?';
+}
+
 function getSelectedMatches(){
     var selected = [];
     document.querySelectorAll('.api-match-cb:checked').forEach(function(cb){
         var idx = parseInt(cb.getAttribute('data-idx'), 10);
-        if(_previewMatches[idx]) selected.push(_previewMatches[idx]);
+        if(!_previewMatches[idx]) return;
+        var item = Object.assign({}, _previewMatches[idx]);
+        // Read possibly-edited date and time
+        var dateInp = document.querySelector('.api-match-date[data-idx="' + idx + '"]');
+        var timeInp = document.querySelector('.api-match-time[data-idx="' + idx + '"]');
+        if(dateInp && dateInp.value){
+            var t = (timeInp && timeInp.value) ? timeInp.value : '00:00';
+            item.raw_date = dateInp.value + 'T' + t + ':00';
+        }
+        selected.push(item);
     });
     return selected;
 }
@@ -1074,6 +1109,11 @@ function renderPreviewTable(matches){
     matches.forEach(function(m, i){
         var score = (m.score_h !== null && m.score_a !== null)
             ? m.score_h + ' : ' + m.score_a : '—';
+        // Parse raw_date "2026-05-15T14:20:00" into date/time parts
+        var raw  = m.raw_date || '';
+        var parts = raw.split('T');
+        var dateVal = parts[0] || '';
+        var timeVal = parts[1] ? parts[1].substring(0, 5) : '';
         var tr = document.createElement('tr');
         tr.innerHTML =
             '<td style="padding:.2rem .4rem;text-align:center">' +
@@ -1081,8 +1121,13 @@ function renderPreviewTable(matches){
             '</td>' +
             '<td style="padding:.25rem .5rem">' + esc(m.home) + '</td>' +
             '<td style="padding:.25rem .5rem">' + esc(m.away) + '</td>' +
-            '<td style="padding:.25rem .5rem">' + esc(m.date) + '</td>' +
-            '<td style="padding:.25rem .5rem">' + esc(m.status) + '</td>' +
+            '<td style="padding:.2rem .4rem;white-space:nowrap">' +
+                '<input type="date" class="api-match-date" data-idx="' + i + '" value="' + esc(dateVal) + '" ' +
+                    'style="background:var(--bg3);border:1px solid var(--border-d);border-radius:4px;color:inherit;font-size:.78rem;padding:.15rem .3rem;width:7.5rem" />' +
+                '<input type="time" class="api-match-time" data-idx="' + i + '" value="' + esc(timeVal) + '" ' +
+                    'style="background:var(--bg3);border:1px solid var(--border-d);border-radius:4px;color:inherit;font-size:.78rem;padding:.15rem .3rem;margin-left:.25rem;width:5rem" />' +
+            '</td>' +
+            '<td style="padding:.25rem .5rem;white-space:nowrap;font-size:.78rem;color:var(--muted-d)" title="' + esc(m.status) + '">' + esc(statusLabel(m.status)) + '</td>' +
             '<td style="padding:.25rem .5rem;text-align:center">' + esc(score) + '</td>';
         tbody.appendChild(tr);
     });
