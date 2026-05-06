@@ -1005,25 +1005,54 @@ func AdminTeamDupes(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
-		// All teams JSON for manual merge UI
+		// All teams JSON for merge UI — includes comp_names and match_count
 		type dupeTeamJSON struct {
-			ID          int    `json:"id"`
-			Name        string `json:"name"`
-			DisplayName string `json:"display_name"`
-			Sport       string `json:"sport"`
+			ID          int      `json:"id"`
+			Name        string   `json:"name"`
+			DisplayName string   `json:"display_name"`
+			Sport       string   `json:"sport"`
+			CompNames   []string `json:"comp_names"`
+			MatchCount  int      `json:"match_count"`
 		}
 		atRows, _ := db.Pool.Query(ctx, `
-			SELECT id, name, COALESCE(display_name,''), sport
-			FROM teams ORDER BY sport, LOWER(COALESCE(NULLIF(display_name,''), name))`)
+			SELECT t.id, t.name, COALESCE(t.display_name,''), t.sport,
+			       (SELECT COUNT(*) FROM matches m WHERE m.home_team_id=t.id OR m.away_team_id=t.id)
+			FROM teams t
+			ORDER BY t.sport, LOWER(COALESCE(NULLIF(t.display_name,''), t.name))`)
 		var allTeams []dupeTeamJSON
+		teamIdxByID := map[int]int{}
 		if atRows != nil {
 			for atRows.Next() {
 				var t dupeTeamJSON
-				if err := atRows.Scan(&t.ID, &t.Name, &t.DisplayName, &t.Sport); err == nil {
+				if err := atRows.Scan(&t.ID, &t.Name, &t.DisplayName, &t.Sport, &t.MatchCount); err == nil {
+					t.CompNames = []string{}
+					teamIdxByID[t.ID] = len(allTeams)
 					allTeams = append(allTeams, t)
 				}
 			}
 			atRows.Close()
+		}
+		// Load competition names per team
+		dtCompRows, _ := db.Pool.Query(ctx, `
+			SELECT ct.team_id, c.name, c.season
+			FROM competition_teams ct
+			JOIN competitions c ON c.id = ct.competition_id
+			ORDER BY c.id DESC`)
+		if dtCompRows != nil {
+			for dtCompRows.Next() {
+				var tid int
+				var cname, cseason string
+				if err := dtCompRows.Scan(&tid, &cname, &cseason); err == nil {
+					if idx, ok := teamIdxByID[tid]; ok {
+						label := cname
+						if cseason != "" {
+							label += " " + cseason
+						}
+						allTeams[idx].CompNames = append(allTeams[idx].CompNames, label)
+					}
+				}
+			}
+			dtCompRows.Close()
 		}
 		allTeamsJSON, _ := json.Marshal(allTeams)
 
@@ -1034,6 +1063,69 @@ func AdminTeamDupes(tmpl *template.Template) http.HandlerFunc {
 			"Flash":        middleware.GetFlash(w, r),
 		})
 	}
+}
+
+// ── POST /admin/teams/merge-bulk ──────────────────────────────────────────────
+// JSON API: provede hromadné sloučení páru {source_id, target_id}.
+// Tělo: JSON pole [{source_id:X, target_id:Y}, ...]
+// Odpověď: {"ok":true,"merged":N,"errors":[...]}
+func AdminTeamMergeBulk(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
+		return
+	}
+	type mergePair struct {
+		SourceID int `json:"source_id"`
+		TargetID int `json:"target_id"`
+	}
+	var pairs []mergePair
+	if err := json.NewDecoder(r.Body).Decode(&pairs); err != nil {
+		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": "bad JSON: " + err.Error()})
+		w.Write(b)
+		return
+	}
+
+	ctx := context.Background()
+	merged := 0
+	var errs []string
+
+	for _, p := range pairs {
+		if p.SourceID == 0 || p.TargetID == 0 || p.SourceID == p.TargetID {
+			errs = append(errs, fmt.Sprintf("neplatny par %d->%d", p.SourceID, p.TargetID))
+			continue
+		}
+		var sourceName, targetName string
+		if err := db.Pool.QueryRow(ctx, `SELECT name FROM teams WHERE id=$1`, p.SourceID).Scan(&sourceName); err != nil {
+			errs = append(errs, fmt.Sprintf("zdrojovy tym ID %d nenalezen", p.SourceID))
+			continue
+		}
+		if err := db.Pool.QueryRow(ctx, `SELECT name FROM teams WHERE id=$1`, p.TargetID).Scan(&targetName); err != nil {
+			errs = append(errs, fmt.Sprintf("cilovy tym ID %d nenalezen", p.TargetID))
+			continue
+		}
+		// 1. Přepiš zápasy
+		_, _ = db.Pool.Exec(ctx, `UPDATE matches SET home_team_id=$1 WHERE home_team_id=$2`, p.TargetID, p.SourceID)
+		_, _ = db.Pool.Exec(ctx, `UPDATE matches SET away_team_id=$1 WHERE away_team_id=$2`, p.TargetID, p.SourceID)
+		// 2. Přenes competition_teams
+		_, _ = db.Pool.Exec(ctx, `
+			INSERT INTO competition_teams (competition_id, team_id)
+			SELECT competition_id, $1 FROM competition_teams WHERE team_id=$2
+			ON CONFLICT DO NOTHING`, p.TargetID, p.SourceID)
+		// 3. Ulož alias
+		appendTeamAlias(ctx, sourceName, p.TargetID)
+		// 4. Smaž zdroj
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, p.SourceID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, p.SourceID)
+
+		desc := fmt.Sprintf("Bulk merge: '%s' (ID %d) sloucen do '%s' (ID %d)", sourceName, p.SourceID, targetName, p.TargetID)
+		LogAction(&admin.ID, admin.Username, "team_merge", "team", &p.SourceID, desc, nil, nil)
+		merged++
+	}
+
+	b, _ := json.Marshal(map[string]interface{}{"ok": true, "merged": merged, "errors": errs})
+	w.Write(b)
 }
 
 // ── GET /admin/teams/assign ────────────────────────────────────────────────────
