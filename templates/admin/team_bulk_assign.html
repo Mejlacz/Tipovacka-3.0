@@ -1,0 +1,199 @@
+{{define "title"}}Hromadné přiřazování týmů{{end}}
+<div class="page-header">
+    <h1>📋 Hromadné přiřazování týmů</h1>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+        <a href="/admin/teams/dupes" class="btn btn-secondary btn-sm">🔍 Duplikáty</a>
+        <a href="/admin/teams"       class="btn btn-secondary btn-sm">← Týmy</a>
+    </div>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+<p style="font-size:.85rem;color:var(--muted-d);margin-bottom:.75rem">
+    Vyber týmy (checkboxem), zvol soutěž a klikni <strong>Přidat</strong> nebo <strong>Odebrat</strong>.
+    Filtruj podle sportu nebo jen nezařazené.
+</p>
+
+<form method="post" action="/admin/teams/assign" id="assign-form">
+<input type="hidden" name="_csrf"         value="{{.CSRFToken}}" />
+<input type="hidden" name="action"        id="bulk-action" value="add" />
+<input type="hidden" name="competition_id" id="bulk-comp-id" value="" />
+
+{{/* ── Akční lišta ── */}}
+<div style="position:sticky;top:0;z-index:100;background:var(--bg);padding:.6rem 0;border-bottom:1px solid var(--border-d);margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+    <select id="comp-sel" style="flex:1;min-width:220px;max-width:380px"
+            onchange="document.getElementById('bulk-comp-id').value=this.value">
+        <option value="">— vyber soutěž —</option>
+        {{range .Comps}}
+        <option value="{{.ID}}">{{.Name}}{{if .Season}} — {{.Season}}{{end}}
+            {{if eq .Sport "hockey"}} 🏒{{else if eq .Sport "football"}} ⚽{{end}}</option>
+        {{end}}
+    </select>
+    <button type="button" class="btn btn-primary btn-sm" onclick="doAction('add')">➕ Přidat vybrané</button>
+    <button type="button" class="btn btn-sm" style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3)"
+            onclick="doAction('remove')">➖ Odebrat vybrané</button>
+    <span id="sel-count" style="font-size:.8rem;color:var(--muted-d);margin-left:.25rem">0 vybráno</span>
+</div>
+
+{{/* ── Filtr ── */}}
+<div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.65rem;flex-wrap:wrap">
+    <input type="search" id="team-search" placeholder="🔍 Hledat tým…"
+           oninput="filterRows()"
+           style="flex:1;min-width:180px;padding:.35rem .6rem;background:var(--bg2);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.87rem" />
+    <div style="display:flex;gap:.25rem">
+        <button type="button" class="filter-sport-btn active" data-sport="" onclick="setSport('')">Vše</button>
+        <button type="button" class="filter-sport-btn" data-sport="football" onclick="setSport('football')">⚽</button>
+        <button type="button" class="filter-sport-btn" data-sport="hockey"   onclick="setSport('hockey')">🏒</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:.3rem;font-size:.82rem;cursor:pointer;color:var(--muted-d)">
+        <input type="checkbox" id="orphan-only" onchange="filterRows()" /> Jen nezařazené
+    </label>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllVisible()">Vybrat vše viditelné</button>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="clearAll()">Zrušit výběr</button>
+    <span id="row-count" style="font-size:.78rem;color:var(--muted-d)"></span>
+</div>
+
+<style>
+.filter-sport-btn{padding:.22rem .6rem;font-size:.78rem;border:1px solid var(--border-d);background:var(--bg2);color:var(--muted-d);border-radius:5px;cursor:pointer}
+.filter-sport-btn.active{background:var(--accent,#10b981);color:#fff;border-color:var(--accent,#10b981)}
+.assign-row{border-bottom:1px solid var(--border-d);transition:background .1s}
+.assign-row:hover{background:rgba(255,255,255,.03)}
+.assign-row.is-orphan td:first-child{border-left:3px solid #f59e0b}
+.assign-row.selected{background:rgba(99,102,241,.1)}
+.comp-badge{display:inline-block;font-size:.67rem;padding:.05rem .38rem;border-radius:10px;background:rgba(99,102,241,.18);color:#a5b4fc;white-space:nowrap;margin:.05rem .1rem 0 0}
+</style>
+
+{{/* ── Tabulka ── */}}
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;font-size:.83rem">
+    <thead>
+        <tr style="background:var(--bg2);font-size:.74rem;color:var(--muted-d)">
+            <th style="padding:.35rem .5rem;width:2rem;text-align:center">
+                <input type="checkbox" id="cb-all" onchange="toggleAll(this.checked)" title="Vybrat vše" />
+            </th>
+            <th style="padding:.35rem .6rem;text-align:left">Název</th>
+            <th style="padding:.35rem .6rem;text-align:left;width:8%">Sport</th>
+            <th style="padding:.35rem .6rem;text-align:left;width:35%">Soutěže</th>
+            <th style="padding:.35rem .4rem;text-align:center;width:6%">Zápasy</th>
+        </tr>
+    </thead>
+    <tbody id="assign-tbody">
+    {{range .Teams}}
+    <tr class="assign-row{{if .IsOrphan}} is-orphan{{end}}"
+        data-sport="{{.Sport}}"
+        data-orphan="{{if .IsOrphan}}1{{else}}0{{end}}"
+        data-name="{{.Name}} {{.DisplayName}}">
+        <td style="padding:.3rem .5rem;text-align:center">
+            <input type="checkbox" name="team_ids" value="{{.ID}}" class="team-cb" onchange="updateCount()" />
+        </td>
+        <td style="padding:.3rem .6rem;font-weight:600">
+            {{.Name}}
+            {{if .DisplayName}}<span style="font-weight:400;font-size:.79rem;color:var(--muted-d)"> ({{.DisplayName}})</span>{{end}}
+            {{if .IsOrphan}}<span style="font-size:.67rem;color:#f59e0b;margin-left:.3rem">⚠ nezař.</span>{{end}}
+        </td>
+        <td style="padding:.3rem .6rem">
+            {{if eq .Sport "football"}}⚽{{else if eq .Sport "hockey"}}🏒{{else}}{{.Sport}}{{end}}
+        </td>
+        <td style="padding:.3rem .6rem">
+            {{if .CompNames}}
+                {{range .CompNames}}<span class="comp-badge">{{.}}</span>{{end}}
+            {{else}}<span style="font-size:.74rem;color:#f59e0b">Nepřiřazen</span>{{end}}
+        </td>
+        <td style="padding:.3rem .4rem;text-align:center;color:var(--muted-d)">{{.MatchCount}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+</form>
+
+<script>
+(function(){
+var _sport = '';
+
+window.setSport = function(s){
+    _sport = s;
+    document.querySelectorAll('.filter-sport-btn').forEach(function(b){
+        b.classList.toggle('active', b.dataset.sport === s);
+    });
+    // Auto-select matching competition from dropdown if sport set
+    if(s){
+        var sel = document.getElementById('comp-sel');
+        // Prefer first option whose text contains matching emoji
+        var emoji = s === 'hockey' ? '🏒' : '⚽';
+        for(var i=0;i<sel.options.length;i++){
+            if(sel.options[i].text.indexOf(emoji) >= 0){
+                sel.selectedIndex = i;
+                document.getElementById('bulk-comp-id').value = sel.options[i].value;
+                break;
+            }
+        }
+    }
+    filterRows();
+};
+
+window.filterRows = function(){
+    var q       = (document.getElementById('team-search').value || '').toLowerCase();
+    var orphOnly= document.getElementById('orphan-only').checked;
+    var rows    = document.querySelectorAll('#assign-tbody tr.assign-row');
+    var visible = 0;
+    rows.forEach(function(row){
+        var show = true;
+        if(_sport && row.dataset.sport !== _sport) show = false;
+        if(q && (row.dataset.name||'').toLowerCase().indexOf(q) < 0) show = false;
+        if(orphOnly && row.dataset.orphan !== '1') show = false;
+        row.style.display = show ? '' : 'none';
+        if(show) visible++;
+    });
+    var rc = document.getElementById('row-count');
+    if(rc) rc.textContent = visible + ' / ' + rows.length + ' týmů';
+};
+
+window.toggleAll = function(checked){
+    document.querySelectorAll('#assign-tbody tr.assign-row:not([style*="none"]) .team-cb').forEach(function(cb){
+        cb.checked = checked;
+    });
+    updateCount();
+};
+
+window.selectAllVisible = function(){
+    document.querySelectorAll('#assign-tbody tr.assign-row:not([style*="none"]) .team-cb').forEach(function(cb){
+        cb.checked = true;
+    });
+    updateCount();
+};
+
+window.clearAll = function(){
+    document.querySelectorAll('.team-cb').forEach(function(cb){ cb.checked = false; });
+    updateCount();
+};
+
+window.updateCount = function(){
+    var n = document.querySelectorAll('.team-cb:checked').length;
+    var el = document.getElementById('sel-count');
+    if(el) el.textContent = n + ' vybráno';
+};
+
+window.doAction = function(action){
+    var n = document.querySelectorAll('.team-cb:checked').length;
+    if(n === 0){ alert('Nejprve vyber týmy.'); return; }
+    var compSel = document.getElementById('comp-sel');
+    var compID  = compSel ? compSel.value : '';
+    if(!compID){ alert('Nejprve vyber soutěž.'); return; }
+    var compName = compSel.options[compSel.selectedIndex].text;
+    var verb = action === 'add' ? 'přidat do' : 'odebrat z';
+    if(!confirm(n + ' tymu: ' + verb + ' "' + compName + '"?')) return;
+    document.getElementById('bulk-action').value = action;
+    document.getElementById('bulk-comp-id').value = compID;
+    document.getElementById('assign-form').submit();
+};
+
+// Init
+filterRows();
+updateCount();
+})();
+</script>

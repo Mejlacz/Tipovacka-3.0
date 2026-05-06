@@ -1005,10 +1005,167 @@ func AdminTeamDupes(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
+		// All teams JSON for manual merge UI
+		type dupeTeamJSON struct {
+			ID          int    `json:"id"`
+			Name        string `json:"name"`
+			DisplayName string `json:"display_name"`
+			Sport       string `json:"sport"`
+		}
+		atRows, _ := db.Pool.Query(ctx, `
+			SELECT id, name, COALESCE(display_name,''), sport
+			FROM teams ORDER BY sport, LOWER(COALESCE(NULLIF(display_name,''), name))`)
+		var allTeams []dupeTeamJSON
+		if atRows != nil {
+			for atRows.Next() {
+				var t dupeTeamJSON
+				if err := atRows.Scan(&t.ID, &t.Name, &t.DisplayName, &t.Sport); err == nil {
+					allTeams = append(allTeams, t)
+				}
+			}
+			atRows.Close()
+		}
+		allTeamsJSON, _ := json.Marshal(allTeams)
+
 		RenderTemplate(w, r, tmpl, "admin/team_dupes.html", TemplateData{
+			"User":         admin,
+			"Pairs":        pairs,
+			"AllTeamsJSON": string(allTeamsJSON),
+			"Flash":        middleware.GetFlash(w, r),
+		})
+	}
+}
+
+// ── GET /admin/teams/assign ────────────────────────────────────────────────────
+// Hromadné přiřazování týmů do soutěží.
+
+type TeamAssignRow struct {
+	ID          int
+	Name        string
+	DisplayName string
+	Sport       string
+	MatchCount  int
+	CompNames   []string
+	IsOrphan    bool
+}
+
+func AdminTeamBulkAssign(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin := RequireAdmin(w, r)
+		if admin == nil {
+			return
+		}
+		ctx := context.Background()
+
+		rows, err := db.Pool.Query(ctx, `
+			SELECT t.id, t.name, COALESCE(t.display_name,''), t.sport,
+			       (SELECT COUNT(*) FROM matches m WHERE m.home_team_id=t.id OR m.away_team_id=t.id),
+			       EXISTS(SELECT 1 FROM competition_teams ct WHERE ct.team_id=t.id)
+			FROM teams t
+			ORDER BY t.sport, LOWER(COALESCE(NULLIF(t.display_name,''), t.name))`)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		var teams []*TeamAssignRow
+		teamByID := map[int]*TeamAssignRow{}
+		for rows.Next() {
+			tr := &TeamAssignRow{}
+			var hasComp bool
+			if err := rows.Scan(&tr.ID, &tr.Name, &tr.DisplayName, &tr.Sport,
+				&tr.MatchCount, &hasComp); err == nil {
+				tr.IsOrphan = !hasComp
+				teams = append(teams, tr)
+				teamByID[tr.ID] = tr
+			}
+		}
+		rows.Close()
+
+		compRows, _ := db.Pool.Query(ctx, `
+			SELECT ct.team_id, c.id, c.name, c.season
+			FROM competition_teams ct
+			JOIN competitions c ON c.id = ct.competition_id
+			ORDER BY c.id DESC`)
+		if compRows != nil {
+			for compRows.Next() {
+				var tid, cid int
+				var cname, cseason string
+				if err := compRows.Scan(&tid, &cid, &cname, &cseason); err == nil {
+					if tr, ok := teamByID[tid]; ok {
+						label := cname
+						if cseason != "" {
+							label += " " + cseason
+						}
+						tr.CompNames = append(tr.CompNames, label)
+					}
+				}
+			}
+			compRows.Close()
+		}
+
+		type CompOption struct {
+			ID     int
+			Name   string
+			Season string
+			Sport  string
+		}
+		coptRows, _ := db.Pool.Query(ctx,
+			`SELECT id, name, COALESCE(season,''), COALESCE(sport,'') FROM competitions ORDER BY id DESC`)
+		var comps []CompOption
+		if coptRows != nil {
+			for coptRows.Next() {
+				var c CompOption
+				if err := coptRows.Scan(&c.ID, &c.Name, &c.Season, &c.Sport); err == nil {
+					comps = append(comps, c)
+				}
+			}
+			coptRows.Close()
+		}
+
+		RenderTemplate(w, r, tmpl, "admin/team_bulk_assign.html", TemplateData{
 			"User":  admin,
-			"Pairs": pairs,
+			"Teams": teams,
+			"Comps": comps,
 			"Flash": middleware.GetFlash(w, r),
 		})
 	}
+}
+
+// POST /admin/teams/assign
+func AdminTeamBulkAssignPost(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	action := r.FormValue("action") // "add" or "remove"
+	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
+	teamIDStrs := r.Form["team_ids"]
+
+	ctx := context.Background()
+	count := 0
+	for _, idStr := range teamIDStrs {
+		teamID, _ := strconv.Atoi(idStr)
+		if teamID == 0 {
+			continue
+		}
+		if action == "add" && compID > 0 {
+			_, _ = db.Pool.Exec(ctx,
+				`INSERT INTO competition_teams (competition_id, team_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+				compID, teamID)
+			count++
+		} else if action == "remove" && compID > 0 {
+			_, _ = db.Pool.Exec(ctx,
+				`DELETE FROM competition_teams WHERE competition_id=$1 AND team_id=$2`,
+				compID, teamID)
+			count++
+		}
+	}
+
+	middleware.SetFlash(w, r, "ok", fmt.Sprintf("Hotovo: %d tymu zpracovano.", count))
+	http.Redirect(w, r, "/admin/teams/assign", http.StatusSeeOther)
 }

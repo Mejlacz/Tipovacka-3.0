@@ -1,7 +1,10 @@
-{{define "title"}}Potenciální duplikáty týmů{{end}}
+{{define "title"}}Duplikáty a merge týmů{{end}}
 <div class="page-header">
-    <h1>🔍 Potenciální duplikáty týmů</h1>
-    <a href="/admin/teams" class="btn btn-secondary btn-sm">← Týmy</a>
+    <h1>🔍 Duplikáty a merge týmů</h1>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+        <a href="/admin/teams/assign" class="btn btn-secondary btn-sm">📋 Přiřadit</a>
+        <a href="/admin/teams"        class="btn btn-secondary btn-sm">← Týmy</a>
+    </div>
 </div>
 
 {{if .Flash}}
@@ -10,76 +13,124 @@
 </div>
 {{end}}
 
-<p style="font-size:.85rem;color:var(--muted-d);margin-bottom:1rem;line-height:1.5">
-    Níže jsou páry týmů, které mají stejný nebo podobný název v rámci jednoho sportu.
-    Pro každý pár rozhodni, který tým je kanonický (zachová se) a který se sloučí do něj.
-    Sloučením se přepíší všechny zápasy a aliasy — akce je nevratná.
-</p>
+{{/* ════════════════════════════════════════════════════
+     MANUÁLNÍ MERGE — admin si sám vybere dva týmy
+════════════════════════════════════════════════════ */}}
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.1rem 1.2rem;margin-bottom:1.5rem">
+    <h2 style="margin:0 0 .5rem;font-size:.95rem">⛓ Manuální sloučení libovolných dvou týmů</h2>
+    <p style="font-size:.82rem;color:var(--muted-d);margin:0 0 .9rem">
+        Vlevo vyber tým <strong>ke smazání</strong> (bude odstraněn, jeho zápasy přejdou na pravý).
+        Vpravo vyber tým <strong>k zachování</strong>.
+    </p>
+
+    {{/* Sport filter */}}
+    <div style="display:flex;gap:.3rem;margin-bottom:.75rem;flex-wrap:wrap;align-items:center">
+        <span style="font-size:.8rem;color:var(--muted-d)">Sport:</span>
+        <button type="button" class="msport-btn active" data-sport="" onclick="setMSport('')">Vše</button>
+        <button type="button" class="msport-btn" data-sport="football" onclick="setMSport('football')">⚽ Fotbal</button>
+        <button type="button" class="msport-btn" data-sport="hockey"   onclick="setMSport('hockey')">🏒 Hokej</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:.75rem;align-items:start">
+
+        {{/* Levý panel — zdroj (smazat) */}}
+        <div>
+            <div style="font-size:.78rem;color:#f87171;font-weight:700;margin-bottom:.3rem">🗑 Smazat (zdroj)</div>
+            <input type="text" id="msrc-filter" placeholder="Hledat…" oninput="buildMSel('src')"
+                   style="width:100%;box-sizing:border-box;padding:.3rem .55rem;font-size:.82rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;margin-bottom:.3rem" />
+            <select id="msrc-sel" size="8" onchange="updateMergePreview()"
+                    style="width:100%;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;font-size:.82rem;padding:.2rem"></select>
+            <div id="msrc-info" style="font-size:.73rem;color:var(--muted-d);margin-top:.25rem;min-height:1.1em"></div>
+        </div>
+
+        {{/* Šipka + merge tlačítko */}}
+        <div style="text-align:center;padding-top:2.5rem">
+            <div style="font-size:1.4rem;color:var(--muted-d);margin-bottom:.5rem">→</div>
+            <form id="manual-merge-form" method="post" action="">
+                <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+                <input type="hidden" name="target_team_id" id="mtgt-id-hidden" value="" />
+                <button type="submit" id="manual-merge-btn" class="btn btn-primary btn-sm"
+                        style="background:#f59e0b;border-color:#f59e0b;color:#1a1a1a;font-weight:700;white-space:nowrap"
+                        disabled onclick="return confirmMerge()">
+                    ⛓ Sloučit
+                </button>
+            </form>
+        </div>
+
+        {{/* Pravý panel — cíl (zachovat) */}}
+        <div>
+            <div style="font-size:.78rem;color:#10b981;font-weight:700;margin-bottom:.3rem">✅ Zachovat (cíl)</div>
+            <input type="text" id="mtgt-filter" placeholder="Hledat…" oninput="buildMSel('tgt')"
+                   style="width:100%;box-sizing:border-box;padding:.3rem .55rem;font-size:.82rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;margin-bottom:.3rem" />
+            <select id="mtgt-sel" size="8" onchange="updateMergePreview()"
+                    style="width:100%;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;font-size:.82rem;padding:.2rem"></select>
+            <div id="mtgt-info" style="font-size:.73rem;color:var(--muted-d);margin-top:.25rem;min-height:1.1em"></div>
+        </div>
+
+    </div>
+
+    <div id="merge-preview" style="font-size:.82rem;color:var(--muted-d);margin-top:.65rem;padding:.5rem .7rem;background:var(--bg3);border-radius:6px;display:none">
+    </div>
+</div>
+
+<style>
+.msport-btn{padding:.2rem .6rem;font-size:.78rem;border:1px solid var(--border-d);background:var(--bg2);color:var(--muted-d);border-radius:5px;cursor:pointer;transition:background .15s}
+.msport-btn.active{background:var(--accent,#10b981);color:#fff;border-color:var(--accent,#10b981)}
+</style>
+
+{{/* ════════════════════════════════════════════════════
+     AUTO-DETEKOVANÉ PÁRY
+════════════════════════════════════════════════════ */}}
+<h2 style="font-size:.92rem;font-weight:700;margin:.25rem 0 .5rem;color:var(--muted-d)">
+    🤖 Automaticky nalezené páry ({{len .Pairs}})
+</h2>
 
 {{if not .Pairs}}
-<div class="alert alert-success">✅ Žádné potenciální duplikáty nenalezeny.</div>
+<div class="alert alert-success" style="margin-bottom:1rem">✅ Žádné auto-detekované duplikáty.</div>
 {{else}}
-
-<p style="font-size:.8rem;color:var(--muted-d);margin-bottom:1.1rem">
-    Nalezeno <strong>{{len .Pairs}}</strong> párů.
-    Tým s více zápasy je obvykle ten "správný" — druhý slučte do něj.
+<p style="font-size:.79rem;color:var(--muted-d);margin-bottom:.85rem">
+    Tým s více zápasy je obvykle ten správný — druhý sloučit do něj.
 </p>
-
-<div style="display:flex;flex-direction:column;gap:.9rem">
+<div style="display:flex;flex-direction:column;gap:.75rem">
 {{range .Pairs}}
-<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem 1.1rem">
-
-    {{/* Sport badge */}}
-    <div style="margin-bottom:.6rem">
-        <span style="font-size:.72rem;padding:.1rem .45rem;border-radius:10px;background:rgba(99,102,241,.15);color:#818cf8">
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:9px;padding:.85rem 1rem">
+    <div style="margin-bottom:.5rem">
+        <span style="font-size:.7rem;padding:.1rem .4rem;border-radius:9px;background:rgba(99,102,241,.15);color:#818cf8">
             {{if eq .Sport "football"}}⚽ fotbal{{else if eq .Sport "hockey"}}🏒 hokej{{else}}{{.Sport}}{{end}}
         </span>
     </div>
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:.65rem;align-items:center">
 
-    {{/* Dva týmy vedle sebe */}}
-    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:.75rem;align-items:center">
-
-        {{/* Tým A */}}
-        <div style="background:var(--bg3);border-radius:7px;padding:.7rem .85rem">
-            <div style="font-weight:700;font-size:.92rem">{{.Name1}}</div>
-            {{if .DN1}}<div style="font-size:.78rem;color:var(--muted-d)">{{.DN1}}</div>{{end}}
-            <div style="font-size:.74rem;margin-top:.3rem;color:{{if gt .MC1 .MC2}}#10b981{{else}}var(--muted-d){{end}}">
-                {{.MC1}} zápasů
-            </div>
-            <div style="margin-top:.5rem;display:flex;gap:.4rem;flex-wrap:wrap">
-                <form method="post" action="/admin/teams/{{.ID2}}/merge" style="display:inline"
-                      onsubmit="return confirm('Sloučit {{.Name2}} → {{.Name1}}? Tým {{.Name2}} bude smazán.')">
-                    <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
-                    <input type="hidden" name="target_team_id" value="{{.ID1}}" />
-                    <button type="submit" class="btn btn-sm"
-                            style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);font-size:.74rem">
-                        ← Zachovat tento, sloučit druhý sem
-                    </button>
-                </form>
-            </div>
+        <div style="background:var(--bg3);border-radius:6px;padding:.6rem .8rem">
+            <div style="font-weight:700;font-size:.9rem">{{.Name1}}</div>
+            {{if .DN1}}<div style="font-size:.76rem;color:var(--muted-d)">{{.DN1}}</div>{{end}}
+            <div style="font-size:.72rem;margin-top:.25rem;color:{{if gt .MC1 .MC2}}#10b981{{else}}var(--muted-d){{end}}">{{.MC1}} zápasů</div>
+            <form method="post" action="/admin/teams/{{.ID2}}/merge" style="margin-top:.4rem"
+                  onsubmit="return confirm('Sloučit {{.Name2}} do {{.Name1}}? Tým {{.Name2}} bude smazán.')">
+                <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
+                <input type="hidden" name="target_team_id" value="{{.ID1}}" />
+                <button type="submit" class="btn btn-sm"
+                        style="font-size:.72rem;background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)">
+                    ← Zachovat tento
+                </button>
+            </form>
         </div>
 
-        {{/* Šipka */}}
-        <div style="text-align:center;font-size:1.2rem;color:var(--muted-d)">⇄</div>
+        <div style="color:var(--muted-d);font-size:1.1rem">⇄</div>
 
-        {{/* Tým B */}}
-        <div style="background:var(--bg3);border-radius:7px;padding:.7rem .85rem">
-            <div style="font-weight:700;font-size:.92rem">{{.Name2}}</div>
-            {{if .DN2}}<div style="font-size:.78rem;color:var(--muted-d)">{{.DN2}}</div>{{end}}
-            <div style="font-size:.74rem;margin-top:.3rem;color:{{if gt .MC2 .MC1}}#10b981{{else}}var(--muted-d){{end}}">
-                {{.MC2}} zápasů
-            </div>
-            <div style="margin-top:.5rem;display:flex;gap:.4rem;flex-wrap:wrap">
-                <form method="post" action="/admin/teams/{{.ID1}}/merge" style="display:inline"
-                      onsubmit="return confirm('Sloučit {{.Name1}} → {{.Name2}}? Tým {{.Name1}} bude smazán.')">
-                    <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
-                    <input type="hidden" name="target_team_id" value="{{.ID2}}" />
-                    <button type="submit" class="btn btn-sm"
-                            style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);font-size:.74rem">
-                        Zachovat tento, sloučit druhý sem →
-                    </button>
-                </form>
-            </div>
+        <div style="background:var(--bg3);border-radius:6px;padding:.6rem .8rem">
+            <div style="font-weight:700;font-size:.9rem">{{.Name2}}</div>
+            {{if .DN2}}<div style="font-size:.76rem;color:var(--muted-d)">{{.DN2}}</div>{{end}}
+            <div style="font-size:.72rem;margin-top:.25rem;color:{{if gt .MC2 .MC1}}#10b981{{else}}var(--muted-d){{end}}">{{.MC2}} zápasů</div>
+            <form method="post" action="/admin/teams/{{.ID1}}/merge" style="margin-top:.4rem"
+                  onsubmit="return confirm('Sloučit {{.Name1}} do {{.Name2}}? Tým {{.Name1}} bude smazán.')">
+                <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
+                <input type="hidden" name="target_team_id" value="{{.ID2}}" />
+                <button type="submit" class="btn btn-sm"
+                        style="font-size:.72rem;background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)">
+                    Zachovat tento →
+                </button>
+            </form>
         </div>
 
     </div>
@@ -87,3 +138,100 @@
 {{end}}
 </div>
 {{end}}
+
+<script>
+(function(){
+var allTeams = {{.AllTeamsJSON}};
+var _msport  = '';
+
+// Info cache — match counts and comp names
+var infoCache = {};
+allTeams.forEach(function(t){ infoCache[t.id] = t; });
+
+window.setMSport = function(s){
+    _msport = s;
+    document.querySelectorAll('.msport-btn').forEach(function(b){
+        b.classList.toggle('active', b.dataset.sport === s);
+    });
+    buildMSel('src');
+    buildMSel('tgt');
+};
+
+function getFilteredTeams(excludeID){
+    var srcID = parseInt((document.getElementById('msrc-sel').value||'0'),10);
+    var tgtID = parseInt((document.getElementById('mtgt-sel').value||'0'),10);
+    return allTeams.filter(function(t){
+        if(t.id === excludeID) return false;
+        if(_msport && t.sport !== _msport) return false;
+        return true;
+    });
+}
+
+window.buildMSel = function(which){
+    var filterId = which === 'src' ? 'msrc-filter' : 'mtgt-filter';
+    var selId    = which === 'src' ? 'msrc-sel'    : 'mtgt-sel';
+    var otherSel = which === 'src' ? document.getElementById('mtgt-sel') : document.getElementById('msrc-sel');
+    var excludeID= otherSel ? parseInt(otherSel.value||'0',10) : 0;
+
+    var filter = (document.getElementById(filterId).value||'').toLowerCase();
+    var sel    = document.getElementById(selId);
+    var oldVal = sel.value;
+    sel.innerHTML = '';
+
+    getFilteredTeams(excludeID).forEach(function(t){
+        var label = t.display_name ? t.display_name + '  (' + t.name + ')' : t.name;
+        if(filter && label.toLowerCase().indexOf(filter) < 0) return;
+        var opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = label;
+        if(String(t.id) === oldVal) opt.selected = true;
+        sel.appendChild(opt);
+    });
+    updateMergePreview();
+};
+
+window.updateMergePreview = function(){
+    var srcID = parseInt((document.getElementById('msrc-sel').value||'0'),10);
+    var tgtID = parseInt((document.getElementById('mtgt-sel').value||'0'),10);
+    var btn   = document.getElementById('manual-merge-btn');
+    var form  = document.getElementById('manual-merge-form');
+    var prev  = document.getElementById('merge-preview');
+
+    if(srcID && tgtID && srcID !== tgtID){
+        document.getElementById('mtgt-id-hidden').value = tgtID;
+        form.action = '/admin/teams/' + srcID + '/merge';
+        if(btn) btn.disabled = false;
+
+        var st = infoCache[srcID];
+        var tt = infoCache[tgtID];
+        var srcLabel = st ? (st.display_name || st.name) : srcID;
+        var tgtLabel = tt ? (tt.display_name || tt.name) : tgtID;
+        if(prev){
+            prev.style.display = '';
+            prev.innerHTML = 'Slouci <strong>' + esc(srcLabel) + '</strong> do <strong>' + esc(tgtLabel) + '</strong> — zdrojovy tym bude smazan, vsechny zapasy prejdou na cilovy.';
+        }
+    } else {
+        if(btn) btn.disabled = true;
+        if(prev) prev.style.display = 'none';
+    }
+
+    // Rebuild other select to exclude current selection
+    buildMSel(document.activeElement && document.activeElement.id === 'msrc-sel' ? 'tgt' : 'src');
+};
+
+window.confirmMerge = function(){
+    var srcSel = document.getElementById('msrc-sel');
+    var tgtSel = document.getElementById('mtgt-sel');
+    if(!srcSel.value || !tgtSel.value) return false;
+    var srcLabel = (srcSel.options[srcSel.selectedIndex]||{}).textContent || srcSel.value;
+    var tgtLabel = (tgtSel.options[tgtSel.selectedIndex]||{}).textContent || tgtSel.value;
+    return confirm('Sloucit "' + srcLabel.trim() + '" do "' + tgtLabel.trim() + '"?\nZdrojovy tym bude trvale smazan.');
+};
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Init
+buildMSel('src');
+buildMSel('tgt');
+})();
+</script>
