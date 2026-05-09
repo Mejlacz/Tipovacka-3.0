@@ -89,6 +89,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
     form.addEventListener('submit', function(e) {
         e.preventDefault();
         var fd = new FormData(form);
+        fd.append('_csrf', _csrfToken);
         fetch('/admin/competitions/{{.SelectedCompetitionID}}/add-match', { method: 'POST', body: fd })
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -456,6 +457,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var inp = cell.querySelector('input'); inp.focus(); inp.select();
             function doPost(val) {
                 var fd = new FormData();
+                fd.append('_csrf', _csrfToken);
                 fd.append('question_id', qId); fd.append('user_id', userId); fd.append('sub_index', subIdx); fd.append('answer_text', val);
                 fetch('/admin/extra/answers/set-ajax', { method: 'POST', body: fd })
                     .then(function(r) { return r.json(); })
