@@ -321,6 +321,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
 {{end}}
 
 <script>
+var _csrfToken = '{{.CSRFToken}}';
 document.addEventListener('DOMContentLoaded', function () {
     var table = document.querySelector('.leaderboard-matrix');
     if (!table) return;
@@ -371,6 +372,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 var h = parseInt(inputs[0].value, 10), a = parseInt(inputs[1].value, 10);
                 if (isNaN(h) || isNaN(a) || h < 0 || a < 0) { cancel(); return; }
                 var fd = new FormData();
+                fd.append('_csrf', _csrfToken);
                 fd.append('match_id', matchId); fd.append('home_score', h); fd.append('away_score', a);
                 fetch('/tip/submit-ajax', { method: 'POST', body: fd })
                     .then(function(r) { return r.json(); })
@@ -417,6 +419,7 @@ document.addEventListener('DOMContentLoaded', function () {
             inputs[0].focus(); inputs[0].select();
             function doPost(h, a) {
                 var fd = new FormData();
+                fd.append('_csrf', _csrfToken);
                 fd.append('match_id', matchId); fd.append('user_id', userId); fd.append('home_score', h); fd.append('away_score', a);
                 fetch('/admin/tips/set-ajax', { method: 'POST', body: fd })
                     .then(function(r) { return r.json(); })
@@ -476,7 +479,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var matchId = btn.dataset.matchId;
             btn.textContent = '⏳';
             btn.disabled = true;
-            fetch('/admin/matches/' + matchId + '/notify-now', { method: 'POST' })
+            fetch('/admin/matches/' + matchId + '/notify-now', { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     btn.disabled = false;
@@ -499,7 +502,7 @@ document.addEventListener('DOMContentLoaded', function () {
             e.stopPropagation();
             var matchId = btn.dataset.matchId, label = btn.dataset.label;
             if (!confirm('Zrušit zápas: ' + label + '?\n\nSmaže se zápas i všechny tipy k němu.')) return;
-            fetch('/admin/matches/' + matchId + '/delete', { method: 'POST' })
+            fetch('/admin/matches/' + matchId + '/delete', { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} })
                 .then(function(r) { return r.json(); })
                 .then(function(data) { if (data.ok) location.reload(); else alert('Chyba: ' + (data.error || 'neznámá')); })
                 .catch(function() { alert('Chyba spojení.'); });
@@ -518,7 +521,9 @@ document.addEventListener('DOMContentLoaded', function () {
             function save() {
                 var h = parseInt(inputs[0].value, 10), a = parseInt(inputs[1].value, 10);
                 if (isNaN(h) || isNaN(a) || h < 0 || a < 0) { cancel(); return; }
-                var fd = new FormData(); fd.append('home_score', h); fd.append('away_score', a);
+                var fd = new FormData();
+                fd.append('_csrf', _csrfToken);
+                fd.append('home_score', h); fd.append('away_score', a);
                 fetch('/admin/matches/' + matchId + '/set-result', { method: 'POST', body: fd })
                     .then(function() { location.reload(); })
                     .catch(function() { cell.innerHTML = orig; });
@@ -541,7 +546,8 @@ document.addEventListener('DOMContentLoaded', function () {
             div.innerHTML = '<input type="datetime-local" class="ie-date" value="' + curIso + '" style="font-size:0.7rem;width:12rem;background:var(--bg3);color:var(--text-d);border:1px solid var(--accent);border-radius:4px;padding:1px 3px">';
             var inp = div.querySelector('input'); inp.focus();
             function save() {
-                var val = inp.value, fd = new FormData(); fd.append('match_date', val);
+                var val = inp.value, fd = new FormData();
+                fd.append('_csrf', _csrfToken); fd.append('match_date', val);
                 fetch('/admin/matches/' + matchId + '/set-date', { method: 'POST', body: fd })
                     .then(function(r) { return r.json(); })
                     .then(function(data) { if (data.ok) { div.dataset.iso = data.iso; div.innerHTML = '✏️ ' + data.display; } else { div.innerHTML = origHtml; alert('Chyba: ' + (data.error || '')); } })
