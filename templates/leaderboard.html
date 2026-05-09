@@ -88,9 +88,9 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
     form.addEventListener('submit', function(e) {
         e.preventDefault();
-        var fd = new FormData(form);
+        var fd = new URLSearchParams(new FormData(form));
         fd.append('_csrf', _csrfToken);
-        fetch('/admin/competitions/{{.SelectedCompetitionID}}/add-match', { method: 'POST', body: fd })
+        fetch('/admin/competitions/{{.SelectedCompetitionID}}/add-match', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd })
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.ok) { location.reload(); }
@@ -372,10 +372,10 @@ document.addEventListener('DOMContentLoaded', function () {
             function save() {
                 var h = parseInt(inputs[0].value, 10), a = parseInt(inputs[1].value, 10);
                 if (isNaN(h) || isNaN(a) || h < 0 || a < 0) { cancel(); return; }
-                var fd = new FormData();
+                var fd = new URLSearchParams();
                 fd.append('_csrf', _csrfToken);
                 fd.append('match_id', matchId); fd.append('home_score', h); fd.append('away_score', a);
-                fetch('/tip/submit-ajax', { method: 'POST', body: fd })
+                fetch('/tip/submit-ajax', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data.ok) { cell.dataset.home = h; cell.dataset.away = a; cell.innerHTML = h + ':' + a; cell.classList.remove('tip-exact','tip-winner','tip-miss'); }
@@ -419,10 +419,10 @@ document.addEventListener('DOMContentLoaded', function () {
             var inputs = cell.querySelectorAll('input');
             inputs[0].focus(); inputs[0].select();
             function doPost(h, a) {
-                var fd = new FormData();
+                var fd = new URLSearchParams();
                 fd.append('_csrf', _csrfToken);
                 fd.append('match_id', matchId); fd.append('user_id', userId); fd.append('home_score', h); fd.append('away_score', a);
-                fetch('/admin/tips/set-ajax', { method: 'POST', body: fd })
+                fetch('/admin/tips/set-ajax', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data.ok) { cell.dataset.home = h; cell.dataset.away = a; cell.innerHTML = h + ':' + a; cell.classList.remove('tip-exact','tip-winner','tip-miss','tip-no-tip'); }
@@ -456,10 +456,10 @@ document.addEventListener('DOMContentLoaded', function () {
             cell.innerHTML = '<input type="text" class="ie-text" value="' + curAns.replace(/"/g,'&quot;') + '" style="width:100%;min-width:60px;font-size:.78rem;background:var(--bg3);color:var(--text-d);border:1px solid #f59e0b;border-radius:3px;padding:1px 3px">';
             var inp = cell.querySelector('input'); inp.focus(); inp.select();
             function doPost(val) {
-                var fd = new FormData();
+                var fd = new URLSearchParams();
                 fd.append('_csrf', _csrfToken);
                 fd.append('question_id', qId); fd.append('user_id', userId); fd.append('sub_index', subIdx); fd.append('answer_text', val);
-                fetch('/admin/extra/answers/set-ajax', { method: 'POST', body: fd })
+                fetch('/admin/extra/answers/set-ajax', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data.ok) { cell.dataset.ans = val; var disp = val.length > 12 ? val.slice(0,12) + '\u2026' : val; cell.innerHTML = val ? '<span style="color:#94a3b8">' + disp + '</span>' : '<span style="color:var(--muted-d)">\u2013</span>'; }
@@ -523,10 +523,10 @@ document.addEventListener('DOMContentLoaded', function () {
             function save() {
                 var h = parseInt(inputs[0].value, 10), a = parseInt(inputs[1].value, 10);
                 if (isNaN(h) || isNaN(a) || h < 0 || a < 0) { cancel(); return; }
-                var fd = new FormData();
+                var fd = new URLSearchParams();
                 fd.append('_csrf', _csrfToken);
                 fd.append('home_score', h); fd.append('away_score', a);
-                fetch('/admin/matches/' + matchId + '/set-result', { method: 'POST', body: fd })
+                fetch('/admin/matches/' + matchId + '/set-result', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd })
                     .then(function() { location.reload(); })
                     .catch(function() { cell.innerHTML = orig; });
             }
@@ -548,9 +548,9 @@ document.addEventListener('DOMContentLoaded', function () {
             div.innerHTML = '<input type="datetime-local" class="ie-date" value="' + curIso + '" style="font-size:0.7rem;width:12rem;background:var(--bg3);color:var(--text-d);border:1px solid var(--accent);border-radius:4px;padding:1px 3px">';
             var inp = div.querySelector('input'); inp.focus();
             function save() {
-                var val = inp.value, fd = new FormData();
+                var val = inp.value, fd = new URLSearchParams();
                 fd.append('_csrf', _csrfToken); fd.append('match_date', val);
-                fetch('/admin/matches/' + matchId + '/set-date', { method: 'POST', body: fd })
+                fetch('/admin/matches/' + matchId + '/set-date', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd })
                     .then(function(r) { return r.json(); })
                     .then(function(data) { if (data.ok) { div.dataset.iso = data.iso; div.innerHTML = '✏️ ' + data.display; } else { div.innerHTML = origHtml; alert('Chyba: ' + (data.error || '')); } })
                     .catch(function() { div.innerHTML = origHtml; });
