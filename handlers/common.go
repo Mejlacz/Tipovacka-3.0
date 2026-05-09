@@ -393,8 +393,8 @@ func RenderTemplate(w http.ResponseWriter, r *http.Request, tmpl *template.Templ
 // LogAction zapíše akci do audit logu.
 func LogAction(adminID *int, adminUsername, action, entityType string, entityID *int, description string, oldValue, newValue *string) {
 	_, err := db.Pool.Exec(context.Background(),
-		`INSERT INTO audit_log (admin_id, admin_username, action, entity_type, entity_id, description, old_value, new_value)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		`INSERT INTO audit_log (timestamp, admin_id, admin_username, action, entity_type, entity_id, description, old_value, new_value)
+		 VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7, $8)`,
 		adminID, adminUsername, action, entityType, entityID, description, oldValue, newValue)
 	if err != nil {
 		log.Printf("[audit] chyba: %v", err)
@@ -550,6 +550,7 @@ func EnsureAdmin(username, password string) {
 		{Col: "password_hash", Val: hash, Include: true},
 		{Col: "is_admin", Val: true, Include: userCols.IsAdmin},
 		{Col: "is_owner", Val: true, Include: userCols.IsOwner},
+		{Col: "is_hidden", Val: false, Include: userCols.IsHidden},
 	})
 	var newID int
 	if err = db.Pool.QueryRow(ctx, sql, vals...).Scan(&newID); err != nil {

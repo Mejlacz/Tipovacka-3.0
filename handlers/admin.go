@@ -887,6 +887,7 @@ func AdminUserNewSubmit(tmpl *template.Template) http.HandlerFunc {
 			{Col: "email", Val: PtrStr(email), Include: userCols.Email},
 			{Col: "is_admin", Val: isAdmin, Include: userCols.IsAdmin},
 			{Col: "is_owner", Val: isOwner, Include: userCols.IsOwner},
+			{Col: "is_hidden", Val: false, Include: userCols.IsHidden},
 			{Col: "lang", Val: "cs", Include: userCols.Lang},
 			{Col: "created_at", Val: time.Now().UTC(), Include: userCols.CreatedAt},
 		})

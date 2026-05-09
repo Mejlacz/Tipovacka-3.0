@@ -148,6 +148,7 @@ func AdminUserImportSubmit(w http.ResponseWriter, r *http.Request) {
 				{Col: "password_hash", Val: hash, Include: true},
 				{Col: "is_admin", Val: isAdmin, Include: userCols.IsAdmin},
 				{Col: "is_owner", Val: isOwner, Include: userCols.IsOwner},
+				{Col: "is_hidden", Val: false, Include: userCols.IsHidden},
 			}
 			if userCols.Email && email != "" {
 				fields = append(fields, UserInsertField{Col: "email", Val: email, Include: true})
