@@ -31,6 +31,7 @@ var userCols struct {
 	IsInactive    bool
 	Lang          bool
 	CreatedAt     bool
+	LastLogin     bool
 	FirstName     bool
 	LastName      bool
 	NotifyAccess  bool
@@ -62,6 +63,7 @@ func InitUserSchema() {
 		case "is_inactive":    userCols.IsInactive = true
 		case "lang":           userCols.Lang = true
 		case "created_at":     userCols.CreatedAt = true
+		case "last_login":     userCols.LastLogin = true
 		case "first_name":     userCols.FirstName = true
 		case "last_name":      userCols.LastName = true
 		case "notify_access":  userCols.NotifyAccess = true
@@ -69,8 +71,8 @@ func InitUserSchema() {
 		case "ui_settings":    userCols.UISettings = true
 		}
 	}
-	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v is_hidden=%v is_approved=%v is_inactive=%v lang=%v created_at=%v first_name=%v last_name=%v notify_access=%v background_url=%v ui_settings=%v",
-		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.IsApproved, userCols.IsInactive, userCols.Lang, userCols.CreatedAt, userCols.FirstName, userCols.LastName, userCols.NotifyAccess, userCols.BackgroundURL, userCols.UISettings)
+	log.Printf("[schema] users: email=%v is_admin=%v is_owner=%v is_blocked=%v is_hidden=%v is_approved=%v is_inactive=%v lang=%v created_at=%v last_login=%v first_name=%v last_name=%v notify_access=%v background_url=%v ui_settings=%v",
+		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.IsApproved, userCols.IsInactive, userCols.Lang, userCols.CreatedAt, userCols.LastLogin, userCols.FirstName, userCols.LastName, userCols.NotifyAccess, userCols.BackgroundURL, userCols.UISettings)
 }
 
 // buildUserSelect vrátí SELECT sloupců + jejich scan cíle pro daného uživatele.
@@ -105,6 +107,9 @@ func buildUserSelect() (cols string, scanInto func(u *models.User) []interface{}
 	}
 	if userCols.CreatedAt {
 		names = append(names, "created_at")
+	}
+	if userCols.LastLogin {
+		names = append(names, "last_login")
 	}
 	if userCols.FirstName {
 		names = append(names, "first_name")
@@ -193,6 +198,10 @@ func scanUser(u *models.User, row interface {
 	if userCols.CreatedAt {
 		ptrs = append(ptrs, &createdAt)
 	}
+	var lastLogin *time.Time
+	if userCols.LastLogin {
+		ptrs = append(ptrs, &lastLogin)
+	}
 	var firstName, lastName *string
 	if userCols.FirstName {
 		ptrs = append(ptrs, &firstName)
@@ -240,6 +249,7 @@ func scanUser(u *models.User, row interface {
 	}
 	u.FirstName = firstName
 	u.LastName = lastName
+	u.LastLogin = lastLogin
 	return nil
 }
 
@@ -287,7 +297,7 @@ func RequireAdmin(w http.ResponseWriter, r *http.Request) *models.User {
 	return u
 }
 
-// RequireLogin přesměruje na /login pokud není přihlášen nebo je blokován.
+// RequireLogin přesměruje na /login pokud není přihlášen, je blokován nebo neaktivní.
 func RequireLogin(w http.ResponseWriter, r *http.Request) *models.User {
 	u := GetCurrentUser(r)
 	if u == nil {
@@ -393,8 +403,8 @@ func RenderTemplate(w http.ResponseWriter, r *http.Request, tmpl *template.Templ
 // LogAction zapíše akci do audit logu.
 func LogAction(adminID *int, adminUsername, action, entityType string, entityID *int, description string, oldValue, newValue *string) {
 	_, err := db.Pool.Exec(context.Background(),
-		`INSERT INTO audit_log (timestamp, admin_id, admin_username, action, entity_type, entity_id, description, old_value, new_value)
-		 VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7, $8)`,
+		`INSERT INTO audit_log (timestamp, admin_id, admin_username, action, entity_type, entity_id, description, old_value, new_value, undone)
+		 VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7, $8, FALSE)`,
 		adminID, adminUsername, action, entityType, entityID, description, oldValue, newValue)
 	if err != nil {
 		log.Printf("[audit] chyba: %v", err)
@@ -551,6 +561,7 @@ func EnsureAdmin(username, password string) {
 		{Col: "is_admin", Val: true, Include: userCols.IsAdmin},
 		{Col: "is_owner", Val: true, Include: userCols.IsOwner},
 		{Col: "is_hidden", Val: false, Include: userCols.IsHidden},
+		{Col: "created_at", Val: time.Now(), Include: userCols.CreatedAt},
 	})
 	var newID int
 	if err = db.Pool.QueryRow(ctx, sql, vals...).Scan(&newID); err != nil {

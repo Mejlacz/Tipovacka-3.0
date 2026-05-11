@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"tipovacka/db"
 	"tipovacka/middleware"
@@ -149,6 +150,7 @@ func AdminUserImportSubmit(w http.ResponseWriter, r *http.Request) {
 				{Col: "is_admin", Val: isAdmin, Include: userCols.IsAdmin},
 				{Col: "is_owner", Val: isOwner, Include: userCols.IsOwner},
 				{Col: "is_hidden", Val: false, Include: userCols.IsHidden},
+				{Col: "created_at", Val: time.Now(), Include: userCols.CreatedAt},
 			}
 			if userCols.Email && email != "" {
 				fields = append(fields, UserInsertField{Col: "email", Val: email, Include: true})
