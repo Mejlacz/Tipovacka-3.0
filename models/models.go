@@ -32,6 +32,7 @@ type User struct {
 	UISettings    *string // JSON: {"exact_bg":"#...","winner_bg":"#...",...}
 	Lang          string
 	CreatedAt     time.Time
+	LastLogin     *time.Time
 }
 
 func (u *User) DisplayName() string {

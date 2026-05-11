@@ -54,7 +54,9 @@
 .ubtn-unblock{ background:#6366f122; color:#a5b4fc; border-color:#6366f144; }
 .ubtn-block  { background:#f59e0b22; color:#fbbf24; border-color:#f59e0b44; }
 .ubtn-welcome{ background:#06b6d422; color:#22d3ee; border-color:#06b6d444; }
-.ubtn-del    { background:#ef444422; color:#f87171; border-color:#ef444444; }
+.ubtn-del      { background:#ef444422; color:#f87171; border-color:#ef444444; }
+.ubtn-inactive { background:#64748b22; color:#94a3b8; border-color:#64748b44; }
+.ubtn-activate { background:#22c55e22; color:#4ade80; border-color:#22c55e44; }
 </style>
 
 <div class="page-header">
@@ -153,6 +155,16 @@
             <form style="display:inline" method="post" action="/admin/users/{{.ID}}/block"
                   onsubmit="return confirm('Blokovat {{.Username}}?')">
                 <button class="ubtn ubtn-block">🔒 Blokovat</button>
+            </form>
+            {{end}}
+            {{if .IsInactive}}
+            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/toggle-inactive">
+                <button class="ubtn ubtn-activate" title="Vrátit do aktivních">↩ Aktivovat</button>
+            </form>
+            {{else}}
+            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/toggle-inactive"
+                  onsubmit="return confirm('Přesunout {{.Username}} do Neaktivních?')">
+                <button class="ubtn ubtn-inactive" title="Označit jako neaktivního">💤 Neaktivní</button>
             </form>
             {{end}}
             <form style="display:inline" method="post" action="/admin/users/{{.ID}}/send-welcome">

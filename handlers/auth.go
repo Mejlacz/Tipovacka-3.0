@@ -164,6 +164,22 @@ func LoginSubmit(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
+		if u.IsBlocked {
+			renderErr("Váš účet byl zablokován.")
+			return
+		}
+
+		// Neaktivní uživatel se přihlásí → automaticky reaktivovat
+		if userCols.IsInactive && u.IsInactive {
+			_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_inactive = false WHERE id = $1`, u.ID)
+			log.Printf("[login] uživatel %s (%d) reaktivován přihlášením", u.Username, u.ID)
+		}
+
+		// Zaznamenat čas posledního přihlášení
+		if userCols.LastLogin {
+			_, _ = db.Pool.Exec(ctx, `UPDATE users SET last_login = NOW() WHERE id = $1`, u.ID)
+		}
+
 		middleware.SetUserID(w, r, u.ID)
 		middleware.SetLang(w, r, u.Lang)
 		http.Redirect(w, r, "/", http.StatusSeeOther)

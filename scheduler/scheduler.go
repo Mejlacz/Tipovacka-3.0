@@ -21,6 +21,7 @@ func Start(ctx context.Context, pool *pgxpool.Pool) {
 	go runNeonBackupLoop(ctx, pool)
 	go runEmailNotifyLoop(ctx, pool)
 	go runAutoResultsLoop(ctx, pool)
+	go runAutoInactiveLoop(ctx, pool)
 	log.Println("[scheduler] spuštěn")
 }
 
@@ -357,6 +358,60 @@ func runAutoResultsFetch(ctx context.Context, pool *pgxpool.Pool) { //nolint:unp
 	for _, comp := range comps {
 		updated, notFound := handlers.AutoFetchResults(ctx, comp.ID, comp.FdCode, "football")
 		log.Printf("[auto-results] %s (%s): %d aktualizováno, %d nenalezeno", comp.Name, comp.FdCode, updated, notFound)
+	}
+}
+
+// ─── Auto-inactive loop ───────────────────────────────────────────────────────
+
+// runAutoInactiveLoop každý den ve 4:00 označí uživatele bez přihlášení rok+
+// jako neaktivní (kromě admin/owner/blocked).
+func runAutoInactiveLoop(ctx context.Context, pool *pgxpool.Pool) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("[scheduler] auto-inactive panic: %v", err)
+		}
+	}()
+
+	for {
+		// Počkej na 4:00 následujícího dne
+		now := time.Now()
+		next := time.Date(now.Year(), now.Month(), now.Day(), 4, 0, 0, 0, now.Location())
+		if !next.After(now) {
+			next = next.Add(24 * time.Hour)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Until(next)):
+		}
+
+		runAutoInactive(ctx, pool)
+	}
+}
+
+func runAutoInactive(ctx context.Context, pool *pgxpool.Pool) {
+	// Označit uživatele jako neaktivní pokud:
+	// - last_login je starší než 1 rok, nebo last_login IS NULL a created_at starší než 1 rok
+	// - není admin ani owner ani blokovaný
+	// - zatím není neaktivní
+	result, err := pool.Exec(ctx, `
+		UPDATE users
+		SET is_inactive = true
+		WHERE is_inactive = false
+		  AND COALESCE(is_blocked, false) = false
+		  AND COALESCE(is_admin, false)   = false
+		  AND COALESCE(is_owner, false)   = false
+		  AND (
+		        last_login < NOW() - INTERVAL '1 year'
+		        OR (last_login IS NULL AND created_at < NOW() - INTERVAL '1 year')
+		      )
+	`)
+	if err != nil {
+		log.Printf("[auto-inactive] chyba: %v", err)
+		return
+	}
+	if result.RowsAffected() > 0 {
+		log.Printf("[auto-inactive] označeno %d uživatelů jako neaktivní (1 rok bez přihlášení)", result.RowsAffected())
 	}
 }
 
