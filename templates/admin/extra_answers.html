@@ -13,8 +13,17 @@
       {{end}}
       <a href="/admin/extra/{{.Comp.ID}}/export" class="btn btn-secondary"
          style="background:#1a3a5c;color:#fff;border-color:#1a3a5c;font-size:0.85rem">
-        📥 Export CSV
+        📥 Export XLSX
       </a>
+      <label class="btn btn-secondary" style="font-size:0.85rem;cursor:pointer;margin:0"
+             title="Nahrát XLSX se šablonou otázek (viz list 'Import šablona')">
+        📤 Import XLSX
+        <form method="post" action="/admin/extra/{{.Comp.ID}}/import"
+              enctype="multipart/form-data" id="extra-import-form" style="display:none">
+          <input type="file" name="import_file" accept=".xlsx"
+                 onchange="document.getElementById('extra-import-form').submit()">
+        </form>
+      </label>
       <a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary" style="font-size:0.85rem">➕ Nová otázka</a>
       <a href="/extra?competition_id={{.Comp.ID}}" class="btn btn-secondary" style="font-size:0.85rem">← Extra</a>
       <a href="/admin" class="btn btn-secondary" style="font-size:0.85rem">← Admin</a>

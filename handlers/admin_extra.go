@@ -4,7 +4,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xuri/excelize/v2"
 	"tipovacka/db"
 	"tipovacka/middleware"
 	"tipovacka/models"
@@ -382,7 +382,7 @@ func AdminExtraAutoEvaluate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
 }
 
-// GET /admin/extra/{competition_id}/export  — CSV export
+// GET /admin/extra/{competition_id}/export  — XLSX export
 func AdminExtraExport(w http.ResponseWriter, r *http.Request) {
 	admin := RequireAdmin(w, r)
 	if admin == nil {
@@ -399,36 +399,39 @@ func AdminExtraExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	qRows, _ := db.Pool.Query(ctx,
-		`SELECT id, order_num, text, max_points, correct_answer, is_closed
-		   FROM extra_questions WHERE competition_id=$1 ORDER BY order_num, id`, compID)
 	type qInfo struct {
 		ID            int
 		Order         int
 		Text          string
 		MaxPoints     int
 		CorrectAnswer string
+		AnswerOptions string
 		IsClosed      bool
 	}
+	qRows, _ := db.Pool.Query(ctx,
+		`SELECT id, order_num, text, max_points, correct_answer, is_closed, answer_options
+		   FROM extra_questions WHERE competition_id=$1 ORDER BY order_num, id`, compID)
 	var questions []qInfo
 	for qRows.Next() {
 		var q qInfo
-		var corr *string
-		_ = qRows.Scan(&q.ID, &q.Order, &q.Text, &q.MaxPoints, &corr, &q.IsClosed)
+		var corr, opts *string
+		_ = qRows.Scan(&q.ID, &q.Order, &q.Text, &q.MaxPoints, &corr, &q.IsClosed, &opts)
 		if corr != nil {
 			q.CorrectAnswer = *corr
+		}
+		if opts != nil {
+			q.AnswerOptions = *opts
 		}
 		questions = append(questions, q)
 	}
 	qRows.Close()
 
-	// Answers
 	type answerRow struct {
-		QuestionID int
+		QuestionID   int
 		QuestionText string
-		Username   string
-		Answer     string
-		Points     string
+		Username     string
+		Answer       string
+		Points       string
 	}
 	var answers []answerRow
 	if len(questions) > 0 {
@@ -457,34 +460,254 @@ func AdminExtraExport(w http.ResponseWriter, r *http.Request) {
 		aRows.Close()
 	}
 
-	safeName := strings.ReplaceAll(comp.Name, " ", "_")
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="extra_`+safeName+`.csv"`)
+	// ── Sestavit XLSX ──────────────────────────────────────────────────────
+	f := excelize.NewFile()
+	defer f.Close()
 
-	cw := csv.NewWriter(w)
-	// Section 1: Questions
-	_ = cw.Write([]string{"=== OTÁZKY ==="})
-	_ = cw.Write([]string{"id", "order", "text", "max_points", "correct_answer", "is_closed"})
-	for _, q := range questions {
-		closed := "0"
+	// Styly
+	boldStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Color: "FFFFFF"},
+		Fill:      excelize.Fill{Type: "pattern", Color: []string{"1a3a5c"}, Pattern: 1},
+		Alignment: &excelize.Alignment{Horizontal: "center"},
+	})
+	closedStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "888888", Italic: true},
+	})
+
+	// ── List 1: Otázky ──
+	sheet1 := "Otázky"
+	f.SetSheetName("Sheet1", sheet1)
+	headers1 := []string{"ID", "Pořadí", "Otázka", "Body", "Správná odpověď", "Možnosti (dropdown)", "Uzavřeno"}
+	for ci, h := range headers1 {
+		cell, _ := excelize.CoordinatesToCellName(ci+1, 1)
+		_ = f.SetCellValue(sheet1, cell, h)
+		_ = f.SetCellStyle(sheet1, cell, cell, headerStyle)
+	}
+	_ = f.SetColWidth(sheet1, "A", "A", 14)
+	_ = f.SetColWidth(sheet1, "B", "B", 8)
+	_ = f.SetColWidth(sheet1, "C", "C", 45)
+	_ = f.SetColWidth(sheet1, "D", "D", 8)
+	_ = f.SetColWidth(sheet1, "E", "E", 25)
+	_ = f.SetColWidth(sheet1, "F", "F", 35)
+	_ = f.SetColWidth(sheet1, "G", "G", 10)
+
+	for ri, q := range questions {
+		row := ri + 2
+		closedStr := "ne"
 		if q.IsClosed {
-			closed = "1"
+			closedStr = "ano"
 		}
-		_ = cw.Write([]string{
-			strconv.Itoa(q.ID), strconv.Itoa(q.Order), q.Text,
-			strconv.Itoa(q.MaxPoints), q.CorrectAnswer, closed,
-		})
+		rowData := []interface{}{q.ID, q.Order, q.Text, q.MaxPoints, q.CorrectAnswer, q.AnswerOptions, closedStr}
+		for ci, val := range rowData {
+			cell, _ := excelize.CoordinatesToCellName(ci+1, row)
+			_ = f.SetCellValue(sheet1, cell, val)
+		}
+		if q.IsClosed {
+			startCell, _ := excelize.CoordinatesToCellName(1, row)
+			endCell, _ := excelize.CoordinatesToCellName(len(headers1), row)
+			_ = f.SetCellStyle(sheet1, startCell, endCell, closedStyle)
+		}
 	}
-	_ = cw.Write([]string{})
-	// Section 2: Answers
-	_ = cw.Write([]string{"=== ODPOVĚDI ==="})
-	_ = cw.Write([]string{"question_id", "question_text", "username", "answer", "points"})
-	for _, a := range answers {
-		_ = cw.Write([]string{
-			strconv.Itoa(a.QuestionID), a.QuestionText, a.Username, a.Answer, a.Points,
-		})
+
+	// ── List 2: Odpovědi ──
+	sheet2 := "Odpovědi"
+	_, _ = f.NewSheet(sheet2)
+	headers2 := []string{"ID otázky", "Otázka", "Uživatel", "Odpověď", "Body"}
+	for ci, h := range headers2 {
+		cell, _ := excelize.CoordinatesToCellName(ci+1, 1)
+		_ = f.SetCellValue(sheet2, cell, h)
+		_ = f.SetCellStyle(sheet2, cell, cell, headerStyle)
 	}
-	cw.Flush()
+	_ = f.SetColWidth(sheet2, "A", "A", 14)
+	_ = f.SetColWidth(sheet2, "B", "B", 45)
+	_ = f.SetColWidth(sheet2, "C", "C", 18)
+	_ = f.SetColWidth(sheet2, "D", "D", 30)
+	_ = f.SetColWidth(sheet2, "E", "E", 8)
+
+	prevQID := -1
+	for ri, a := range answers {
+		row := ri + 2
+		ptsVal := interface{}(nil)
+		if a.Points != "" {
+			if n, err2 := strconv.Atoi(a.Points); err2 == nil {
+				ptsVal = n
+			}
+		}
+		// Zvýraznit začátek každé otázky
+		qIDVal := interface{}(nil)
+		if a.QuestionID != prevQID {
+			qIDVal = a.QuestionID
+			prevQID = a.QuestionID
+		}
+		rowData := []interface{}{qIDVal, a.QuestionText, a.Username, a.Answer, ptsVal}
+		for ci, val := range rowData {
+			cell, _ := excelize.CoordinatesToCellName(ci+1, row)
+			if val != nil {
+				_ = f.SetCellValue(sheet2, cell, val)
+			}
+		}
+		// Tučně username
+		usernameCell, _ := excelize.CoordinatesToCellName(3, row)
+		_ = f.SetCellStyle(sheet2, usernameCell, usernameCell, boldStyle)
+	}
+
+	// ── List 3: Import šablona ──
+	sheet3 := "Import šablona"
+	_, _ = f.NewSheet(sheet3)
+	importHeaders := []string{"pořadí", "otázka", "body", "správná_odpověď", "možnosti_dropdown"}
+	for ci, h := range importHeaders {
+		cell, _ := excelize.CoordinatesToCellName(ci+1, 1)
+		_ = f.SetCellValue(sheet3, cell, h)
+		_ = f.SetCellStyle(sheet3, cell, cell, headerStyle)
+	}
+	_ = f.SetColWidth(sheet3, "A", "A", 10)
+	_ = f.SetColWidth(sheet3, "B", "B", 45)
+	_ = f.SetColWidth(sheet3, "C", "C", 8)
+	_ = f.SetColWidth(sheet3, "D", "D", 25)
+	_ = f.SetColWidth(sheet3, "E", "E", 40)
+	// Příklad řádku
+	example := []interface{}{1, "Kdo vyhraje turnaj?", 5, "Česko", "Česko\nSlovensko\nKanada"}
+	for ci, val := range example {
+		cell, _ := excelize.CoordinatesToCellName(ci+1, 2)
+		_ = f.SetCellValue(sheet3, cell, val)
+	}
+
+	safeName := strings.ReplaceAll(comp.Name, " ", "_")
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", `attachment; filename="extra_`+safeName+`.xlsx"`)
+	if err2 := f.Write(w); err2 != nil {
+		log.Printf("[extra export] write error: %v", err2)
+	}
+}
+
+// POST /admin/extra/{competition_id}/import  — XLSX/CSV import otázek
+func AdminExtraImport(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	compID, _ := strconv.Atoi(r.PathValue("competition_id"))
+	ctx := context.Background()
+
+	// Verify competition exists
+	var compExists bool
+	_ = db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM competitions WHERE id=$1)`, compID).Scan(&compExists)
+	if !compExists {
+		middleware.SetFlash(w, r, "error", "Soutěž nenalezena.")
+		http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
+		return
+	}
+
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		middleware.SetFlash(w, r, "error", "Chyba při nahrání souboru.")
+		http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
+		return
+	}
+
+	file, header, err := r.FormFile("import_file")
+	if err != nil {
+		middleware.SetFlash(w, r, "error", "Soubor nenalezen.")
+		http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
+		return
+	}
+	defer file.Close()
+
+	// Aktuální max order_num
+	var maxOrder int
+	_ = db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(MAX(order_num), 0) FROM extra_questions WHERE competition_id=$1`, compID).Scan(&maxOrder)
+
+	// Parsuj XLSX
+	var rows [][]string
+	name := strings.ToLower(header.Filename)
+	if strings.HasSuffix(name, ".xlsx") {
+		xf, err2 := excelize.OpenReader(file)
+		if err2 != nil {
+			middleware.SetFlash(w, r, "error", "Nelze načíst XLSX: "+err2.Error())
+			http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
+			return
+		}
+		defer xf.Close()
+		// Hledej list "Import šablona" nebo první list
+		target := "Import šablona"
+		sheets := xf.GetSheetList()
+		found := false
+		for _, s := range sheets {
+			if s == target {
+				found = true
+				break
+			}
+		}
+		if !found && len(sheets) > 0 {
+			target = sheets[0]
+		}
+		rows, _ = xf.GetRows(target)
+	} else {
+		middleware.SetFlash(w, r, "error", "Podporovaný formát: .xlsx")
+		http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
+		return
+	}
+
+	// Parsuj řádky — přeskoč hlavičku (řádek 1)
+	// Sloupce: pořadí | otázka | body | správná_odpověď | možnosti_dropdown
+	inserted := 0
+	for ri, row := range rows {
+		if ri == 0 {
+			continue // header
+		}
+		if len(row) < 2 {
+			continue
+		}
+		text := strings.TrimSpace(row[1])
+		if text == "" {
+			continue
+		}
+		maxPts := 3
+		if len(row) >= 3 && strings.TrimSpace(row[2]) != "" {
+			if n, err2 := strconv.Atoi(strings.TrimSpace(row[2])); err2 == nil && n > 0 {
+				maxPts = n
+			}
+		}
+		var correctPtr *string
+		if len(row) >= 4 {
+			if v := strings.TrimSpace(row[3]); v != "" {
+				correctPtr = &v
+			}
+		}
+		var optsPtr *string
+		if len(row) >= 5 {
+			if v := strings.TrimSpace(row[4]); v != "" {
+				// Normalizuj: každá řádka = jedna volba
+				var opts []string
+				for _, line := range strings.Split(v, "\n") {
+					line = strings.TrimSpace(line)
+					if line != "" {
+						opts = append(opts, line)
+					}
+				}
+				if len(opts) > 0 {
+					joined := strings.Join(opts, "\n")
+					optsPtr = &joined
+				}
+			}
+		}
+		maxOrder++
+		if _, err2 := db.Pool.Exec(ctx,
+			`INSERT INTO extra_questions (competition_id, order_num, text, max_points, correct_answer, is_closed, answer_options)
+			 VALUES ($1, $2, $3, $4, $5, FALSE, $6)`,
+			compID, maxOrder, text, maxPts, correctPtr, optsPtr); err2 != nil {
+			log.Printf("[extra import] INSERT error row %d: %v", ri, err2)
+			continue
+		}
+		inserted++
+	}
+
+	LogAction(&admin.ID, admin.Username, "extra_import", "competition", &compID,
+		fmt.Sprintf("Import %d extra otázek ze souboru %s", inserted, header.Filename), nil, nil)
+
+	middleware.SetFlash(w, r, "ok", fmt.Sprintf("✅ Importováno %d otázek ze souboru.", inserted))
+	http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
 }
 
 // POST /admin/extra/answers/set-ajax  — admin sets extra answer for a user (AJAX)

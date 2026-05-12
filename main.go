@@ -345,6 +345,7 @@ func main() {
 	r.Post("/admin/extra/{competition_id}/answers", handlers.AdminExtraAnswersSave)
 	r.Post("/admin/extra/{competition_id}/auto-evaluate", handlers.AdminExtraAutoEvaluate)
 	r.Get("/admin/extra/{competition_id}/export", handlers.AdminExtraExport)
+	r.Post("/admin/extra/{competition_id}/import", handlers.AdminExtraImport)
 	r.Post("/admin/extra/{competition_id}/deadline-settings", handlers.AdminExtraDeadlineSettings)
 	r.Post("/admin/extra/answers/set-ajax", handlers.AdminSetExtraAnswerAjax)
 	r.Get("/admin/extra/teams-ajax", handlers.AdminExtraTeamsAjax)
