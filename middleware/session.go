@@ -120,15 +120,17 @@ func CSRFMiddleware(next http.Handler) http.Handler {
 		tok := GetCSRFToken(w, r)
 
 		if !safeMethods[r.Method] && !exemptPaths[r.URL.Path] {
+			// Vždy parsovat tělo — aby handlery mohly číst form hodnoty přes r.FormValue
+			ct := r.Header.Get("Content-Type")
+			if strings.HasPrefix(ct, "multipart/form-data") {
+				_ = r.ParseMultipartForm(8 << 20)
+			} else {
+				_ = r.ParseForm()
+			}
+
+			// CSRF token: preferovat header (AJAX), fallback na form pole
 			submitted := r.Header.Get("X-CSRF-Token")
 			if submitted == "" {
-				// Multipart/form-data musíme parsovat explicitně — ParseForm tělo nečte
-				ct := r.Header.Get("Content-Type")
-				if strings.HasPrefix(ct, "multipart/form-data") {
-					_ = r.ParseMultipartForm(8 << 20) // 8 MB limit pro CSRF pole
-				} else {
-					_ = r.ParseForm()
-				}
 				submitted = r.FormValue("_csrf")
 			}
 			if submitted != tok {
