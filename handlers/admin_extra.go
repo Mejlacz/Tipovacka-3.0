@@ -37,9 +37,9 @@ func AdminExtraQuestionNewForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		// Načti seznam soutěží pro výběr týmů
+		// Načti pouze aktivní soutěže pro výběr týmů
 		compRows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, season FROM competitions ORDER BY is_active DESC, sort_order ASC NULLS LAST, id DESC`)
+			`SELECT id, name, season FROM competitions WHERE is_active = TRUE ORDER BY sort_order ASC NULLS LAST, id DESC`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}
