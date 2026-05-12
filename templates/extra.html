@@ -90,7 +90,7 @@
                     <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#f87171;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">Uzavřeno</span>
                     {{end}}
                     {{if ne $q.MaxPoints 3}}
-                    <span style="font-size:0.75rem;color:var(--muted-d);margin-left:0.4rem">(max. {{$q.MaxPoints}} b)</span>
+                    <span style="font-size:0.75rem;color:var(--muted-d);margin-left:0.4rem">({{$q.MaxPoints}} b)</span>
                     {{end}}
                 </div>
                 {{if $.IsRevealed}}{{if $ans}}{{if $ans.Points}}
