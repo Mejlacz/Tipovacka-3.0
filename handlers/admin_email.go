@@ -202,7 +202,7 @@ func AdminEmailForm(tmpl *template.Template) http.HandlerFunc {
 			Season string
 		}
 		compRows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, season FROM competitions ORDER BY is_active DESC, sort_order ASC NULLS LAST, id DESC`)
+			`SELECT id, name, season FROM competitions WHERE is_active = TRUE ORDER BY sort_order ASC NULLS LAST, id DESC`)
 		var comps []compOpt
 		for compRows.Next() {
 			var c compOpt

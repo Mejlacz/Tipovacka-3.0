@@ -31,7 +31,7 @@ func ProfilePage(tmpl *template.Template) http.HandlerFunc {
 
 		// Competitions
 		compRows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions ORDER BY id DESC`)
+			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE is_active = TRUE ORDER BY sort_order ASC NULLS LAST, id DESC`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}
