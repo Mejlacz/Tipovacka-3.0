@@ -39,6 +39,25 @@
     {{end}}
 </div>
 
+{{/* ── Deadline / stav banner ── */}}
+{{if .Comp}}
+{{if .IsLocked}}
+  {{if .IsRevealed}}
+  <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.88rem;color:#34d399">
+    🔒 Tipování uzavřeno · Výsledky zveřejněny
+  </div>
+  {{else}}
+  <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.88rem;color:#f87171">
+    🔒 Tipování uzavřeno · Výsledky budou zveřejněny brzy
+  </div>
+  {{end}}
+{{else if .EffectiveDeadline}}
+  <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.88rem;color:#fbbf24">
+    ⏰ Deadline pro tipování: <strong>{{fmtTime .EffectiveDeadline "02.01.2006 15:04"}}</strong>
+  </div>
+{{end}}
+{{end}}
+
 {{/* ── Obsah ── */}}
 {{if not .Comp}}
     <p class="empty">{{tr .Lang "extra_no_comp"}}</p>
@@ -74,15 +93,15 @@
                     <span style="font-size:0.75rem;color:var(--muted-d);margin-left:0.4rem">(max. {{$q.MaxPoints}} b)</span>
                     {{end}}
                 </div>
-                {{if $ans}}{{if $ans.Points}}
+                {{if $.IsRevealed}}{{if $ans}}{{if $ans.Points}}
                 <span style="background:rgba(16,185,129,0.15);color:#34d399;padding:0.2rem 0.7rem;border-radius:20px;font-weight:700;font-size:0.88rem;white-space:nowrap">
                     {{$ans.Points}} b
                 </span>
-                {{end}}{{end}}
+                {{end}}{{end}}{{end}}
             </div>
 
-            {{/* Správná odpověď */}}
-            {{if $q.CorrectAnswer}}
+            {{/* Správná odpověď — zobrazit jen pokud jsou výsledky zveřejněny */}}
+            {{if and $.IsRevealed $q.CorrectAnswer}}
             <div style="font-size:0.82rem;color:#fbbf24;background:rgba(245,158,11,0.12);padding:0.3rem 0.7rem;border-radius:6px;margin-bottom:0.6rem">
                 Správná odpověď: <strong>{{$q.CorrectAnswer}}</strong>
             </div>
@@ -119,7 +138,7 @@
                 </button>
                 {{else}}
                 <span style="font-size:0.8rem;color:var(--muted-d);min-width:80px;text-align:center">
-                    {{if and $ans $ans.Points}}Ohodnoceno{{else}}Uzavřeno{{end}}
+                    {{if and $.IsRevealed $ans $ans.Points}}Ohodnoceno{{else}}Uzavřeno{{end}}
                 </span>
                 {{end}}
             </div>

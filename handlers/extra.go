@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"tipovacka/db"
 	"tipovacka/models"
@@ -26,11 +27,12 @@ func ExtraView(tmpl *template.Template) http.HandlerFunc {
 		ctx := context.Background()
 
 		compRows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE is_active = TRUE ORDER BY sort_order ASC NULLS LAST, id DESC`)
+			`SELECT id, name, season, is_active, sport, sort_order, extra_deadline, extra_reveal_at
+			   FROM competitions WHERE is_active = TRUE ORDER BY sort_order ASC NULLS LAST, id DESC`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}
-			_ = compRows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.Sport, &c.SortOrder)
+			_ = compRows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.Sport, &c.SortOrder, &c.ExtraDeadline, &c.ExtraRevealAt)
 			competitions = append(competitions, c)
 		}
 		compRows.Close()
@@ -64,6 +66,40 @@ func ExtraView(tmpl *template.Template) http.HandlerFunc {
 		var questions []*models.ExtraQuestion
 		answersMap := map[int]*models.ExtraAnswer{} // question_id → answer
 
+		// ── Výpočet deadline a reveal ──────────────────────────────────────
+		var effectiveDeadline *time.Time
+		var isLocked bool
+		var isRevealed bool
+
+		if comp != nil {
+			if comp.ExtraDeadline != nil {
+				// Admin zadal vlastní deadline
+				effectiveDeadline = comp.ExtraDeadline
+			} else {
+				// Auto: začátek prvního zápasu v soutěži
+				var firstMatch time.Time
+				err := db.Pool.QueryRow(ctx,
+					`SELECT MIN(m.match_date) FROM matches m
+					   JOIN rounds r ON r.id = m.round_id
+					  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, comp.ID).
+					Scan(&firstMatch)
+				if err == nil && !firstMatch.IsZero() {
+					effectiveDeadline = &firstMatch
+				}
+			}
+
+			if effectiveDeadline != nil {
+				isLocked = time.Now().After(*effectiveDeadline)
+			}
+
+			// Reveal: NULL = stejný čas jako deadline; jinak explicitní čas
+			if comp.ExtraRevealAt != nil {
+				isRevealed = time.Now().After(*comp.ExtraRevealAt)
+			} else {
+				isRevealed = isLocked
+			}
+		}
+
 		if comp != nil {
 			qRows, _ := db.Pool.Query(ctx,
 				`SELECT id, competition_id, order_num, text, max_points, correct_answer, is_closed, answer_options
@@ -71,6 +107,10 @@ func ExtraView(tmpl *template.Template) http.HandlerFunc {
 			for qRows.Next() {
 				q := &models.ExtraQuestion{}
 				_ = qRows.Scan(&q.ID, &q.CompetitionID, &q.OrderNum, &q.Text, &q.MaxPoints, &q.CorrectAnswer, &q.IsClosed, &q.AnswerOptions)
+				// Přepis IsClosed: competition-level lock platí pro všechny otázky
+				if isLocked {
+					q.IsClosed = true
+				}
 				questions = append(questions, q)
 			}
 			qRows.Close()
@@ -100,6 +140,9 @@ func ExtraView(tmpl *template.Template) http.HandlerFunc {
 			"Questions":             questions,
 			"AnswersMap":            answersMap,
 			"SelectedCompetitionID": compID,
+			"EffectiveDeadline":     effectiveDeadline,
+			"IsLocked":              isLocked,
+			"IsRevealed":            isRevealed,
 		})
 	}
 }
@@ -142,6 +185,36 @@ func ExtraSaveAjax(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"ok":false,"error":"closed"}`))
 		return
 	}
+
+	// Zkontroluj competition-level deadline
+	var compExtraDeadline *time.Time
+	var compExtraRevealAt *time.Time
+	_ = db.Pool.QueryRow(ctx,
+		`SELECT extra_deadline, extra_reveal_at FROM competitions WHERE id=$1`, q.CompetitionID).
+		Scan(&compExtraDeadline, &compExtraRevealAt)
+
+	if compExtraDeadline != nil && time.Now().After(*compExtraDeadline) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"ok":false,"error":"closed"}`))
+		return
+	}
+	// Pokud není custom deadline, zkontroluj první zápas soutěže
+	if compExtraDeadline == nil {
+		var firstMatch time.Time
+		errFM := db.Pool.QueryRow(ctx,
+			`SELECT MIN(m.match_date) FROM matches m
+			   JOIN rounds r ON r.id = m.round_id
+			  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, q.CompetitionID).
+			Scan(&firstMatch)
+		if errFM == nil && !firstMatch.IsZero() && time.Now().After(firstMatch) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"ok":false,"error":"closed"}`))
+			return
+		}
+	}
+	_ = compExtraRevealAt // jen pro budoucí použití
 
 	// Upsert answer
 	var existingID int

@@ -58,13 +58,15 @@ func (u *User) Role() string {
 // ─── Competition ──────────────────────────────────────────────────────────────
 
 type Competition struct {
-	ID        int
-	Name      string
-	Season    string
-	IsActive  bool
-	Sport     string
-	SortOrder *int
-	FdCode    string // football-data.org kód pro auto-fetch výsledků (např. CL, PL)
+	ID            int
+	Name          string
+	Season        string
+	IsActive      bool
+	Sport         string
+	SortOrder     *int
+	FdCode        string     // football-data.org kód pro auto-fetch výsledků (např. CL, PL)
+	ExtraDeadline *time.Time // NULL = auto (první zápas soutěže), jinak admin override
+	ExtraRevealAt *time.Time // NULL = zveřejní se ve stejný čas jako deadline; jinak konkrétní čas
 }
 
 // ─── Round ────────────────────────────────────────────────────────────────────

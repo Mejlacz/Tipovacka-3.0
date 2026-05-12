@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -42,6 +43,8 @@ func migrateSchema() {
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS fd_code VARCHAR(10) NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_settings TEXT`,
 		`ALTER TABLE extra_questions ADD COLUMN IF NOT EXISTS answer_options TEXT`,
+		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_deadline TIMESTAMPTZ`,
+		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_reveal_at TIMESTAMPTZ`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
@@ -342,6 +345,7 @@ func main() {
 	r.Post("/admin/extra/{competition_id}/answers", handlers.AdminExtraAnswersSave)
 	r.Post("/admin/extra/{competition_id}/auto-evaluate", handlers.AdminExtraAutoEvaluate)
 	r.Get("/admin/extra/{competition_id}/export", handlers.AdminExtraExport)
+	r.Post("/admin/extra/{competition_id}/deadline-settings", handlers.AdminExtraDeadlineSettings)
 	r.Post("/admin/extra/answers/set-ajax", handlers.AdminSetExtraAnswerAjax)
 	r.Get("/admin/extra/teams-ajax", handlers.AdminExtraTeamsAjax)
 
@@ -489,6 +493,13 @@ func templateFuncs() template.FuncMap {
 		},
 		// lower converts string to lowercase (for data-name search)
 		"lower": strings.ToLower,
+		// fmtTime formats a *time.Time pointer using the given layout; returns "" for nil
+		"fmtTime": func(t *time.Time, layout string) string {
+			if t == nil {
+				return ""
+			}
+			return t.In(time.Local).Format(layout)
+		},
 		// paginate vrátí slice stránek pro navigaci (čísla 1..total, -1 = "…")
 		"paginate": func(current, total int) []int {
 			var pages []int

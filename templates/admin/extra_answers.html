@@ -26,6 +26,56 @@
        style="margin-bottom:1rem">{{index .Flash "msg" | safeHTML}}</div>
   {{end}}
 
+  {{/* ── Nastavení deadline & reveal ── */}}
+  <div class="card mb-3" style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;margin-bottom:1.25rem">
+    <div class="card-body" style="padding:1rem 1.25rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+        <strong style="font-size:1rem">⏰ Deadline a zveřejnění výsledků</strong>
+        <span style="font-size:0.8rem;color:var(--muted-d)">
+          Auto-deadline (první zápas):
+          {{if .AutoDeadline}}<strong>{{fmtTime .AutoDeadline "02.01.2006 15:04"}}</strong>{{else}}<em>žádný zápas</em>{{end}}
+        </span>
+      </div>
+      <form method="post" action="/admin/extra/{{.Comp.ID}}/deadline-settings" style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end">
+        <div>
+          <label style="display:block;font-size:0.8rem;color:var(--muted-d);margin-bottom:0.2rem">
+            Deadline (prázdné = auto)
+          </label>
+          <input type="datetime-local" name="extra_deadline"
+                 value="{{fmtTime .Comp.ExtraDeadline "2006-01-02T15:04"}}"
+                 style="padding:0.35rem 0.6rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.85rem">
+        </div>
+        <div>
+          <label style="display:block;font-size:0.8rem;color:var(--muted-d);margin-bottom:0.2rem">
+            Zveřejnit výsledky (prázdné = automaticky se zamknutím)
+          </label>
+          <input type="datetime-local" name="extra_reveal_at"
+                 value="{{fmtTime .Comp.ExtraRevealAt "2006-01-02T15:04"}}"
+                 style="padding:0.35rem 0.6rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.85rem">
+        </div>
+        <div style="display:flex;gap:0.5rem">
+          <button type="submit" class="btn btn-secondary" style="font-size:0.85rem">💾 Uložit</button>
+          <button type="submit" name="extra_reveal_at" value="now" class="btn btn-primary" style="font-size:0.85rem"
+                  onclick="return confirm('Zveřejnit výsledky ihned?')">
+            🚀 Zveřejnit nyní
+          </button>
+        </div>
+      </form>
+      {{if .Comp.ExtraDeadline}}
+      <div style="margin-top:0.5rem;font-size:0.78rem;color:var(--muted-d)">
+        ✏️ Custom deadline: <strong>{{fmtTime .Comp.ExtraDeadline "02.01.2006 15:04"}}</strong> ·
+        <a href="#" onclick="document.querySelector('[name=extra_deadline]').value='';return false" style="color:var(--muted-d)">vymazat (= vrátit na auto)</a>
+      </div>
+      {{end}}
+      {{if .Comp.ExtraRevealAt}}
+      <div style="margin-top:0.25rem;font-size:0.78rem;color:var(--muted-d)">
+        👁 Naplánované zveřejnění: <strong>{{fmtTime .Comp.ExtraRevealAt "02.01.2006 15:04"}}</strong> ·
+        <a href="#" onclick="document.querySelector('[name=extra_reveal_at]').value='';return false" style="color:var(--muted-d)">vymazat (= auto)</a>
+      </div>
+      {{end}}
+    </div>
+  </div>
+
   {{if not .Questions}}
     <p class="empty">Žádné extra otázky pro tuto soutěž.</p>
     <p><a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary">➕ Přidat první otázku</a></p>

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"tipovacka/db"
 	"tipovacka/middleware"
@@ -181,11 +182,22 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 
 		comp := &models.Competition{}
 		err := db.Pool.QueryRow(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE id=$1`, compID).
-			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder)
+			`SELECT id, name, season, is_active, sport, sort_order, extra_deadline, extra_reveal_at FROM competitions WHERE id=$1`, compID).
+			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder, &comp.ExtraDeadline, &comp.ExtraRevealAt)
 		if err != nil {
 			http.Redirect(w, r, "/extra", http.StatusSeeOther)
 			return
+		}
+
+		// Výpočet auto-deadline (první zápas)
+		var autoDeadline *time.Time
+		var firstMatch time.Time
+		errFM := db.Pool.QueryRow(ctx,
+			`SELECT MIN(m.match_date) FROM matches m
+			   JOIN rounds r ON r.id = m.round_id
+			  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, compID).Scan(&firstMatch)
+		if errFM == nil && !firstMatch.IsZero() {
+			autoDeadline = &firstMatch
 		}
 
 		qRows, _ := db.Pool.Query(ctx,
@@ -232,6 +244,7 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 			"Questions":         questions,
 			"AnswersByQuestion": answersByQuestion,
 			"Flash":             flash,
+			"AutoDeadline":      autoDeadline,
 		})
 	}
 }
@@ -595,4 +608,54 @@ func AdminExtraTeamsAjax(w http.ResponseWriter, r *http.Request) {
 	jsonBytes, _ := json.Marshal(names)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsonBytes)
+}
+
+// POST /admin/extra/{competition_id}/deadline-settings
+// Nastavuje extra_deadline a extra_reveal_at pro soutěž.
+func AdminExtraDeadlineSettings(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	compID, _ := strconv.Atoi(r.PathValue("competition_id"))
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	ctx := context.Background()
+
+	// extra_deadline — prázdné = auto (první zápas)
+	deadlineStr := strings.TrimSpace(r.FormValue("extra_deadline"))
+	var deadlinePtr *time.Time
+	if deadlineStr != "" {
+		t, err := time.ParseInLocation("2006-01-02T15:04", deadlineStr, time.Local)
+		if err == nil {
+			deadlinePtr = &t
+		}
+	}
+
+	// extra_reveal_at — prázdné = auto (shodné s deadline)
+	revealStr := strings.TrimSpace(r.FormValue("extra_reveal_at"))
+	var revealPtr *time.Time
+	if revealStr == "now" {
+		now := time.Now()
+		revealPtr = &now
+	} else if revealStr != "" {
+		t, err := time.ParseInLocation("2006-01-02T15:04", revealStr, time.Local)
+		if err == nil {
+			revealPtr = &t
+		}
+	}
+
+	_, err := db.Pool.Exec(ctx,
+		`UPDATE competitions SET extra_deadline=$1, extra_reveal_at=$2 WHERE id=$3`,
+		deadlinePtr, revealPtr, compID)
+	if err != nil {
+		log.Printf("[extra deadline] UPDATE error: %v", err)
+		middleware.SetFlash(w, r, "error", "Chyba při ukládání: "+err.Error())
+	} else {
+		middleware.SetFlash(w, r, "ok", "Nastavení deadline/reveal uloženo.")
+	}
+
+	http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
 }
