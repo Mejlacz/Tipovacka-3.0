@@ -3,9 +3,17 @@
 {{/* ── Otevřená tipování ── */}}
 {{if .OpenMatches}}
 <div style="margin-bottom:1.5rem">
-    <h2 style="font-size:.88rem;font-weight:700;color:var(--muted-d);margin:0 0 .6rem;text-transform:uppercase;letter-spacing:.05em">
-        ⚡ Otevřená tipování
-    </h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;flex-wrap:wrap;gap:.4rem">
+        <h2 style="font-size:.88rem;font-weight:700;color:var(--muted-d);margin:0;text-transform:uppercase;letter-spacing:.05em">
+            ⚡ Otevřená tipování
+        </h2>
+        <div style="display:flex;align-items:center;gap:.5rem">
+            <span id="qt-flash" style="font-size:.8rem;display:none"></span>
+            <button id="qt-save-all" style="padding:.3rem .75rem;font-size:.82rem;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:7px;cursor:pointer;white-space:nowrap">
+                💾 Uložit vše
+            </button>
+        </div>
+    </div>
     <div style="display:flex;flex-direction:column;gap:.35rem">
     {{$prevComp := ""}}
     {{range .OpenMatches}}
@@ -97,17 +105,96 @@
 
 <script>
 (function() {
+    var flash = document.getElementById('qt-flash');
+    var flashTimer;
+
+    function showFlash(msg, type) {
+        if (!flash) return;
+        flash.textContent = msg;
+        flash.style.display = 'inline';
+        flash.style.color = type === 'ok' ? '#34d399' : type === 'err' ? '#f87171' : '#fbbf24';
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(function() { flash.style.display = 'none'; }, 3500);
+    }
+
+    function submitFormAjax(form, onDone) {
+        var btn = form.querySelector('.qt-btn');
+        var fd = new FormData(form);
+        if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+        fetch('/tip/submit-ajax', { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (btn) {
+                    btn.disabled = false;
+                    if (data.ok) {
+                        btn.className = 'qt-btn qt-btn-edit';
+                        btn.textContent = '✏️';
+                    } else {
+                        btn.textContent = data.error === 'deadline_passed' ? '🔒' : '❌';
+                        setTimeout(function() {
+                            btn.textContent = btn.classList.contains('qt-btn-edit') ? '✏️' : '➤';
+                        }, 2000);
+                    }
+                }
+                if (onDone) onDone(data.ok);
+            })
+            .catch(function() {
+                if (btn) { btn.disabled = false; btn.textContent = '❌'; }
+                if (onDone) onDone(false);
+            });
+    }
+
+    // Jednotlivé formuláře — AJAX místo full reload
     document.querySelectorAll('.qt-row').forEach(function(form) {
         var inputs = form.querySelectorAll('.qt-score');
         if (inputs.length < 2) return;
+
         inputs[0].addEventListener('focus', function() { inputs[0].select(); });
         inputs[1].addEventListener('focus', function() { inputs[1].select(); });
         inputs[0].addEventListener('keydown', function(e) {
             if (e.key === 'Enter') { e.preventDefault(); inputs[1].focus(); inputs[1].select(); }
         });
         inputs[1].addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }
+            if (e.key === 'Enter') { e.preventDefault(); submitFormAjax(form, null); }
+        });
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitFormAjax(form, null);
         });
     });
+
+    // Hromadné uložení
+    var saveAllBtn = document.getElementById('qt-save-all');
+    if (saveAllBtn) {
+        saveAllBtn.addEventListener('click', function() {
+            var forms = Array.from(document.querySelectorAll('.qt-row')).filter(function(f) {
+                var sc = f.querySelectorAll('.qt-score');
+                return sc.length >= 2 && sc[0].value !== '' && sc[1].value !== '';
+            });
+            if (!forms.length) {
+                showFlash('Žádné tipy k uložení', 'warn');
+                return;
+            }
+            saveAllBtn.disabled = true;
+            saveAllBtn.textContent = '⏳ Ukládám…';
+            var saved = 0, failed = 0, pending = forms.length;
+            forms.forEach(function(form) {
+                submitFormAjax(form, function(ok) {
+                    if (ok) saved++; else failed++;
+                    pending--;
+                    if (pending === 0) {
+                        saveAllBtn.disabled = false;
+                        saveAllBtn.textContent = '💾 Uložit vše';
+                        if (failed === 0) {
+                            showFlash('✅ Uloženo ' + saved + ' tipů', 'ok');
+                        } else {
+                            showFlash('✅ ' + saved + ' ok, ❌ ' + failed + ' chyb', 'err');
+                        }
+                    }
+                });
+            });
+        });
+    }
 })();
 </script>
