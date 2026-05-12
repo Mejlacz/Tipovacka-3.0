@@ -156,7 +156,7 @@ func ExtraSaveAjax(w http.ResponseWriter, r *http.Request) {
 			`UPDATE extra_answers SET answer=$1 WHERE id=$2`, answer, existingID)
 	} else {
 		_ = db.Pool.QueryRow(ctx,
-			`INSERT INTO extra_answers (question_id, user_id, answer) VALUES ($1,$2,$3) RETURNING id`,
+			`INSERT INTO extra_answers (question_id, user_id, answer, created_at) VALUES ($1,$2,$3,NOW()) RETURNING id`,
 			questionID, user.ID, answer).Scan(&existingID)
 	}
 

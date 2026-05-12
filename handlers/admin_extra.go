@@ -7,6 +7,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -82,12 +83,18 @@ func AdminExtraQuestionNewSubmit(w http.ResponseWriter, r *http.Request) {
 		correctPtr = &correctAnswer
 	}
 
-	_, _ = db.Pool.Exec(ctx,
-		`INSERT INTO extra_questions (competition_id, order_num, text, max_points, correct_answer)
-		 VALUES ($1, $2, $3, $4, $5)`,
-		compID, orderNum, text, maxPts, correctPtr)
+	if _, err := db.Pool.Exec(ctx,
+		`INSERT INTO extra_questions (competition_id, order_num, text, max_points, correct_answer, is_closed)
+		 VALUES ($1, $2, $3, $4, $5, FALSE)`,
+		compID, orderNum, text, maxPts, correctPtr); err != nil {
+		log.Printf("[extra_question] INSERT error: %v", err)
+		middleware.SetFlash(w, r, "error", "Chyba při ukládání otázky: "+err.Error())
+		http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/questions/new", http.StatusSeeOther)
+		return
+	}
 
-	http.Redirect(w, r, "/extra?competition_id="+strconv.Itoa(compID), http.StatusSeeOther)
+	middleware.SetFlash(w, r, "ok", "Otázka přidána.")
+	http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
 }
 
 // POST /admin/extra/questions/{question_id}/delete
@@ -502,7 +509,7 @@ func AdminSetExtraAnswerAjax(w http.ResponseWriter, r *http.Request) {
 		parts[subIndex] = answerText
 		newAnswer := strings.Join(parts, "|~~|")
 		_ = db.Pool.QueryRow(ctx,
-			`INSERT INTO extra_answers (question_id, user_id, answer) VALUES ($1,$2,$3) RETURNING id`,
+			`INSERT INTO extra_answers (question_id, user_id, answer, created_at) VALUES ($1,$2,$3,NOW()) RETURNING id`,
 			questionID, userID, newAnswer).Scan(&existingID)
 	}
 
