@@ -165,6 +165,7 @@ type ExtraQuestion struct {
 	MaxPoints     int
 	CorrectAnswer *string
 	IsClosed      bool
+	AnswerOptions *string // newline-separated dropdown options; nil = free-text input
 }
 
 // ─── ExtraAnswer ──────────────────────────────────────────────────────────────

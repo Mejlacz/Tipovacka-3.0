@@ -66,11 +66,11 @@ func ExtraView(tmpl *template.Template) http.HandlerFunc {
 
 		if comp != nil {
 			qRows, _ := db.Pool.Query(ctx,
-				`SELECT id, competition_id, order_num, text, max_points, correct_answer, is_closed
+				`SELECT id, competition_id, order_num, text, max_points, correct_answer, is_closed, answer_options
 				   FROM extra_questions WHERE competition_id=$1 ORDER BY order_num, id`, comp.ID)
 			for qRows.Next() {
 				q := &models.ExtraQuestion{}
-				_ = qRows.Scan(&q.ID, &q.CompetitionID, &q.OrderNum, &q.Text, &q.MaxPoints, &q.CorrectAnswer, &q.IsClosed)
+				_ = qRows.Scan(&q.ID, &q.CompetitionID, &q.OrderNum, &q.Text, &q.MaxPoints, &q.CorrectAnswer, &q.IsClosed, &q.AnswerOptions)
 				questions = append(questions, q)
 			}
 			qRows.Close()
@@ -127,9 +127,9 @@ func ExtraSaveAjax(w http.ResponseWriter, r *http.Request) {
 	// Load question
 	q := &models.ExtraQuestion{}
 	err := db.Pool.QueryRow(ctx,
-		`SELECT id, competition_id, order_num, text, max_points, correct_answer, is_closed
+		`SELECT id, competition_id, order_num, text, max_points, correct_answer, is_closed, answer_options
 		   FROM extra_questions WHERE id=$1`, questionID).
-		Scan(&q.ID, &q.CompetitionID, &q.OrderNum, &q.Text, &q.MaxPoints, &q.CorrectAnswer, &q.IsClosed)
+		Scan(&q.ID, &q.CompetitionID, &q.OrderNum, &q.Text, &q.MaxPoints, &q.CorrectAnswer, &q.IsClosed, &q.AnswerOptions)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)

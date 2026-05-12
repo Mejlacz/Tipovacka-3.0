@@ -5,6 +5,7 @@ package handlers
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -36,9 +37,21 @@ func AdminExtraQuestionNewForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
+		// Načti seznam soutěží pro výběr týmů
+		compRows, _ := db.Pool.Query(ctx,
+			`SELECT id, name, season FROM competitions ORDER BY is_active DESC, sort_order ASC NULLS LAST, id DESC`)
+		var competitions []*models.Competition
+		for compRows.Next() {
+			c := &models.Competition{}
+			_ = compRows.Scan(&c.ID, &c.Name, &c.Season)
+			competitions = append(competitions, c)
+		}
+		compRows.Close()
+
 		RenderTemplate(w, r, tmpl, "admin/extra_question_new.html", TemplateData{
-			"User": admin,
-			"Comp": comp,
+			"User":         admin,
+			"Comp":         comp,
+			"Competitions": competitions,
 		})
 	}
 }
@@ -61,6 +74,9 @@ func AdminExtraQuestionNewSubmit(w http.ResponseWriter, r *http.Request) {
 		maxPts = 3
 	}
 	correctAnswer := strings.TrimSpace(r.FormValue("correct_answer"))
+	// answer_options: newline-separated list; only if checkbox "use_dropdown" checked
+	useDropdown := r.FormValue("use_dropdown") == "1"
+	answerOptionsRaw := strings.TrimSpace(r.FormValue("answer_options"))
 
 	ctx := context.Background()
 
@@ -82,11 +98,26 @@ func AdminExtraQuestionNewSubmit(w http.ResponseWriter, r *http.Request) {
 	if correctAnswer != "" {
 		correctPtr = &correctAnswer
 	}
+	var answerOptionsPtr *string
+	if useDropdown && answerOptionsRaw != "" {
+		// Normalizuj: odstraň prázdné řádky, trim každou volbu
+		var opts []string
+		for _, line := range strings.Split(answerOptionsRaw, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				opts = append(opts, line)
+			}
+		}
+		if len(opts) > 0 {
+			joined := strings.Join(opts, "\n")
+			answerOptionsPtr = &joined
+		}
+	}
 
 	if _, err := db.Pool.Exec(ctx,
-		`INSERT INTO extra_questions (competition_id, order_num, text, max_points, correct_answer, is_closed)
-		 VALUES ($1, $2, $3, $4, $5, FALSE)`,
-		compID, orderNum, text, maxPts, correctPtr); err != nil {
+		`INSERT INTO extra_questions (competition_id, order_num, text, max_points, correct_answer, is_closed, answer_options)
+		 VALUES ($1, $2, $3, $4, $5, FALSE, $6)`,
+		compID, orderNum, text, maxPts, correctPtr, answerOptionsPtr); err != nil {
 		log.Printf("[extra_question] INSERT error: %v", err)
 		middleware.SetFlash(w, r, "error", "Chyba při ukládání otázky: "+err.Error())
 		http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/questions/new", http.StatusSeeOther)
@@ -158,12 +189,12 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		qRows, _ := db.Pool.Query(ctx,
-			`SELECT id, competition_id, order_num, text, max_points, correct_answer, is_closed
+			`SELECT id, competition_id, order_num, text, max_points, correct_answer, is_closed, answer_options
 			   FROM extra_questions WHERE competition_id=$1 ORDER BY order_num, id`, compID)
 		var questions []*models.ExtraQuestion
 		for qRows.Next() {
 			q := &models.ExtraQuestion{}
-			_ = qRows.Scan(&q.ID, &q.CompetitionID, &q.OrderNum, &q.Text, &q.MaxPoints, &q.CorrectAnswer, &q.IsClosed)
+			_ = qRows.Scan(&q.ID, &q.CompetitionID, &q.OrderNum, &q.Text, &q.MaxPoints, &q.CorrectAnswer, &q.IsClosed, &q.AnswerOptions)
 			questions = append(questions, q)
 		}
 		qRows.Close()
@@ -466,9 +497,9 @@ func AdminSetExtraAnswerAjax(w http.ResponseWriter, r *http.Request) {
 	// Load question
 	q := &models.ExtraQuestion{}
 	err := db.Pool.QueryRow(ctx,
-		`SELECT id, competition_id, order_num, text, max_points, correct_answer, is_closed
+		`SELECT id, competition_id, order_num, text, max_points, correct_answer, is_closed, answer_options
 		   FROM extra_questions WHERE id=$1`, questionID).
-		Scan(&q.ID, &q.CompetitionID, &q.OrderNum, &q.Text, &q.MaxPoints, &q.CorrectAnswer, &q.IsClosed)
+		Scan(&q.ID, &q.CompetitionID, &q.OrderNum, &q.Text, &q.MaxPoints, &q.CorrectAnswer, &q.IsClosed, &q.AnswerOptions)
 	if err != nil {
 		jsonError(w, "question_not_found", http.StatusNotFound)
 		return
@@ -520,4 +551,48 @@ func AdminSetExtraAnswerAjax(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"ok":true,"answer":` + jsonStr(answerText) + `}`))
+}
+
+// GET /admin/extra/teams-ajax?competition_id=X  — vrátí JSON pole názvů týmů soutěže
+func AdminExtraTeamsAjax(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`[]`))
+		return
+	}
+	compID, _ := strconv.Atoi(r.URL.Query().Get("competition_id"))
+	if compID == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+		return
+	}
+	ctx := context.Background()
+	// Načti týmy přes competition_teams i přímý FK (UNION odstraní duplikáty)
+	rows, err := db.Pool.Query(ctx, `
+		SELECT DISTINCT COALESCE(t.display_name, t.name)
+		FROM teams t
+		JOIN competition_teams ct ON ct.team_id = t.id
+		WHERE ct.competition_id = $1
+		UNION
+		SELECT DISTINCT COALESCE(display_name, name)
+		FROM teams
+		WHERE competition_id = $1
+		ORDER BY 1`, compID)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[]`))
+		return
+	}
+	var names []string
+	for rows.Next() {
+		var n string
+		_ = rows.Scan(&n)
+		names = append(names, n)
+	}
+	rows.Close()
+	jsonBytes, _ := json.Marshal(names)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonBytes)
 }

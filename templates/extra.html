@@ -91,6 +91,18 @@
             {{/* Input + tlačítko — locked when closed or already scored */}}
             {{$locked := or $q.IsClosed (and $ans $ans.Points)}}
             <div style="display:flex;gap:0.5rem;align-items:center" class="extra-row" data-qid="{{$q.ID}}">
+                {{if $q.AnswerOptions}}
+                {{/* Dropdown select */}}
+                <select class="extra-input"
+                        {{if $locked}}disabled{{end}}
+                        style="flex:1;padding:0.45rem 0.7rem;border-radius:7px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem;{{if $locked}}opacity:0.7;{{end}}">
+                    <option value="">— vyberte —</option>
+                    {{range splitLines (strVal $q.AnswerOptions)}}
+                    <option value="{{.}}" {{if and $ans (eq $ans.Answer .)}}selected{{end}}>{{.}}</option>
+                    {{end}}
+                </select>
+                {{else}}
+                {{/* Free-text input */}}
                 <input type="text"
                        class="extra-input"
                        value="{{if $ans}}{{$ans.Answer}}{{end}}"
@@ -98,6 +110,7 @@
                        {{if $locked}}disabled{{end}}
                        style="flex:1;padding:0.45rem 0.7rem;border-radius:7px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem;{{if $locked}}opacity:0.7;{{end}}"
                        maxlength="200">
+                {{end}}
                 {{if not $locked}}
                 <button class="btn btn-secondary extra-save"
                         style="white-space:nowrap;min-width:80px"

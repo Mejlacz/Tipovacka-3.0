@@ -41,6 +41,7 @@ func migrateSchema() {
 		`ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS can_see_deadline BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS fd_code VARCHAR(10) NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_settings TEXT`,
+		`ALTER TABLE extra_questions ADD COLUMN IF NOT EXISTS answer_options TEXT`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
@@ -342,6 +343,7 @@ func main() {
 	r.Post("/admin/extra/{competition_id}/auto-evaluate", handlers.AdminExtraAutoEvaluate)
 	r.Get("/admin/extra/{competition_id}/export", handlers.AdminExtraExport)
 	r.Post("/admin/extra/answers/set-ajax", handlers.AdminSetExtraAnswerAjax)
+	r.Get("/admin/extra/teams-ajax", handlers.AdminExtraTeamsAjax)
 
 	// Admin groups (Owner only)
 	r.Get("/admin/groups", handlers.AdminGroupsList(tmpl))
@@ -472,6 +474,18 @@ func templateFuncs() template.FuncMap {
 		// tr translates a key to the given language (CS/EN)
 		"tr": func(lang, key string) string {
 			return i18n.Tr(lang, key)
+		},
+		// splitLines splits a string by newlines and returns non-empty trimmed lines
+		"splitLines": func(s string) []string {
+			parts := strings.Split(s, "\n")
+			var out []string
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					out = append(out, p)
+				}
+			}
+			return out
 		},
 		// lower converts string to lowercase (for data-name search)
 		"lower": strings.ToLower,

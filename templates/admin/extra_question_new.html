@@ -27,13 +27,51 @@
           </div>
         </div>
 
-        <div style="margin-bottom:1.5rem">
-          <label class="form-label" style="font-weight:600">Správná odpověď <span style="font-weight:400;color:#888">(nepovinné — lze doplnit i později)</span></label>
+        <div style="margin-bottom:1rem">
+          <label class="form-label" style="font-weight:600">Správná odpověď <span style="font-weight:400;color:#888">(nepovinné)</span></label>
           <input type="text" name="correct_answer" class="form-control"
                  placeholder="např. McDavid  (více možností oddělte: McDavid|Ovechkin)"
                  maxlength="200">
           <div style="font-size:0.8rem;color:#888;margin-top:0.3rem">
-            Po zadání správné odpovědi lze body přidělit automaticky tlačítkem „🎯 Vyhodnotit".
+            Po zadání správné odpovědi lze body přidělit automaticky.
+          </div>
+        </div>
+
+        {{/* ── Dropdown sekce ── */}}
+        <div style="margin-bottom:1.5rem;padding:1rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:10px">
+          <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;font-weight:600;margin-bottom:0">
+            <input type="checkbox" id="use_dropdown_cb" name="use_dropdown" value="1"
+                   style="width:1.1rem;height:1.1rem;cursor:pointer;flex-shrink:0">
+            <span>📋 Výběr ze seznamu (dropdown)</span>
+          </label>
+          <div style="font-size:0.8rem;color:#888;margin-top:.3rem;margin-left:1.7rem">
+            Tipéři budou vybírat odpověď z předem daného seznamu místo volného textu.
+          </div>
+
+          <div id="dropdown_opts" style="display:none;margin-top:1rem">
+            {{if .Competitions}}
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.75rem">
+              <label style="font-size:.85rem;font-weight:600;white-space:nowrap">Načíst týmy ze soutěže:</label>
+              <select id="team_comp_select" style="flex:1;min-width:140px;padding:.3rem .5rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg2);color:var(--text-d);font-size:.85rem">
+                <option value="">— vyber soutěž —</option>
+                {{range .Competitions}}
+                <option value="{{.ID}}">{{.Name}}{{if .Season}} {{.Season}}{{end}}</option>
+                {{end}}
+              </select>
+              <button type="button" id="load_teams_btn"
+                      style="padding:.3rem .8rem;border-radius:6px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:.85rem;white-space:nowrap">
+                ↓ Načíst týmy
+              </button>
+            </div>
+            {{end}}
+
+            <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.3rem">
+              Možnosti výběru <span style="font-weight:400;color:#888">(každá na novém řádku)</span>
+            </label>
+            <textarea id="answer_options_ta" name="answer_options" class="form-control"
+                      rows="8" placeholder="např.:&#10;Chelsea&#10;Arsenal&#10;Liverpool&#10;Manchester City"
+                      style="font-family:monospace;font-size:.88rem;resize:vertical"></textarea>
+            <div id="load_status" style="font-size:.78rem;color:#888;margin-top:.3rem"></div>
           </div>
         </div>
 
@@ -46,3 +84,42 @@
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+    var cb = document.getElementById('use_dropdown_cb');
+    var opts = document.getElementById('dropdown_opts');
+    var loadBtn = document.getElementById('load_teams_btn');
+    var compSel = document.getElementById('team_comp_select');
+    var ta = document.getElementById('answer_options_ta');
+    var status = document.getElementById('load_status');
+
+    cb.addEventListener('change', function () {
+        opts.style.display = cb.checked ? 'block' : 'none';
+    });
+
+    if (loadBtn) {
+        loadBtn.addEventListener('click', function () {
+            var cid = compSel ? compSel.value : '';
+            if (!cid) { status.textContent = 'Nejdřív vyber soutěž.'; return; }
+            loadBtn.disabled = true;
+            status.textContent = 'Načítám…';
+            fetch('/admin/extra/teams-ajax?competition_id=' + cid)
+                .then(function (r) { return r.json(); })
+                .then(function (teams) {
+                    if (!teams || teams.length === 0) {
+                        status.textContent = 'Pro tuto soutěž nebyly nalezeny žádné týmy.';
+                    } else {
+                        ta.value = teams.join('\n');
+                        status.textContent = '✓ Načteno ' + teams.length + ' týmů.';
+                    }
+                    loadBtn.disabled = false;
+                })
+                .catch(function () {
+                    status.textContent = 'Chyba při načítání.';
+                    loadBtn.disabled = false;
+                });
+        });
+    }
+})();
+</script>
