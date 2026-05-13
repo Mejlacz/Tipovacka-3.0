@@ -78,9 +78,9 @@
                     <div class="nav-dropdown-divider"></div>
                     <a href="{{if eq $.Lang "en"}}/set-lang/cs{{else}}/set-lang/en{{end}}" style="display:flex;align-items:center;gap:.4rem;text-decoration:none">{{tr $.Lang "lang_switch_to"}}</a>
                     <div class="nav-dropdown-divider"></div>
-                    <form method="post" action="/logout">
+                    <form method="post" action="/logout" id="logout-form">
                         <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
-                        <button type="submit" class="nav-dropdown-btn">{{tr $.Lang "logout"}}</button>
+                        <button type="submit" class="nav-dropdown-btn" id="logout-btn">{{tr $.Lang "logout"}}</button>
                     </form>
                 </div>
             </div>
@@ -388,6 +388,22 @@ if ('serviceWorker' in navigator) {
             burger.setAttribute('aria-expanded','false'); burger.textContent='☰';
         });
     });
+
+    // iOS fix: tap na logout se interpretuje jako scroll gesto — menu se posune
+    // o řádek místo odeslání formu. touchend + preventDefault to vyřeší.
+    var lBtn = document.getElementById('logout-btn');
+    if (lBtn) {
+        var lForm = document.getElementById('logout-form');
+        lBtn.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            links.classList.remove('open');
+            burger.classList.remove('open');
+            burger.setAttribute('aria-expanded', 'false');
+            burger.textContent = '☰';
+            if (lForm) lForm.submit();
+        });
+    }
 })();
 
 /* ── My rank chip ── */
