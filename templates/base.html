@@ -375,7 +375,15 @@ if ('serviceWorker' in navigator) {
         });
     });
     links.querySelectorAll('a, .nav-dropdown-btn').forEach(function(el) {
-        el.addEventListener('click', function() {
+        el.addEventListener('click', function(e) {
+            // Logout button: nechej form submit proběhnout, zavři menu až pak
+            if (el.classList.contains('nav-dropdown-btn') && el.closest('form')) {
+                setTimeout(function() {
+                    links.classList.remove('open'); burger.classList.remove('open');
+                    burger.setAttribute('aria-expanded','false'); burger.textContent='☰';
+                }, 50);
+                return;
+            }
             links.classList.remove('open'); burger.classList.remove('open');
             burger.setAttribute('aria-expanded','false'); burger.textContent='☰';
         });
