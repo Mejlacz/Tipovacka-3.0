@@ -389,12 +389,19 @@ if ('serviceWorker' in navigator) {
         });
     });
 
-    // iOS fix: tap na logout se interpretuje jako scroll gesto — menu se posune
-    // o řádek místo odeslání formu. touchend + preventDefault to vyřeší.
+    // iOS/Android fix: tap na logout se interpretuje jako scroll gesto — menu se posune
+    // o řádek místo odeslání formu. Zachytíme touchstart souřadnici a v touchend
+    // odešleme form jen pokud šlo o tap (pohyb < 10px), ne o scroll.
     var lBtn = document.getElementById('logout-btn');
     if (lBtn) {
         var lForm = document.getElementById('logout-form');
+        var _touchStartY = 0;
+        lBtn.addEventListener('touchstart', function(e) {
+            _touchStartY = e.touches[0].clientY;
+        }, {passive: true});
         lBtn.addEventListener('touchend', function(e) {
+            var moved = Math.abs(e.changedTouches[0].clientY - _touchStartY);
+            if (moved > 10) return; // byl scroll, ne tap — necháme proběhnout normálně
             e.preventDefault();
             e.stopPropagation();
             links.classList.remove('open');
