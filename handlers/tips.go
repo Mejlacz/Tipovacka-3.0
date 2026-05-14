@@ -150,10 +150,44 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
+		// Extra otázky — pro každou soutěž zjisti jestli jsou stále otevřené
+		extraOpenComps := map[int]bool{}
+		if len(comps) > 0 {
+			now := NowPrague()
+			for _, c := range comps {
+				var extraCount int
+				_ = db.Pool.QueryRow(ctx,
+					`SELECT COUNT(*) FROM extra_questions WHERE competition_id=$1`, c.ID).Scan(&extraCount)
+				if extraCount == 0 {
+					continue
+				}
+				var extraDeadline *time.Time
+				_ = db.Pool.QueryRow(ctx,
+					`SELECT extra_deadline FROM competitions WHERE id=$1`, c.ID).Scan(&extraDeadline)
+				var effectiveDeadline *time.Time
+				if extraDeadline != nil {
+					effectiveDeadline = extraDeadline
+				} else {
+					var firstMatch time.Time
+					err2 := db.Pool.QueryRow(ctx,
+						`SELECT MIN(m.match_date) FROM matches m
+						   JOIN rounds r ON r.id = m.round_id
+						  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, c.ID).Scan(&firstMatch)
+					if err2 == nil && !firstMatch.IsZero() {
+						effectiveDeadline = &firstMatch
+					}
+				}
+				if effectiveDeadline == nil || now.Before(*effectiveDeadline) {
+					extraOpenComps[c.ID] = true
+				}
+			}
+		}
+
 		RenderTemplate(w, r, tmpl, "index.html", TemplateData{
-			"User":         u,
-			"Competitions": comps,
-			"OpenMatches":  openMatches,
+			"User":           u,
+			"Competitions":   comps,
+			"OpenMatches":    openMatches,
+			"ExtraOpenComps": extraOpenComps,
 		})
 	}
 }

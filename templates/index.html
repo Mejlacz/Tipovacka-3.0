@@ -61,6 +61,14 @@
         <div class="card-title">{{.Name}}</div>
         <div class="card-sub">{{.Season}}</div>
     </a>
+    {{if index $.ExtraOpenComps .ID}}
+    <a href="/extra?competition_id={{.ID}}"
+       style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.4rem;margin-bottom:0.6rem;
+              padding:0.35rem 0.85rem;border-radius:8px;font-size:0.85rem;font-weight:600;
+              text-decoration:none;background:var(--accent);color:#fff">
+        🎯 Tipovat Extra otázky – {{.Name}}
+    </a>
+    {{end}}
 {{end}}
 </div>
 {{else}}
