@@ -283,8 +283,10 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         {{$pts := index (index $.ExtraPtsMatrix $row.User.ID) $qid}}
         {{$isLast := .IsLast}}
         {{$eaAdmin := or $.User.IsAdmin $.User.IsOwner}}
+        {{/* Extra tipy jsou viditelné: admin vždy; moje vlastní vždy; ostatní až po reveal */}}
+        {{$extraVisible := or $eaAdmin $isMe $.ExtraRevealed}}
         <td class="cell-tip{{if $eaAdmin}} extra-admin-editable{{end}}"
-            title="{{if $ansText}}{{$ansText}}{{else}}–{{end}}{{if and $isLast (not (isNilInt $pts))}} ({{intVal $pts}} b){{end}}"
+            title="{{if and $ansText $extraVisible}}{{$ansText}}{{else if $ansText}}Skryto do odhalení{{else}}–{{end}}{{if and $isLast (not (isNilInt $pts))}} ({{intVal $pts}} b){{end}}"
             style="font-size:0.78rem;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center"
             {{if $eaAdmin}}
             data-q-id="{{$qid}}"
@@ -293,8 +295,10 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             data-sub-index="{{.SubIndex}}"
             data-ans="{{$ansText}}"
             {{end}}>
-            {{if $ansText}}
+            {{if and $ansText $extraVisible}}
                 <span style="color:#94a3b8">{{truncate $ansText 12}}</span>{{if and $isLast (not (isNilInt $pts))}} <strong style="color:#4ade80">{{intVal $pts}}</strong>{{end}}
+            {{else if $ansText}}
+                <span class="tip-hidden" title="Skryto do odhalení" style="color:var(--accent)">✓</span>
             {{else}}
                 <span style="color:var(--muted-d)">–</span>
             {{end}}
