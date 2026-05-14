@@ -53,9 +53,9 @@
         </div>
         {{if .Match.MatchDate}}
         <div class="match-date">
-            {{.Match.MatchDate.Format "02.01.2006 15:04"}}
+            {{fmtPrague .Match.MatchDate "02.01.2006 15:04"}}
             {{if .CanTip}}
-            <span class="match-countdown" data-countdown="{{.Match.MatchDate.Format "2006-01-02T15:04:05"}}"></span>
+            <span class="match-countdown" data-countdown="{{fmtISO .Match.MatchDate}}"></span>
             {{end}}
         </div>
         {{end}}

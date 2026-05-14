@@ -39,11 +39,13 @@
             <a href="/admin/io" class="nav-quick-btn">{{tr $.Lang "nav_io"}}</a>
             <a href="/admin/competitions" class="nav-quick-btn">{{tr $.Lang "nav_competitions"}}</a>
             {{end}}
+            {{if $u.IsApproved}}<a href="/chat">💬 Chat</a>{{end}}
             <a href="/extra">{{tr $.Lang "nav_extra"}}</a>
             {{if $u.IsApproved}}<a href="/achievements">{{tr $.Lang "nav_achievements"}}</a>{{end}}
             {{if $u.IsApproved}}<a href="/stats">{{tr $.Lang "nav_stats"}}</a>{{end}}
             {{if $u.IsApproved}}<a href="/archive">{{tr $.Lang "nav_archive"}}</a>{{end}}
             <a href="/pravidla">{{tr $.Lang "nav_rules"}}</a>
+            {{if $u.IsApproved}}<a href="/feedback">💬 Napište nám</a>{{end}}
             {{if $u.IsAdmin}}
             <div class="nav-dropdown">
                 <span class="nav-dropdown-toggle">{{tr $.Lang "nav_admin"}}</span>
@@ -60,6 +62,7 @@
                     <a href="/admin/users">{{tr $.Lang "nav_users"}}</a>
                     <div class="nav-dropdown-divider"></div>
                     <a href="/admin/email">{{tr $.Lang "nav_email"}}</a>
+                    <a href="/admin/feedback">💬 Zpětná vazba <span id="feedback-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;font-size:.7rem;font-weight:700;padding:.05rem .4rem;margin-left:.2rem;vertical-align:middle"></span></a>
                     <div class="nav-dropdown-divider"></div>
                     {{if $u.IsOwner}}<a href="/admin/history">{{tr $.Lang "nav_history"}}</a>{{end}}
                     <a href="/admin/audit">{{tr $.Lang "nav_audit"}}</a>
@@ -355,6 +358,13 @@ if ('serviceWorker' in navigator) {
     var badge = document.getElementById('unscored-badge');
     if (!badge) return;
     fetch('/admin/unscored-count').then(function(r){return r.ok?r.json():null;}).then(function(d){
+        if(d && d.count){badge.textContent=d.count;badge.style.display='inline';}
+    }).catch(function(){});
+})();
+(function() {
+    var badge = document.getElementById('feedback-badge');
+    if (!badge) return;
+    fetch('/admin/feedback/unread-count').then(function(r){return r.ok?r.json():null;}).then(function(d){
         if(d && d.count){badge.textContent=d.count;badge.style.display='inline';}
     }).catch(function(){});
 })();

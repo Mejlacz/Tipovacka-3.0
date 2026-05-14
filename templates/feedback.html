@@ -1,0 +1,218 @@
+<div class="page-header">
+    <h1>💬 Napište nám</h1>
+</div>
+
+<div style="max-width:640px">
+    <p style="color:var(--muted-d);font-size:.9rem;margin-bottom:1.25rem">
+        Máte nápad na vylepšení, narazili jste na chybu nebo chcete prostě napsat adminům? Pište sem — odpovíme co nejdříve.
+    </p>
+
+    <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem">
+        <textarea id="fb-message" rows="5"
+            placeholder="Váš nápad nebo zpráva… (Ctrl+Enter pro odeslání)"
+            style="width:100%;box-sizing:border-box;background:var(--bg3);color:var(--text-d);
+                   border:1px solid var(--border-d);border-radius:8px;padding:.65rem .8rem;
+                   font-size:.92rem;resize:vertical;line-height:1.5;font-family:inherit"></textarea>
+
+        {{/* Image upload area */}}
+        <div id="fb-img-area" style="margin-top:.75rem">
+            <label id="fb-img-label"
+                   style="display:inline-flex;align-items:center;gap:.4rem;cursor:pointer;
+                          padding:.35rem .8rem;border:1px dashed var(--border-d);border-radius:8px;
+                          font-size:.82rem;color:var(--muted-d);transition:border-color .15s,color .15s"
+                   onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+                   onmouseout="this.style.borderColor='var(--border-d)';this.style.color='var(--muted-d)'">
+                📎 Přiložit screenshot
+                <input type="file" id="fb-image-input" accept=".jpg,.jpeg,.png,.webp,.gif"
+                       style="display:none" />
+            </label>
+            <button id="fb-img-remove" style="display:none;margin-left:.4rem;background:none;border:none;
+                    cursor:pointer;color:#f87171;font-size:.82rem;padding:.3rem .5rem" title="Odebrat obrázek">✕ Odebrat</button>
+        </div>
+        {{/* Image preview */}}
+        <div id="fb-img-preview" style="display:none;margin-top:.6rem">
+            <img id="fb-img-thumb" src="" alt="Náhled"
+                 style="max-width:100%;max-height:220px;border-radius:8px;border:1px solid var(--border-d);object-fit:contain;cursor:pointer"
+                 title="Klikni pro zobrazení v plné velikosti" />
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.75rem;gap:.5rem;flex-wrap:wrap">
+            <span id="fb-status" style="font-size:.82rem"></span>
+            <button id="fb-send" class="btn btn-primary" style="padding:.4rem 1.2rem;font-size:.92rem">
+                Odeslat zprávu
+            </button>
+        </div>
+    </div>
+
+    {{if .Items}}
+    <h2 style="font-size:.88rem;font-weight:700;color:var(--muted-d);text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">
+        Vaše předchozí zprávy
+    </h2>
+    <div id="fb-list" style="display:flex;flex-direction:column;gap:.6rem">
+        {{range .Items}}
+        <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:.85rem 1rem">
+            <div style="font-size:.78rem;color:var(--muted-d);margin-bottom:.45rem;display:flex;align-items:center;gap:.6rem">
+                <span>{{fmtPrague .CreatedAt "02.01.2006 15:04"}}</span>
+                {{if .IsRead}}
+                <span style="color:#34d399;font-size:.75rem">✓ Přečteno adminem</span>
+                {{else}}
+                <span style="color:var(--muted-d);font-size:.75rem">⏳ Nepřečteno</span>
+                {{end}}
+            </div>
+            <p style="margin:0 0 {{if .ImageURL}}.55rem{{else}}0{{end}};font-size:.88rem;white-space:pre-wrap;word-break:break-word">{{.Message}}</p>
+            {{if .ImageURL}}
+            <img src="{{strVal .ImageURL}}" alt="Příloha"
+                 style="max-width:100%;max-height:200px;border-radius:7px;border:1px solid var(--border-d);object-fit:contain;cursor:pointer"
+                 onclick="window.open(this.src,'_blank')" title="Klikni pro plnou velikost" />
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div id="fb-list" style="display:flex;flex-direction:column;gap:.6rem"></div>
+    {{end}}
+</div>
+
+{{/* Lightbox */}}
+<div id="fb-lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out"
+     onclick="this.style.display='none'">
+    <img id="fb-lightbox-img" src="" alt=""
+         style="max-width:95vw;max-height:92vh;border-radius:10px;object-fit:contain;box-shadow:0 8px 40px rgba(0,0,0,.7)" />
+</div>
+
+<script>
+(function() {
+    var btn    = document.getElementById('fb-send');
+    var ta     = document.getElementById('fb-message');
+    var status = document.getElementById('fb-status');
+    var imgInput   = document.getElementById('fb-image-input');
+    var imgPreview = document.getElementById('fb-img-preview');
+    var imgThumb   = document.getElementById('fb-img-thumb');
+    var imgRemove  = document.getElementById('fb-img-remove');
+    var imgLabel   = document.getElementById('fb-img-label');
+    var lightbox   = document.getElementById('fb-lightbox');
+    var lightboxImg = document.getElementById('fb-lightbox-img');
+    var list       = document.getElementById('fb-list');
+
+    // image preview
+    imgInput.addEventListener('change', function() {
+        var f = imgInput.files[0];
+        if (!f) return;
+        if (f.size > 5 * 1024 * 1024) {
+            setStatus('❌ Obrázek je příliš velký (max 5 MB).', '#f87171');
+            imgInput.value = '';
+            return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            imgThumb.src = e.target.result;
+            imgPreview.style.display = 'block';
+            imgRemove.style.display = 'inline-block';
+            imgLabel.style.display = 'none';
+        };
+        reader.readAsDataURL(f);
+    });
+
+    imgRemove.addEventListener('click', function() {
+        imgInput.value = '';
+        imgThumb.src = '';
+        imgPreview.style.display = 'none';
+        imgRemove.style.display = 'none';
+        imgLabel.style.display = 'inline-flex';
+    });
+
+    // lightbox
+    imgThumb.addEventListener('click', function() {
+        lightboxImg.src = imgThumb.src;
+        lightbox.style.display = 'flex';
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && lightbox.style.display !== 'none') lightbox.style.display = 'none';
+    });
+
+    function setStatus(msg, color) {
+        status.textContent = msg;
+        status.style.color = color || 'var(--muted-d)';
+    }
+
+    function escHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function pad(n) { return String(n).padStart(2,'0'); }
+
+    btn.addEventListener('click', function() {
+        var msg = ta.value.trim();
+        if (msg.length < 3) { setStatus('Zpráva je příliš krátká.', '#f87171'); return; }
+
+        var fd = new FormData();
+        fd.append('message', msg);
+        if (imgInput.files[0]) fd.append('image', imgInput.files[0]);
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Odesílám…';
+        setStatus('', '');
+
+        fetch('/feedback/submit', { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                btn.disabled = false;
+                btn.textContent = 'Odeslat zprávu';
+                if (data.ok) {
+                    var now = new Date();
+                    var dateStr = pad(now.getDate()) + '.' + pad(now.getMonth()+1) + '.' + now.getFullYear()
+                                + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+                    var imgHtml = data.image_url
+                        ? '<img src="' + escHtml(data.image_url) + '" alt="Příloha" style="max-width:100%;max-height:200px;border-radius:7px;border:1px solid var(--border-d);object-fit:contain;cursor:pointer;margin-top:.55rem" onclick="window.open(this.src,\'_blank\')" title="Klikni pro plnou velikost" />'
+                        : '';
+                    var div = document.createElement('div');
+                    div.style.cssText = 'background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:.85rem 1rem';
+                    div.innerHTML = '<div style="font-size:.78rem;color:var(--muted-d);margin-bottom:.45rem;display:flex;align-items:center;gap:.6rem">'
+                        + '<span>' + dateStr + '</span>'
+                        + '<span style="color:var(--muted-d);font-size:.75rem">⏳ Nepřečteno</span></div>'
+                        + '<p style="margin:0' + (imgHtml ? ' 0 .55rem' : '') + ';font-size:.88rem;white-space:pre-wrap;word-break:break-word">' + escHtml(msg) + '</p>'
+                        + imgHtml;
+                    list.insertBefore(div, list.firstChild);
+
+                    // reset form
+                    ta.value = '';
+                    imgInput.value = '';
+                    imgThumb.src = '';
+                    imgPreview.style.display = 'none';
+                    imgRemove.style.display = 'none';
+                    imgLabel.style.display = 'inline-flex';
+                    setStatus('✅ Zpráva odeslána! Díky.', '#34d399');
+                } else {
+                    var errMap = {
+                        'too_short': 'zpráva je příliš krátká',
+                        'bad_image_type': 'nepodporovaný formát obrázku (.jpg, .png, .webp)',
+                        'image_too_large': 'obrázek je příliš velký (max 5 MB)',
+                        'db_error': 'nepodařilo se uložit',
+                        'server_error': 'chyba serveru'
+                    };
+                    setStatus('❌ Chyba: ' + (errMap[data.error] || data.error || 'nepodařilo se odeslat'), '#f87171');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Odeslat zprávu';
+                setStatus('❌ Chyba spojení.', '#f87171');
+            });
+    });
+
+    ta.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) btn.click();
+    });
+
+    // lightbox for existing images in the list
+    list.querySelectorAll('img[onclick]').forEach(function(img) {
+        img.addEventListener('click', function(e) {
+            e.preventDefault();
+            lightboxImg.src = img.src;
+            lightbox.style.display = 'flex';
+        });
+        // override onclick to use lightbox instead
+        img.removeAttribute('onclick');
+    });
+})();
+</script>

@@ -45,6 +45,22 @@ func migrateSchema() {
 		`ALTER TABLE extra_questions ADD COLUMN IF NOT EXISTS answer_options TEXT`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_deadline TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_reveal_at TIMESTAMPTZ`,
+		`CREATE TABLE IF NOT EXISTS feedback (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			message TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			is_read BOOLEAN NOT NULL DEFAULT false
+		)`,
+		`ALTER TABLE feedback ADD COLUMN IF NOT EXISTS image_url TEXT`,
+		`CREATE TABLE IF NOT EXISTS chat_messages (
+			id BIGSERIAL PRIMARY KEY,
+			user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+			username TEXT NOT NULL,
+			message TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx ON chat_messages(created_at DESC)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
@@ -80,6 +96,9 @@ func main() {
 	// Spusť scheduler na pozadí
 	ctx := context.Background()
 	go scheduler.Start(ctx, db.Pool)
+
+	// Spusť chat hub
+	go handlers.GlobalChatHub.Run(ctx)
 
 	// Set up router
 	r := chi.NewRouter()
@@ -175,6 +194,14 @@ func main() {
 
 	// ── Achievements ──────────────────────────────────────────────────────────
 	r.Get("/achievements", handlers.AchievementsPage(tmpl))
+
+	// ── Chat ──────────────────────────────────────────────────────────────────
+	r.Get("/chat", handlers.ChatPage(tmpl))
+	r.Get("/chat/ws", handlers.ChatWS)
+
+	// ── Feedback ──────────────────────────────────────────────────────────────
+	r.Get("/feedback", handlers.FeedbackPage(tmpl))
+	r.Post("/feedback/submit", handlers.FeedbackSubmit)
 
 	// ── Pages (Pravidla) ──────────────────────────────────────────────────────
 	r.Get("/pravidla", handlers.PravidlaPage(tmpl))
@@ -351,6 +378,12 @@ func main() {
 	r.Post("/admin/extra/answers/set-ajax", handlers.AdminSetExtraAnswerAjax)
 	r.Get("/admin/extra/teams-ajax", handlers.AdminExtraTeamsAjax)
 
+	// Admin feedback
+	r.Get("/admin/feedback", handlers.AdminFeedbackPage(tmpl))
+	r.Get("/admin/feedback/unread-count", handlers.AdminFeedbackUnreadCount)
+	r.Post("/admin/feedback/{id}/read", handlers.AdminFeedbackMarkRead)
+	r.Post("/admin/feedback/read-all", handlers.AdminFeedbackMarkAllRead)
+
 	// Admin groups (Owner only)
 	r.Get("/admin/groups", handlers.AdminGroupsList(tmpl))
 	r.Post("/admin/groups/new", handlers.AdminGroupsNew)
@@ -501,6 +534,21 @@ func templateFuncs() template.FuncMap {
 				return ""
 			}
 			return t.In(time.Local).Format(layout)
+		},
+		// fmtPrague formats a *time.Time in Europe/Prague timezone (CEST/CET)
+		"fmtPrague": func(t *time.Time, layout string) string {
+			if t == nil {
+				return ""
+			}
+			prague, _ := time.LoadLocation("Europe/Prague")
+			return t.In(prague).Format(layout)
+		},
+		// fmtISO formats a *time.Time as UTC ISO 8601 string for JS (e.g. countdown)
+		"fmtISO": func(t *time.Time) string {
+			if t == nil {
+				return ""
+			}
+			return t.UTC().Format("2006-01-02T15:04:05") + "Z"
 		},
 		// paginate vrátí slice stránek pro navigaci (čísla 1..total, -1 = "…")
 		"paginate": func(current, total int) []int {
