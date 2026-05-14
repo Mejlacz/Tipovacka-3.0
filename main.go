@@ -228,6 +228,7 @@ func main() {
 	r.Post("/admin/matches/{match_id}/delete", handlers.AdminMatchDelete)
 	r.Post("/admin/matches/{match_id}/set-date", handlers.AdminMatchSetDate)
 	r.Post("/admin/matches/{match_id}/notify-now", handlers.AdminMatchNotifyNow)
+	r.Post("/admin/competitions/{competition_id}/extra-notify", handlers.AdminExtraNotifyNow)
 	r.Post("/admin/matches/{match_id}/set-tip", handlers.AdminSetTip)
 	r.Post("/admin/tips/set-ajax", handlers.AdminSetTip) // alias (Python URL)
 	r.Get("/admin/unscored", handlers.AdminUnscored(tmpl))

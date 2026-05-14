@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/xuri/excelize/v2"
+	"tipovacka/config"
 	"tipovacka/db"
 	"tipovacka/middleware"
 	"tipovacka/models"
@@ -881,4 +882,154 @@ func AdminExtraDeadlineSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/admin/extra/"+strconv.Itoa(compID)+"/answers", http.StatusSeeOther)
+}
+
+// POST /admin/competitions/{competition_id}/extra-notify (AJAX)
+// Odešle emailové upozornění uživatelům kteří ještě nevyplnili extra otázky.
+func AdminExtraNotifyNow(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	compID, _ := strconv.Atoi(r.PathValue("competition_id"))
+	ctx := context.Background()
+
+	// Načti info o soutěži
+	var compName string
+	var extraDeadline *time.Time
+	err := db.Pool.QueryRow(ctx,
+		`SELECT name, extra_deadline FROM competitions WHERE id=$1`, compID).
+		Scan(&compName, &extraDeadline)
+	if err != nil {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+
+	// Deadline text pro email
+	deadlineText := ""
+	loc, _ := time.LoadLocation("Europe/Prague")
+	if loc == nil {
+		loc = time.UTC
+	}
+	if extraDeadline != nil {
+		deadlineText = extraDeadline.In(loc).Format("02.01. 15:04")
+	} else {
+		var firstMatch time.Time
+		err2 := db.Pool.QueryRow(ctx,
+			`SELECT MIN(m.match_date) FROM matches m
+			   JOIN rounds r ON r.id = m.round_id
+			  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, compID).Scan(&firstMatch)
+		if err2 == nil && !firstMatch.IsZero() {
+			deadlineText = firstMatch.In(loc).Format("02.01. 15:04")
+		}
+	}
+
+	// Uživatelé s opt-in
+	uRows, err := db.Pool.Query(ctx, `
+		SELECT u.id, u.email, u.username
+		FROM users u
+		JOIN notification_settings ns ON ns.user_id = u.id
+		WHERE ns.competition_id = $1
+		  AND u.email IS NOT NULL AND u.email != ''
+		  AND COALESCE(u.is_blocked,  false) = false
+		  AND COALESCE(u.is_inactive, false) = false
+		  AND COALESCE(u.is_approved, true)  = true
+	`, compID)
+	if err != nil {
+		jsonError(w, "db_error", http.StatusInternalServerError)
+		return
+	}
+	type recipient struct {
+		ID    int
+		Email string
+	}
+	var opted []recipient
+	for uRows.Next() {
+		var rec recipient
+		var username string
+		_ = uRows.Scan(&rec.ID, &rec.Email, &username)
+		opted = append(opted, rec)
+	}
+	uRows.Close()
+
+	if len(opted) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"sent":0}`))
+		return
+	}
+
+	// Kdo už odpověděl na všechny otázky?
+	qRows, _ := db.Pool.Query(ctx,
+		`SELECT id FROM extra_questions WHERE competition_id=$1`, compID)
+	var qIDs []int
+	for qRows.Next() {
+		var qid int
+		_ = qRows.Scan(&qid)
+		qIDs = append(qIDs, qid)
+	}
+	qRows.Close()
+
+	answered := map[int]int{}
+	if len(qIDs) > 0 {
+		aRows, _ := db.Pool.Query(ctx,
+			`SELECT DISTINCT user_id FROM extra_answers WHERE question_id = ANY($1)`, qIDs)
+		for aRows.Next() {
+			var uid int
+			_ = aRows.Scan(&uid)
+			answered[uid]++
+		}
+		aRows.Close()
+	}
+
+	totalQ := len(qIDs)
+	var untipped []recipient
+	for _, rec := range opted {
+		if answered[rec.ID] < totalQ {
+			untipped = append(untipped, rec)
+		}
+	}
+
+	if len(untipped) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"sent":0}`))
+		return
+	}
+
+	go func() {
+		appURL := config.AppURL
+		extraURL := appURL + fmt.Sprintf("/extra?competition_id=%d", compID)
+		subject := fmt.Sprintf("🎯 Ještě nemáš extra tipy — %s", compName)
+		deadlineInfo := ""
+		if deadlineText != "" {
+			deadlineInfo = fmt.Sprintf(`<p style="color:#64748b;margin:.5rem 0">⏰ Deadline: <strong>%s</strong></p>`, deadlineText)
+		}
+		bodyHTML := fmt.Sprintf(
+			`<html><body style="font-family:sans-serif;max-width:500px;margin:auto;padding:1rem;background:#f0f4f8">`+
+				`<div style="background:#131f2e;color:#fff;padding:1rem 1.5rem;border-radius:8px 8px 0 0">`+
+				`<h2 style="margin:0;font-size:1.1rem">🎯 Nezapomeň na extra tipy!</h2>`+
+				`</div>`+
+				`<div style="background:#fff;padding:1.5rem;border-radius:0 0 8px 8px;border:1px solid #dde3ea;border-top:none">`+
+				`<p style="margin-top:0">Ještě nemáš vyplněné extra otázky pro <strong>%s</strong>.</p>`+
+				`%s`+
+				`<div style="text-align:center;margin:1.5rem 0">`+
+				`<a href="%s" style="background:#10b981;color:#fff;text-decoration:none;padding:.65rem 1.8rem;border-radius:6px;font-weight:700;font-size:.95rem">Tipovat extra →</a>`+
+				`</div>`+
+				`<p style="color:#94a3b8;font-size:.78rem;text-align:center;margin-bottom:0">`+
+				`Nastavení upozornění: <a href="%s/profile" style="color:#64748b">/profile</a>`+
+				`</p>`+
+				`</div>`+
+				`</body></html>`,
+			compName, deadlineInfo, extraURL, appURL,
+		)
+		for _, rec := range untipped {
+			if err := notifySendEmail(rec.Email, subject, bodyHTML); err != nil {
+				log.Printf("[extra-notify] email chyba → %s: %v", rec.Email, err)
+			}
+		}
+		log.Printf("[extra-notify] %s: odesláno %d emailů", compName, len(untipped))
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(fmt.Sprintf(`{"ok":true,"total":%d}`, len(untipped))))
 }

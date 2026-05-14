@@ -192,6 +192,15 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 <div class="match-header" style="color:#f0c040">
                     🎯 {{.SubText}}
                 </div>
+                {{if and (or $.User.IsAdmin $.User.IsOwner) (not .IsClosed) .IsLast}}
+                <div style="display:flex;justify-content:center;margin-top:2px">
+                    <button class="extra-notify-btn"
+                            data-comp-id="{{$.SelectedCompetitionID}}"
+                            title="Poslat upozornění uživatelům, kteří ještě nevyplnili extra otázky"
+                            style="background:none;border:none;cursor:pointer;font-size:0.75rem;padding:0 2px;line-height:1;opacity:.8"
+                            onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.8">🔔</button>
+                </div>
+                {{end}}
             </th>
             {{end}}
             {{if .ExtraCols}}
@@ -493,6 +502,30 @@ document.addEventListener('DOMContentLoaded', function () {
                         btn.textContent = '✅';
                         btn.style.opacity = '1';
                         setTimeout(function() { btn.textContent = '🔔'; btn.style.opacity = '.4'; }, 3000);
+                    } else {
+                        btn.textContent = '🔔';
+                        alert('Chyba: ' + (data.error || 'neznámá'));
+                    }
+                })
+                .catch(function() { btn.disabled = false; btn.textContent = '🔔'; alert('Chyba spojení.'); });
+        });
+    });
+
+    // ── Extra otázky notifikace (admin) ──
+    table.querySelectorAll('.extra-notify-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var compId = btn.dataset.compId;
+            btn.textContent = '⏳';
+            btn.disabled = true;
+            fetch('/admin/competitions/' + compId + '/extra-notify', { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    btn.disabled = false;
+                    if (data.ok) {
+                        btn.textContent = '✅';
+                        btn.style.opacity = '1';
+                        setTimeout(function() { btn.textContent = '🔔'; btn.style.opacity = '.8'; }, 3000);
                     } else {
                         btn.textContent = '🔔';
                         alert('Chyba: ' + (data.error || 'neznámá'));
