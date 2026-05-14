@@ -278,11 +278,48 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 			tippableIface[i] = v
 		}
 
+		// Extra otázky — zjisti jestli jsou otevřené (deadline ještě nepřešel)
+		extraOpen := false
+		hasExtra := false
+		{
+			var extraDeadline *time.Time
+			_ = db.Pool.QueryRow(ctx,
+				`SELECT extra_deadline FROM competitions WHERE id=$1`, compID).Scan(&extraDeadline)
+
+			var effectiveDeadline *time.Time
+			if extraDeadline != nil {
+				effectiveDeadline = extraDeadline
+			} else {
+				var firstMatch time.Time
+				err2 := db.Pool.QueryRow(ctx,
+					`SELECT MIN(m.match_date) FROM matches m
+					   JOIN rounds r ON r.id = m.round_id
+					  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, compID).Scan(&firstMatch)
+				if err2 == nil && !firstMatch.IsZero() {
+					effectiveDeadline = &firstMatch
+				}
+			}
+
+			// Má vůbec soutěž nějaké extra otázky?
+			var extraCount int
+			_ = db.Pool.QueryRow(ctx,
+				`SELECT COUNT(*) FROM extra_questions WHERE competition_id=$1`, compID).Scan(&extraCount)
+			hasExtra = extraCount > 0
+
+			if hasExtra {
+				now := NowPrague()
+				if effectiveDeadline == nil || now.Before(*effectiveDeadline) {
+					extraOpen = true
+				}
+			}
+		}
+
 		RenderTemplate(w, r, tmpl, "competition.html", TemplateData{
 			"User":         u,
 			"Comp":         comp,
 			"MatchContext": tippableIface,
 			"AllLocked":    allLocked,
+			"ExtraOpen":    extraOpen,
 		})
 	}
 }

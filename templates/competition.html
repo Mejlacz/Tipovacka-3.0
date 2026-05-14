@@ -5,6 +5,15 @@
     {{end}}
 </div>
 
+{{if .ExtraOpen}}
+<a href="/extra?competition_id={{.Comp.ID}}"
+   style="display:inline-flex;align-items:center;gap:0.4rem;margin-bottom:1.1rem;
+          padding:0.45rem 1rem;border-radius:8px;font-size:0.9rem;font-weight:600;
+          text-decoration:none;background:var(--accent);color:#fff">
+    🎯 Tipovat Extra otázky
+</a>
+{{end}}
+
 {{if not .MatchContext}}
     {{if .AllLocked}}
     <div class="alert alert-success" style="max-width:480px">{{tr .Lang "tips_all_tipped"}}</div>
