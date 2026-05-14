@@ -283,8 +283,8 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         {{$pts := index (index $.ExtraPtsMatrix $row.User.ID) $qid}}
         {{$isLast := .IsLast}}
         {{$eaAdmin := or $.User.IsAdmin $.User.IsOwner}}
-        {{/* Extra tipy jsou viditelné: admin vždy; moje vlastní vždy; ostatní až po reveal */}}
-        {{$extraVisible := or $eaAdmin $isMe $.ExtraRevealed}}
+        {{/* Extra tipy jsou viditelné: moje vlastní vždy; ostatní až po reveal (ani admin nevidí dřív) */}}
+        {{$extraVisible := or $isMe $.ExtraRevealed}}
         <td class="cell-tip{{if $eaAdmin}} extra-admin-editable{{end}}"
             title="{{if and $ansText $extraVisible}}{{$ansText}}{{else if $ansText}}Skryto do odhalení{{else}}–{{end}}{{if and $isLast (not (isNilInt $pts))}} ({{intVal $pts}} b){{end}}"
             style="font-size:0.78rem;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center"
