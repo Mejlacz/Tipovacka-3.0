@@ -131,32 +131,15 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 		now := NowPrague()
 
 		// Extra reveal: zjisti jestli jsou extra tipy ostatních viditelné
+		// Reveal nastane POUZE pokud admin explicitně nastavil extra_reveal_at ("Odkrýt všem")
 		extraRevealed := false
 		if compID > 0 {
-			var extraDeadline, extraRevealAt *time.Time
+			var extraRevealAt *time.Time
 			_ = db.Pool.QueryRow(ctx,
-				`SELECT extra_deadline, extra_reveal_at FROM competitions WHERE id=$1`, compID).
-				Scan(&extraDeadline, &extraRevealAt)
-
-			var effectiveDeadline *time.Time
-			if extraDeadline != nil {
-				effectiveDeadline = extraDeadline
-			} else {
-				// Auto: začátek prvního zápasu v soutěži
-				var firstMatch time.Time
-				err := db.Pool.QueryRow(ctx,
-					`SELECT MIN(m.match_date) FROM matches m
-					   JOIN rounds r ON r.id = m.round_id
-					  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, compID).Scan(&firstMatch)
-				if err == nil && !firstMatch.IsZero() {
-					effectiveDeadline = &firstMatch
-				}
-			}
-
+				`SELECT extra_reveal_at FROM competitions WHERE id=$1`, compID).
+				Scan(&extraRevealAt)
 			if extraRevealAt != nil {
 				extraRevealed = now.After(*extraRevealAt)
-			} else if effectiveDeadline != nil {
-				extraRevealed = now.After(*effectiveDeadline)
 			}
 		}
 

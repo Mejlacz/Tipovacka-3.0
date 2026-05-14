@@ -92,11 +92,10 @@ func ExtraView(tmpl *template.Template) http.HandlerFunc {
 				isLocked = time.Now().After(*effectiveDeadline)
 			}
 
-			// Reveal: NULL = stejný čas jako deadline; jinak explicitní čas
+			// Reveal: pouze pokud admin explicitně nastavil extra_reveal_at (klik "Odkrýt všem")
+			// NULL = ještě neodhaleno, i když deadline prošel
 			if comp.ExtraRevealAt != nil {
 				isRevealed = time.Now().After(*comp.ExtraRevealAt)
-			} else {
-				isRevealed = isLocked
 			}
 		}
 
