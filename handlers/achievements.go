@@ -387,10 +387,11 @@ func AchievementsPage(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 
-		// Load ALL competitions (active + inactive) so selector shows full history
+		// Load only recent competitions — achievements tracking starts from LM 2025/2026.
+		// LIMIT keeps old historical competitions out of the selector.
 		compRows, _ := db.Pool.Query(ctx,
 			`SELECT id, name, season, is_active, sport, sort_order FROM competitions
-			  ORDER BY sort_order NULLS LAST, id DESC`)
+			  ORDER BY sort_order NULLS LAST, id DESC LIMIT 10`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}
