@@ -4,6 +4,11 @@
 
 {{if .Competitions}}
 <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:1.25rem">
+    <a href="/achievements?competition_id=all"
+       style="padding:0.35rem 0.85rem;border-radius:20px;font-size:0.85rem;text-decoration:none;white-space:nowrap;
+              {{if .SelectedAll}}background:var(--accent);color:#fff;border:1px solid var(--accent);font-weight:700;{{else}}background:var(--bg2);color:var(--text-d);border:1px solid var(--border-d);font-weight:400;{{end}}">
+        🌍 Všechny soutěže
+    </a>
     {{range .Competitions}}
     <a href="/achievements?competition_id={{.ID}}"
        style="padding:0.35rem 0.85rem;border-radius:20px;font-size:0.85rem;text-decoration:none;white-space:nowrap;
@@ -14,11 +19,18 @@
 </div>
 {{end}}
 
-{{if not .SelectedComp}}
+{{if and (not .SelectedAll) (not .SelectedComp)}}
     <p class="empty">Žádná soutěž nenalezena.</p>
 {{else if not .Rows}}
     <p class="empty">V téhle soutěži zatím nikdo netipoval.</p>
 {{else}}
+
+{{if .SelectedAll}}
+<p style="margin-bottom:1rem;font-size:0.88rem;color:var(--muted-d)">
+    Celkový přehled achievementů přes všechny soutěže.
+    Čísla v buňkách = kolikrát byl achievement získán v různých soutěžích.
+</p>
+{{end}}
 
 <details style="margin-bottom:1.25rem">
     <summary style="cursor:pointer;font-size:0.88rem;color:var(--muted-d);user-select:none;padding:0.2rem 0">
@@ -77,8 +89,13 @@
         </td>
         <td class="col-pts" style="text-align:center;font-weight:700;color:var(--accent)">{{$row.Count}}</td>
         {{range $.AllAchievements}}
+        {{$cnt := index $row.EarnedCounts .ID}}
         <td style="text-align:center;font-size:1.05rem">
-            {{if index $row.EarnedIDs .ID}}
+            {{if gt $cnt 1}}
+            <span title="{{.Name}} ({{$cnt}}× v různých soutěžích)" style="position:relative;display:inline-block">
+                {{.Icon}}<sup style="font-size:0.55rem;font-weight:700;color:var(--accent);vertical-align:super;line-height:1">{{$cnt}}</sup>
+            </span>
+            {{else if gt $cnt 0}}
             <span title="{{.Name}}">{{.Icon}}</span>
             {{else}}
             <span style="color:var(--bg3);font-size:0.7rem">–</span>
@@ -91,7 +108,7 @@
 </table>
 </div>
 
-{{if not .SelectedComp.IsActive}}
+{{if and (not $.SelectedAll) $.SelectedComp (not $.SelectedComp.IsActive)}}
 <p style="margin-top:0.85rem;font-size:0.82rem;color:var(--muted-d);text-align:center">
     🔒 Uzavřená soutěž — achievementy jsou finální.
 </p>

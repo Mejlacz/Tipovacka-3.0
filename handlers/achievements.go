@@ -387,9 +387,10 @@ func AchievementsPage(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 
+		// Load ALL competitions (active + inactive) so selector shows full history
 		compRows, _ := db.Pool.Query(ctx,
 			`SELECT id, name, season, is_active, sport, sort_order FROM competitions
-			  WHERE is_active = TRUE ORDER BY sort_order NULLS LAST, id DESC`)
+			  ORDER BY sort_order NULLS LAST, id DESC`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}
@@ -399,54 +400,92 @@ func AchievementsPage(tmpl *template.Template) http.HandlerFunc {
 		compRows.Close()
 
 		// Determine selected competition
+		selectedAll := r.URL.Query().Get("competition_id") == "all"
 		var selectedComp *models.Competition
-		if v := r.URL.Query().Get("competition_id"); v != "" {
-			cid, _ := strconv.Atoi(v)
-			for _, c := range competitions {
-				if c.ID == cid {
-					selectedComp = c
-					break
+		if !selectedAll {
+			if v := r.URL.Query().Get("competition_id"); v != "" {
+				cid, _ := strconv.Atoi(v)
+				for _, c := range competitions {
+					if c.ID == cid {
+						selectedComp = c
+						break
+					}
 				}
 			}
-		}
-		if selectedComp == nil {
-			for _, c := range competitions {
-				if c.IsActive {
-					selectedComp = c
-					break
+			if selectedComp == nil {
+				for _, c := range competitions {
+					if c.IsActive {
+						selectedComp = c
+						break
+					}
 				}
 			}
-		}
-		if selectedComp == nil && len(competitions) > 0 {
-			selectedComp = competitions[0]
+			if selectedComp == nil && len(competitions) > 0 {
+				selectedComp = competitions[0]
+			}
 		}
 
 		type AchRow struct {
-			User      *models.User
-			Earned    []Achievement
-			EarnedIDs map[string]bool
-			Count     int
+			User         *models.User
+			EarnedIDs    map[string]bool
+			EarnedCounts map[string]int // how many competitions the achievement was earned in
+			Count        int            // total achievements (sum of EarnedCounts)
 		}
 		var rows []AchRow
 
-		if selectedComp != nil {
-			// Visible users
-			visibleUsers := map[int]*models.User{}
-			cols, _ := buildUserSelect()
-			filterSQL := ""
-			if userCols.IsBlocked {
-				filterSQL += " AND is_blocked=FALSE"
+		// Load visible users once (used by both per-comp and all-comps paths)
+		visibleUsers := map[int]*models.User{}
+		cols, _ := buildUserSelect()
+		filterSQL := ""
+		if userCols.IsBlocked {
+			filterSQL += " AND is_blocked=FALSE"
+		}
+		uRows, _ := db.Pool.Query(ctx,
+			"SELECT "+cols+" FROM users WHERE is_hidden=FALSE"+filterSQL+" ORDER BY username")
+		for uRows.Next() {
+			u := &models.User{}
+			if scanUser(u, uRows) == nil {
+				visibleUsers[u.ID] = u
 			}
-			uRows, _ := db.Pool.Query(ctx,
-				"SELECT "+cols+" FROM users WHERE is_hidden=FALSE"+filterSQL+" ORDER BY username")
-			for uRows.Next() {
-				u := &models.User{}
-				if scanUser(u, uRows) == nil {
-					visibleUsers[u.ID] = u
+		}
+		uRows.Close()
+
+		if selectedAll {
+			// Aggregate across ALL competitions
+			// userAchCounts[uid][achID] = number of competitions where user earned this achievement
+			userAchCounts := map[int]map[string]int{}
+			for _, comp := range competitions {
+				achByUser := computeAllCompAchievements(ctx, comp.ID, comp.IsActive)
+				for uid, earned := range achByUser {
+					if _, ok := userAchCounts[uid]; !ok {
+						userAchCounts[uid] = map[string]int{}
+					}
+					for _, ach := range earned {
+						userAchCounts[uid][ach.ID]++
+					}
 				}
 			}
-			uRows.Close()
-
+			for uid, achCounts := range userAchCounts {
+				u, ok := visibleUsers[uid]
+				if !ok {
+					continue
+				}
+				earnedIDs := map[string]bool{}
+				total := 0
+				for achID, cnt := range achCounts {
+					if cnt > 0 {
+						earnedIDs[achID] = true
+						total += cnt
+					}
+				}
+				rows = append(rows, AchRow{
+					User:         u,
+					EarnedIDs:    earnedIDs,
+					EarnedCounts: achCounts,
+					Count:        total,
+				})
+			}
+		} else if selectedComp != nil {
 			achByUser := computeAllCompAchievements(ctx, selectedComp.ID, selectedComp.IsActive)
 			for uid, earned := range achByUser {
 				u, ok := visibleUsers[uid]
@@ -454,28 +493,32 @@ func AchievementsPage(tmpl *template.Template) http.HandlerFunc {
 					continue
 				}
 				earnedIDs := map[string]bool{}
+				earnedCounts := map[string]int{}
 				for _, a := range earned {
 					earnedIDs[a.ID] = true
+					earnedCounts[a.ID] = 1
 				}
 				rows = append(rows, AchRow{
-					User:      u,
-					Earned:    earned,
-					EarnedIDs: earnedIDs,
-					Count:     len(earned),
+					User:         u,
+					EarnedIDs:    earnedIDs,
+					EarnedCounts: earnedCounts,
+					Count:        len(earned),
 				})
 			}
-			sort.Slice(rows, func(i, j int) bool {
-				if rows[i].Count != rows[j].Count {
-					return rows[i].Count > rows[j].Count
-				}
-				return strings.ToLower(rows[i].User.Username) < strings.ToLower(rows[j].User.Username)
-			})
 		}
+
+		sort.Slice(rows, func(i, j int) bool {
+			if rows[i].Count != rows[j].Count {
+				return rows[i].Count > rows[j].Count
+			}
+			return strings.ToLower(rows[i].User.Username) < strings.ToLower(rows[j].User.Username)
+		})
 
 		RenderTemplate(w, r, tmpl, "achievements/index.html", TemplateData{
 			"User":            user,
 			"Competitions":    competitions,
 			"SelectedComp":    selectedComp,
+			"SelectedAll":     selectedAll,
 			"Rows":            rows,
 			"AllAchievements": CompAchievements,
 		})
