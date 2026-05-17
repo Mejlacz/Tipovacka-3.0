@@ -203,7 +203,8 @@ func main() {
 	r.Get("/feedback", handlers.FeedbackPage(tmpl))
 	r.Post("/feedback/submit", handlers.FeedbackSubmit)
 
-	// ── Pages (Pravidla) ──────────────────────────────────────────────────────
+	// ── Pages ─────────────────────────────────────────────────────────────────
+	r.Get("/info", handlers.InfoPage(tmpl))
 	r.Get("/pravidla", handlers.PravidlaPage(tmpl))
 
 	// ── Admin ─────────────────────────────────────────────────────────────────
@@ -232,6 +233,7 @@ func main() {
 	r.Post("/admin/users/{user_id}/toggle-hidden", handlers.AdminUserToggleHidden)
 	r.Post("/admin/users/{user_id}/delete", handlers.AdminUserDelete)
 	r.Post("/admin/users/{user_id}/reset-password", handlers.AdminUserResetPassword)
+	r.Post("/admin/users/{user_id}/set-password", handlers.AdminUserSetPassword)
 	r.Post("/admin/users/{user_id}/set-role", handlers.AdminUserSetRole)
 	r.Post("/admin/users/{user_id}/send-welcome", handlers.AdminUserSendWelcome)
 	r.Post("/admin/users/bulk-action", handlers.AdminUsersBulkAction)
@@ -451,6 +453,10 @@ func globRecursive(root, pattern string) []string {
 }
 
 func templateFuncs() template.FuncMap {
+	pragLoc, err := time.LoadLocation("Europe/Prague")
+	if err != nil {
+		pragLoc = time.UTC
+	}
 	return template.FuncMap{
 		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
 		"add":      func(a, b int) int { return a + b },
@@ -535,13 +541,13 @@ func templateFuncs() template.FuncMap {
 			}
 			return t.In(time.Local).Format(layout)
 		},
-		// fmtPrague formats a *time.Time in Europe/Prague timezone (CEST/CET)
+		// fmtPrague konvertuje UTC timestamp (pgx v5 vrací TIMESTAMP WITHOUT
+		// TIME ZONE jako UTC) na Prague local time a formátuje podle layoutu.
 		"fmtPrague": func(t *time.Time, layout string) string {
 			if t == nil {
 				return ""
 			}
-			prague, _ := time.LoadLocation("Europe/Prague")
-			return t.In(prague).Format(layout)
+			return t.In(pragLoc).Format(layout)
 		},
 		// fmtISO formats a *time.Time as UTC ISO 8601 string for JS (e.g. countdown)
 		"fmtISO": func(t *time.Time) string {
