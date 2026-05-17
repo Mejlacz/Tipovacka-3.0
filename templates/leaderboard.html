@@ -107,16 +107,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
     <p class="empty">Žádné zápasy.</p>
 {{else}}
 
-{{/* ── Graf vývoje bodů ── */}}
-<div style="margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-    <button id="lb-chart-toggle" class="btn btn-secondary btn-sm" style="font-size:.8rem" onclick="toggleLbChart()">
-        📈 Graf vývoje
-    </button>
-</div>
-<div id="lb-chart-wrap" style="display:none;background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem;margin-bottom:1rem;position:relative">
-    <canvas id="lb-chart" style="max-height:320px"></canvas>
-    <div id="lb-chart-loading" style="text-align:center;color:var(--muted-d);font-size:.85rem;padding:2rem 0">Načítám data…</div>
-</div>
 
 {{/* ── Barevná legenda ── */}}
 <div class="lb-legend" style="margin-bottom:.75rem;font-size:.82rem;display:flex;gap:1rem;flex-wrap:wrap">
@@ -125,9 +115,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
     <span class="lb-legend-item"><span class="lb-legend-dot tip-miss" style="display:inline-block;width:12px;height:12px;background:var(--bg3);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Špatný tip</span>
     <span class="lb-legend-item"><span style="color:var(--accent);font-size:0.9rem">✓</span> Vsazeno (skryto)</span>
 </div>
-
-{{/* ── Sticky own position bar ── */}}
-<div id="lb-my-pos" style="display:none;position:sticky;top:0;z-index:50;background:var(--navy2,#0f172a);border-bottom:2px solid var(--accent);padding:4px 12px;font-size:0.82rem;color:var(--text-d)"></div>
 
 {{if or .User.IsAdmin .User.IsOwner}}
 <div style="font-size:0.75rem;color:var(--muted-d);margin-bottom:0.4rem;display:flex;align-items:center;gap:0.9rem;flex-wrap:wrap">
@@ -257,8 +244,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             {{$tipData := printf "🎯 Přesnost: %s\n✅ Přesné: %d\n☑️ Vítěz: %d\n❌ Minul: %d\n📊 Tipy: %s" $accStr $row.Exact $row.Winner $row.Miss $row.TipRatio}}
             <span class="player-tip" data-tip="{{$tipData}}" style="cursor:pointer"
                   {{if not $isMe}}data-vs-url="/stats/{{$.SelectedCompetitionID}}/vs/{{$row.User.ID}}"
-                  data-stats-url="/stats/{{$.SelectedCompetitionID}}/extended?user_id={{$row.User.ID}}"{{end}}>{{if $isMe}}<em>{{$row.User.Username}}</em>{{else}}{{$row.User.Username}}{{end}}</span>
-            {{if $isMe}}<span class="badge-you" style="font-size:0.72rem;margin-left:0.2rem">ty</span>{{end}}
+                  data-stats-url="/stats/{{$.SelectedCompetitionID}}/extended?user_id={{$row.User.ID}}"{{end}}>{{if $isMe}}<span style="display:inline-block;background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(16,185,129,.35);border-radius:20px;padding:.1rem .55rem;font-size:.78rem;font-weight:700">{{$row.User.Username}}</span>{{else}}{{$row.User.Username}}{{end}}</span>
             {{if ge $row.Streak 3}}<span title="{{$row.Streak}}× přesný tip v řadě" style="font-size:.7rem;margin-left:.25rem;cursor:default">🔥{{$row.Streak}}</span>{{end}}
         </td>
         <td class="col-pts"><strong>{{$row.Total}}</strong></td>
@@ -598,22 +584,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // ── Sticky own position bar ──
-    var myRow = table.querySelector('tbody tr.highlight');
-    var myPosBar = document.getElementById('lb-my-pos');
-    if (myRow && myPosBar) {
-        var myPlace = myRow.querySelector('.col-place');
-        var myName  = myRow.querySelector('.col-user');
-        var myPts   = myRow.querySelector('.col-pts');
-        if (myPlace && myName && myPts) {
-            myPosBar.textContent = '📍 ' + myPlace.textContent.trim() + ' ' + myName.textContent.trim() + ' · ' + myPts.textContent.trim() + ' b';
-        }
-        var observer = new IntersectionObserver(function(entries) {
-            myPosBar.style.display = entries[0].isIntersecting ? 'none' : 'block';
-        }, { threshold: 0, rootMargin: '-60px 0px 0px 0px' });
-        observer.observe(myRow);
-    }
-
     // ── Player stats modal ──
     var navbar = document.querySelector('.navbar');
     var navH = navbar ? navbar.offsetHeight : 52;
@@ -678,112 +648,8 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-{{/* ── Graf Chart.js ── */}}
+
 <script>
-var _lbChartLoaded = false;
-var _lbChartInstance = null;
-var _lbChartOpen = false;
-
-function toggleLbChart() {
-    var wrap = document.getElementById('lb-chart-wrap');
-    var btn  = document.getElementById('lb-chart-toggle');
-    _lbChartOpen = !_lbChartOpen;
-    wrap.style.display = _lbChartOpen ? 'block' : 'none';
-    btn.textContent = _lbChartOpen ? '📉 Skrýt graf' : '📈 Graf vývoje';
-    if (_lbChartOpen && !_lbChartLoaded) {
-        _lbChartLoaded = true;
-        loadChartJs(renderLbChart);
-    }
-}
-
-function loadChartJs(cb) {
-    if (window.Chart) { cb(); return; }
-    var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
-    s.onload = cb;
-    document.head.appendChild(s);
-}
-
-function renderLbChart() {
-    var compId = {{if .SelectedCompetitionID}}{{.SelectedCompetitionID}}{{else}}0{{end}};
-    if (!compId) {
-        document.getElementById('lb-chart-loading').textContent = 'Vyber soutěž.';
-        return;
-    }
-    fetch('/leaderboard/chart-data?competition_id=' + compId)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            document.getElementById('lb-chart-loading').style.display = 'none';
-            if (!data.labels || data.labels.length === 0) {
-                document.getElementById('lb-chart-loading').style.display = 'block';
-                document.getElementById('lb-chart-loading').textContent = 'Zatím žádná dokončená kola.';
-                return;
-            }
-
-            var PALETTE = [
-                '#10b981','#3b82f6','#f59e0b','#ec4899','#8b5cf6',
-                '#06b6d4','#f97316','#84cc16','#e11d48','#a78bfa',
-                '#22d3ee','#fbbf24','#4ade80','#fb7185','#c084fc'
-            ];
-
-            var datasets = data.datasets.map(function(ds, i) {
-                var isMe = ds.isMe;
-                var color = isMe ? '#34d399' : PALETTE[i % PALETTE.length];
-                return {
-                    label: ds.label,
-                    data: ds.data,
-                    hidden: !isMe && i >= 5,
-                    borderColor: color,
-                    backgroundColor: isMe ? 'rgba(52,211,153,.12)' : 'transparent',
-                    borderWidth: isMe ? 3 : 1.5,
-                    pointRadius: isMe ? 5 : 3,
-                    pointHoverRadius: isMe ? 7 : 5,
-                    tension: 0.3,
-                    fill: isMe,
-                    order: isMe ? 0 : 1
-                };
-            });
-
-            var isDark = !document.getElementById('html-root').getAttribute('data-theme') ||
-                         document.getElementById('html-root').getAttribute('data-theme') === 'dark';
-            var gridColor = 'rgba(255,255,255,.08)';
-            var textColor = '#94a3b8';
-
-            if (_lbChartInstance) { _lbChartInstance.destroy(); }
-            _lbChartInstance = new Chart(document.getElementById('lb-chart'), {
-                type: 'line',
-                data: { labels: data.labels, datasets: datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { color: textColor, font: { size: 11 }, boxWidth: 12, padding: 8 }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + ' b'; }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor } },
-                        y: {
-                            ticks: { color: textColor, font: { size: 11 } },
-                            grid:  { color: gridColor },
-                            title: { display: true, text: 'Body (kumulativně)', color: textColor, font: { size: 11 } }
-                        }
-                    }
-                }
-            });
-        })
-        .catch(function() {
-            document.getElementById('lb-chart-loading').textContent = 'Chyba načítání dat.';
-        });
-}
-
 /* ── Live refresh ── */
 (function() {
     var compId = (new URLSearchParams(location.search).get('competition_id')) || '0';
