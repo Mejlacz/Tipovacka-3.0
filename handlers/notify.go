@@ -52,12 +52,16 @@ func sendMatchNotificationForID(matchID int) {
 		return
 	}
 
-	// Uživatelé s opt-in (ne blokovaní, ne neaktivní, schválení, mají email)
+	// Všichni aktivní tipéři v soutěži — tj. mají aspoň jeden tip v soutěži,
+	// mají email, nejsou blokovaní/neaktivní. Bez opt-in filtru — ruční zvoneček
+	// jde záměrně všem kdo v soutěži hraje.
 	uRows, err := db.Pool.Query(ctx, `
-		SELECT u.id, u.email, u.username
+		SELECT DISTINCT u.id, u.email, u.username
 		FROM users u
-		JOIN notification_settings ns ON ns.user_id = u.id
-		WHERE ns.competition_id = $1
+		JOIN tips t   ON t.user_id  = u.id
+		JOIN matches m2 ON m2.id    = t.match_id
+		JOIN rounds r2  ON r2.id    = m2.round_id
+		WHERE r2.competition_id = $1
 		  AND u.email IS NOT NULL AND u.email != ''
 		  AND COALESCE(u.is_blocked,  false) = false
 		  AND COALESCE(u.is_inactive, false) = false
