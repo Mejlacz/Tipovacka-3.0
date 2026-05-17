@@ -194,12 +194,15 @@ func sendMatchNotifications(ctx context.Context, pool *pgxpool.Pool) {
 		if !shouldNotifyNow(matchDateLocal, now) {
 			continue
 		}
-		// Uživatelé s opt-in pro tuto soutěž (ne blokovaní, ne neaktivní, mají email)
+		// Všichni aktivní tipéři v soutěži (mají aspoň jeden tip, mají email)
+		// — bez opt-in filtru, notifikace jde každému kdo v soutěži hraje
 		uRows, err := pool.Query(ctx, `
-			SELECT u.id, u.email, u.username
+			SELECT DISTINCT u.id, u.email, u.username
 			FROM users u
-			JOIN notification_settings ns ON ns.user_id = u.id
-			WHERE ns.competition_id = $1
+			JOIN tips t    ON t.user_id  = u.id
+			JOIN matches m2 ON m2.id     = t.match_id
+			JOIN rounds r2  ON r2.id     = m2.round_id
+			WHERE r2.competition_id = $1
 			  AND u.email IS NOT NULL AND u.email != ''
 			  AND COALESCE(u.is_blocked,  false) = false
 			  AND COALESCE(u.is_inactive, false) = false
