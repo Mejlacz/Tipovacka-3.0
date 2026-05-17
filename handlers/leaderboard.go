@@ -435,68 +435,73 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 			for _, m := range finishedForTrend {
 				byRound[m.RoundID] = append(byRound[m.RoundID], m)
 			}
-			latestRoundID := -1
-			var latestDate time.Time
-			for rid, ms := range byRound {
-				for _, m := range ms {
-					if m.MatchDate != nil && m.MatchDate.After(latestDate) {
-						latestDate = *m.MatchDate
-						latestRoundID = rid
-					}
-				}
-			}
-			latestIDs := map[int]bool{}
-			for _, m := range byRound[latestRoundID] {
-				latestIDs[m.ID] = true
-			}
-
-			prevTotals := map[int][2]int{}
-			for _, row := range userRows {
-				uid := row.User.ID
-				prevTotal, prevExact := 0, 0
-				for mid, t := range tipsByUser[uid] {
-					if !latestIDs[mid] && t.Points != nil {
-						prevTotal += *t.Points
-						if *t.Points == 3 {
-							prevExact++
+			// Trend má smysl jen pokud jsou dokončené zápasy ve více kolech —
+			// jinak jsou všechny tipy v "posledním kole" a prevTotal=0 pro všechny,
+			// což by zobrazovalo zavádějící čísla (↓11, ↓13…).
+			if len(byRound) >= 2 {
+				latestRoundID := -1
+				var latestDate time.Time
+				for rid, ms := range byRound {
+					for _, m := range ms {
+						if m.MatchDate != nil && m.MatchDate.After(latestDate) {
+							latestDate = *m.MatchDate
+							latestRoundID = rid
 						}
 					}
 				}
-				userExtra := 0
-				if eaMap, ok := extraAnswersMatrix[uid]; ok {
-					for _, ea := range eaMap {
-						if ea.Points != nil {
-							userExtra += *ea.Points
+				latestIDs := map[int]bool{}
+				for _, m := range byRound[latestRoundID] {
+					latestIDs[m.ID] = true
+				}
+
+				prevTotals := map[int][2]int{}
+				for _, row := range userRows {
+					uid := row.User.ID
+					prevTotal, prevExact := 0, 0
+					for mid, t := range tipsByUser[uid] {
+						if !latestIDs[mid] && t.Points != nil {
+							prevTotal += *t.Points
+							if *t.Points == 3 {
+								prevExact++
+							}
 						}
 					}
+					userExtra := 0
+					if eaMap, ok := extraAnswersMatrix[uid]; ok {
+						for _, ea := range eaMap {
+							if ea.Points != nil {
+								userExtra += *ea.Points
+							}
+						}
+					}
+					prevTotals[uid] = [2]int{prevTotal + userExtra, prevExact}
 				}
-				prevTotals[uid] = [2]int{prevTotal + userExtra, prevExact}
-			}
 
-			type prevEntry struct{ uid, gt, exact int }
-			var prevSorted []prevEntry
-			for uid, v := range prevTotals {
-				prevSorted = append(prevSorted, prevEntry{uid, v[0], v[1]})
-			}
-			sort.Slice(prevSorted, func(i, j int) bool {
-				if prevSorted[i].gt != prevSorted[j].gt {
-					return prevSorted[i].gt > prevSorted[j].gt
+				type prevEntry struct{ uid, gt, exact int }
+				var prevSorted []prevEntry
+				for uid, v := range prevTotals {
+					prevSorted = append(prevSorted, prevEntry{uid, v[0], v[1]})
 				}
-				return prevSorted[i].exact > prevSorted[j].exact
-			})
-			prevPlaceMap := map[int]int{}
-			p := 1
-			for i, e := range prevSorted {
-				if i > 0 && e.gt == prevSorted[i-1].gt && e.exact == prevSorted[i-1].exact {
-					prevPlaceMap[e.uid] = prevPlaceMap[prevSorted[i-1].uid]
-				} else {
-					prevPlaceMap[e.uid] = p
+				sort.Slice(prevSorted, func(i, j int) bool {
+					if prevSorted[i].gt != prevSorted[j].gt {
+						return prevSorted[i].gt > prevSorted[j].gt
+					}
+					return prevSorted[i].exact > prevSorted[j].exact
+				})
+				prevPlaceMap := map[int]int{}
+				p := 1
+				for i, e := range prevSorted {
+					if i > 0 && e.gt == prevSorted[i-1].gt && e.exact == prevSorted[i-1].exact {
+						prevPlaceMap[e.uid] = prevPlaceMap[prevSorted[i-1].uid]
+					} else {
+						prevPlaceMap[e.uid] = p
+					}
+					p++
 				}
-				p++
-			}
-			for _, row := range userRows {
-				if prev, ok := prevPlaceMap[row.User.ID]; ok {
-					row.Trend = prev - row.Place
+				for _, row := range userRows {
+					if prev, ok := prevPlaceMap[row.User.ID]; ok {
+						row.Trend = prev - row.Place
+					}
 				}
 			}
 		}
@@ -592,7 +597,7 @@ func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
 		var matchList []matchInfo
 		mrows, _ := db.Pool.Query(ctx,
 			`SELECT m.id,
-			        COALESCE(TO_CHAR(m.match_date AT TIME ZONE 'Europe/Prague', 'DD.MM.'), '#' || m.id::text)
+			        COALESCE(TO_CHAR(m.match_date, 'DD.MM.'), '#' || m.id::text)
 			   FROM matches m
 			   JOIN rounds r ON r.id = m.round_id
 			  WHERE r.competition_id = $1 AND m.is_finished = true
