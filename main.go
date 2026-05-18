@@ -453,10 +453,6 @@ func globRecursive(root, pattern string) []string {
 }
 
 func templateFuncs() template.FuncMap {
-	pragLoc, err := time.LoadLocation("Europe/Prague")
-	if err != nil {
-		pragLoc = time.UTC
-	}
 	return template.FuncMap{
 		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
 		"add":      func(a, b int) int { return a + b },
@@ -541,13 +537,14 @@ func templateFuncs() template.FuncMap {
 			}
 			return t.In(time.Local).Format(layout)
 		},
-		// fmtPrague konvertuje UTC timestamp (pgx v5 vrací TIMESTAMP WITHOUT
-		// TIME ZONE jako UTC) na Prague local time a formátuje podle layoutu.
+		// fmtPrague formátuje *time.Time — DB ukládá TIMESTAMP WITHOUT TIME ZONE
+		// jako Prague wall-clock (pgx v5 vrátí stejnou hodnotu labelovanou UTC),
+		// proto žádná timezone konverze není potřeba.
 		"fmtPrague": func(t *time.Time, layout string) string {
 			if t == nil {
 				return ""
 			}
-			return t.In(pragLoc).Format(layout)
+			return t.Format(layout)
 		},
 		// fmtISO formats a *time.Time as UTC ISO 8601 string for JS (e.g. countdown)
 		"fmtISO": func(t *time.Time) string {
