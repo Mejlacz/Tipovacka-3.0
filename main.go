@@ -453,6 +453,10 @@ func globRecursive(root, pattern string) []string {
 }
 
 func templateFuncs() template.FuncMap {
+	pragLoc, err := time.LoadLocation("Europe/Prague")
+	if err != nil {
+		pragLoc = time.UTC
+	}
 	return template.FuncMap{
 		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
 		"add":      func(a, b int) int { return a + b },
@@ -546,12 +550,16 @@ func templateFuncs() template.FuncMap {
 			}
 			return t.Format(layout)
 		},
-		// fmtISO formats a *time.Time as UTC ISO 8601 string for JS (e.g. countdown)
+		// fmtISO formats a *time.Time as ISO 8601 string with Prague timezone offset for JS countdown.
+		// DB stores TIMESTAMP WITHOUT TIME ZONE as Prague wall-clock (pgx v5 returns e.g. time.Time{16:20 UTC}).
+		// Reconstruct as real Prague time so JS countdown fires at the correct local moment.
 		"fmtISO": func(t *time.Time) string {
 			if t == nil {
 				return ""
 			}
-			return t.UTC().Format("2006-01-02T15:04:05") + "Z"
+			// t is Prague wall-clock labeled as UTC — rebuild with Prague location
+			prgTime := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), pragLoc)
+			return prgTime.Format(time.RFC3339)
 		},
 		// paginate vrátí slice stránek pro navigaci (čísla 1..total, -1 = "…")
 		"paginate": func(current, total int) []int {

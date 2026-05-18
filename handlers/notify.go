@@ -116,7 +116,10 @@ func sendMatchNotificationForID(matchID int) {
 	matchTime := "?"
 	isNight := false
 	if m.MatchDate != nil {
-		md := m.MatchDate.In(loc)
+		// m.MatchDate is Prague wall-clock labeled as UTC (pgx v5 TIMESTAMP WITHOUT TIME ZONE).
+		// Rebuild as real Prague time.
+		md := time.Date(m.MatchDate.Year(), m.MatchDate.Month(), m.MatchDate.Day(),
+			m.MatchDate.Hour(), m.MatchDate.Minute(), m.MatchDate.Second(), m.MatchDate.Nanosecond(), loc)
 		matchTime = md.Format("02.01. 15:04")
 		isNight = md.Hour() >= 22 || md.Hour() < 8
 	}
