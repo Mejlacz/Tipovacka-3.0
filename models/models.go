@@ -62,6 +62,7 @@ type Competition struct {
 	Name          string
 	Season        string
 	IsActive      bool
+	IsHidden      bool       // skrytá pro uživatele (testovací soutěž apod.)
 	Sport         string
 	SortOrder     *int
 	FdCode        string     // football-data.org kód pro auto-fetch výsledků (např. CL, PL)

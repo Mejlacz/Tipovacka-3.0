@@ -114,7 +114,7 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 		compRows, _ := db.Pool.Query(ctx,
 			`SELECT c.id, c.name, c.season, c.is_active, c.sport, c.sort_order
 			   FROM competitions c
-			  WHERE c.is_active = true
+			  WHERE c.is_active = true AND COALESCE(c.is_hidden,false)=false
 			  ORDER BY c.sort_order ASC NULLS LAST, c.id DESC`)
 		var competitions []*models.Competition
 		for compRows.Next() {
@@ -738,7 +738,7 @@ func MyRankAPI(tmpl *template.Template) http.HandlerFunc {
 		var compID int
 		var compName string
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id, name FROM competitions WHERE is_active=true ORDER BY COALESCE(sort_order,9999) ASC, id DESC LIMIT 1`).
+			`SELECT id, name FROM competitions WHERE is_active=true AND COALESCE(is_hidden,false)=false ORDER BY COALESCE(sort_order,9999) ASC, id DESC LIMIT 1`).
 			Scan(&compID, &compName)
 		if compID == 0 {
 			w.Write([]byte(`{}`))

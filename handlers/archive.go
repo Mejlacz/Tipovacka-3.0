@@ -23,7 +23,7 @@ func ArchiveIndex(tmpl *template.Template) http.HandlerFunc {
 		ctx := context.Background()
 
 		rows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions ORDER BY id DESC`)
+			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE COALESCE(is_hidden,false)=false ORDER BY id DESC`)
 		var all []*models.Competition
 		for rows.Next() {
 			c := &models.Competition{}

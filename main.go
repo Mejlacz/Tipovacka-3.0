@@ -45,6 +45,7 @@ func migrateSchema() {
 		`ALTER TABLE extra_questions ADD COLUMN IF NOT EXISTS answer_options TEXT`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_deadline TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_reveal_at TIMESTAMPTZ`,
+		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT false`,
 		`CREATE TABLE IF NOT EXISTS feedback (
 			id BIGSERIAL PRIMARY KEY,
 			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
