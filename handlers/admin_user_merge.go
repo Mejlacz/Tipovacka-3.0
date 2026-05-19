@@ -22,10 +22,6 @@ func AdminUserMergeForm(tmpl *template.Template) http.HandlerFunc {
 		if admin == nil {
 			return
 		}
-		if !admin.IsOwner {
-			http.Error(w, "403 Forbidden — jen pro Owner", http.StatusForbidden)
-			return
-		}
 		ctx := context.Background()
 
 		// Blokovaní a neaktivní uživatelé se do dropdownu nezahrnují
