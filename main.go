@@ -46,6 +46,7 @@ func migrateSchema() {
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_deadline TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_reveal_at TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT false`,
+		`CREATE TABLE IF NOT EXISTS app_config (key VARCHAR(100) PRIMARY KEY, value TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS feedback (
 			id BIGSERIAL PRIMARY KEY,
 			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -78,6 +79,9 @@ func main() {
 
 	// Migrate schema — add columns that might be missing in older DBs
 	migrateSchema()
+
+	// Načti manuální TZ offset override z DB (nastavuje owner na /admin/time)
+	handlers.LoadTZOverrideFromDB()
 
 	// Detect which optional columns exist in the users table at runtime
 	handlers.InitUserSchema()
@@ -362,6 +366,10 @@ func main() {
 	// User merge
 	r.Get("/admin/users/merge", handlers.AdminUserMergeForm(tmpl))
 	r.Post("/admin/users/merge", handlers.AdminUserMerge)
+
+	// Time diagnostics
+	r.Get("/admin/time", handlers.AdminTimeDiag(tmpl))
+	r.Post("/admin/time/offset", handlers.AdminTimeSetOffset)
 
 	// User import
 	r.Get("/admin/users/import", handlers.AdminUserImportForm(tmpl))

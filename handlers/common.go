@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tipovacka/config"
@@ -17,6 +18,28 @@ import (
 	"tipovacka/middleware"
 	"tipovacka/models"
 )
+
+// ─── TZ override ─────────────────────────────────────────────────────────────
+
+var (
+	tzOverrideMu      sync.RWMutex
+	tzOverrideMinutes *int // nil = auto (Europe/Prague), jinak offset od UTC v minutách
+)
+
+// SetTZOffsetOverride nastaví manuální UTC offset (v minutách).
+// nil = vypne override, použije se Europe/Prague location.
+func SetTZOffsetOverride(minutes *int) {
+	tzOverrideMu.Lock()
+	defer tzOverrideMu.Unlock()
+	tzOverrideMinutes = minutes
+}
+
+// GetTZOffsetOverride vrátí aktuální override (pro zobrazení na admin/time stránce).
+func GetTZOffsetOverride() *int {
+	tzOverrideMu.RLock()
+	defer tzOverrideMu.RUnlock()
+	return tzOverrideMinutes
+}
 
 // ─── Schema detection ────────────────────────────────────────────────────────
 
@@ -346,9 +369,19 @@ func init() {
 
 // NowPrague vrátí aktuální pražský čas jako naive timestamp (UTC location,
 // Praha wall-clock hodnoty). DB ukládá match_date jako TIMESTAMP WITHOUT TIME ZONE —
-// pgx vrátí "21:00" jako time.Time{21:00 UTC}. Pro správné porovnání musí mít
+// pgx vrátí "16:20" jako time.Time{16:20 UTC}. Pro správné porovnání musí mít
 // "teď" stejný formát: Praha wall-clock hodnoty s UTC location.
+// Pokud je nastaven tzOverrideMinutes (owner na /admin/time), použije se ten offset
+// místo automatického Europe/Prague (záchrana při chybě timezone dat).
 func NowPrague() time.Time {
+	tzOverrideMu.RLock()
+	override := tzOverrideMinutes
+	tzOverrideMu.RUnlock()
+	if override != nil {
+		adjusted := time.Now().UTC().Add(time.Duration(*override) * time.Minute)
+		return time.Date(adjusted.Year(), adjusted.Month(), adjusted.Day(),
+			adjusted.Hour(), adjusted.Minute(), adjusted.Second(), adjusted.Nanosecond(), time.UTC)
+	}
 	t := time.Now().In(pragueLocation)
 	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
 }
