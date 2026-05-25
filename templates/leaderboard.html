@@ -522,15 +522,36 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // ── Match delete (admin) ──
+    function confirmMatchDelete(label, onConfirm) {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center';
+        overlay.innerHTML = '<div style="background:var(--bg2);border:2px solid #ef4444;border-radius:12px;padding:1.3rem 1.5rem;max-width:340px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,0.6)">'
+            + '<div style="font-weight:700;color:#ef4444;margin-bottom:0.5rem;font-size:1rem">🗑 Smazat zápas</div>'
+            + '<div style="font-size:0.9rem;color:var(--text-d);margin-bottom:0.5rem"><strong>' + label + '</strong></div>'
+            + '<div style="font-size:0.82rem;color:var(--muted-d);margin-bottom:1rem">Tato akce je nevratná — smaže se zápas i <strong style="color:#ef4444">všechny tipy</strong> k němu.</div>'
+            + '<div style="display:flex;gap:0.5rem;justify-content:flex-end">'
+            + '<button id="_md_cancel" style="padding:0.4rem 1rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);cursor:pointer;font-size:0.88rem">Zrušit</button>'
+            + '<button id="_md_ok" style="padding:0.4rem 1rem;border-radius:6px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:0.88rem">Smazat zápas</button>'
+            + '</div></div>';
+        document.body.appendChild(overlay);
+        function doClose() { document.body.removeChild(overlay); }
+        overlay.querySelector('#_md_ok').addEventListener('click', function() { doClose(); onConfirm(); });
+        overlay.querySelector('#_md_cancel').addEventListener('click', doClose);
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) doClose(); });
+        overlay.addEventListener('keydown', function(e) { if (e.key === 'Escape') doClose(); });
+        overlay.querySelector('#_md_cancel').focus();
+    }
+
     table.querySelectorAll('.match-delete-btn').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             var matchId = btn.dataset.matchId, label = btn.dataset.label;
-            if (!confirm('Zrušit zápas: ' + label + '?\n\nSmaže se zápas i všechny tipy k němu.')) return;
-            fetch('/admin/matches/' + matchId + '/delete', { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} })
-                .then(function(r) { return r.json(); })
-                .then(function(data) { if (data.ok) location.reload(); else alert('Chyba: ' + (data.error || 'neznámá')); })
-                .catch(function() { alert('Chyba spojení.'); });
+            confirmMatchDelete(label, function() {
+                fetch('/admin/matches/' + matchId + '/delete', { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) { if (data.ok) location.reload(); else alert('Chyba: ' + (data.error || 'neznámá')); })
+                    .catch(function() { alert('Chyba spojení.'); });
+            });
         });
     });
 
