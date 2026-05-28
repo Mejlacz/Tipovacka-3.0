@@ -116,14 +116,14 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 			hiddenCond = ""
 		}
 		compRows, _ := db.Pool.Query(ctx,
-			`SELECT c.id, c.name, c.season, c.is_active, c.sport, c.sort_order
+			`SELECT c.id, c.name, c.season, c.is_active, c.sport, c.sort_order, COALESCE(c.is_hidden,false)
 			   FROM competitions c
 			  WHERE c.is_active = true `+hiddenCond+`
 			  ORDER BY c.sort_order ASC NULLS LAST, c.id DESC`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}
-			_ = compRows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.Sport, &c.SortOrder)
+			_ = compRows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.Sport, &c.SortOrder, &c.IsHidden)
 			competitions = append(competitions, c)
 		}
 		compRows.Close()
