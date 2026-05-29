@@ -858,16 +858,18 @@ func AdminExtraDeadlineSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// extra_reveal_at — prázdné = auto (shodné s deadline)
-	revealStr := strings.TrimSpace(r.FormValue("extra_reveal_at"))
+	// extra_reveal_at — "reveal_now=1" = ihned, jinak datetime-local vstup, prázdné = NULL
 	var revealPtr *time.Time
-	if revealStr == "now" {
+	if r.FormValue("reveal_now") == "1" {
 		now := time.Now()
 		revealPtr = &now
-	} else if revealStr != "" {
-		t, err := time.ParseInLocation("2006-01-02T15:04", revealStr, time.Local)
-		if err == nil {
-			revealPtr = &t
+	} else {
+		revealStr := strings.TrimSpace(r.FormValue("extra_reveal_at"))
+		if revealStr != "" {
+			t, err := time.ParseInLocation("2006-01-02T15:04", revealStr, time.Local)
+			if err == nil {
+				revealPtr = &t
+			}
 		}
 	}
 
