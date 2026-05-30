@@ -91,6 +91,15 @@ var histActionIcon = map[string]string{
 	"scheduler":              "⏰",
 }
 
+// histCatActions mapuje kategorii → slice akcí (sdíleno mezi History a AuditLog).
+var histCatActions = map[string][]string{
+	"tipy":      {"tip_save", "extra_save", "admin_set_tip", "admin_set_extra_answer"},
+	"zapasy":    {"match_score", "match_score_clear", "match_create", "match_add_quick", "match_edit", "match_delete", "match_date_change", "auto_fetch_results", "api_update_results"},
+	"kola":      {"round_create", "round_edit", "round_delete", "round_toggle"},
+	"uzivatele": {"user_create", "user_role", "user_delete", "user_approve", "user_block", "user_unblock", "user_toggle_admin", "user_toggle_owner", "user_inactive", "user_import", "merge_user"},
+	"tymy":      {"team_merge", "team_delete"},
+}
+
 // GET /admin/history
 func AdminHistory(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -140,24 +149,16 @@ func AdminHistory(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		// ── Filtr pro SQL ──────────────────────────────────────────────────
-		catActions := map[string][]string{
-			"tipy":      {"tip_save", "extra_save", "admin_set_tip", "admin_set_extra_answer"},
-			"zapasy":    {"match_score", "match_score_clear", "match_create", "match_add_quick", "match_edit", "match_delete", "match_date_change", "auto_fetch_results", "api_update_results"},
-			"kola":      {"round_create", "round_edit", "round_delete", "round_toggle"},
-			"uzivatele": {"user_create", "user_role", "user_delete", "user_approve", "user_block", "user_unblock", "user_toggle_admin", "user_toggle_owner", "user_inactive", "user_import", "merge_user"},
-			"tymy":      {"team_merge", "team_delete"},
-		}
-
 		var whereSQL string
 		var queryArgs []interface{}
 		if cat != "" {
-			if actions, ok := catActions[cat]; ok {
+			if actions, ok := histCatActions[cat]; ok {
 				whereSQL = ` WHERE action = ANY($1)`
 				queryArgs = append(queryArgs, actions)
 			} else if cat == "system" {
 				// system = vše co není v ostatních kategoriích
 				var allKnown []string
-				for _, acts := range catActions {
+				for _, acts := range histCatActions {
 					allKnown = append(allKnown, acts...)
 				}
 				whereSQL = ` WHERE action != ALL($1)`
@@ -248,28 +249,90 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		if page < 1 {
 			page = 1
 		}
-		offset := (page - 1) * perPage
+		cat := r.URL.Query().Get("cat")
 
-		// Non-Owner admins nevidí přesné tipy uživatelů
-		whereClause := ""
-		if !admin.IsOwner {
-			whereClause = ` WHERE action NOT IN ('tip_save','extra_save')`
+		// ── Počty per kategorie ────────────────────────────────────────────
+		type CatCount struct {
+			Cat   string
+			Label string
+			Count int
+		}
+		catRows, _ := db.Pool.Query(ctx, `SELECT action, COUNT(*) FROM audit_log GROUP BY action`)
+		rawCounts := map[string]int{}
+		for catRows.Next() {
+			var act string
+			var cnt int
+			_ = catRows.Scan(&act, &cnt)
+			rawCounts[act] += cnt
+		}
+		catRows.Close()
+		catTotals := map[string]int{}
+		totalAll := 0
+		for act, cnt := range rawCounts {
+			c := historyCategory(act)
+			catTotals[c] += cnt
+			totalAll += cnt
+		}
+		catOrder := []string{"tipy", "zapasy", "kola", "uzivatele", "tymy", "system"}
+		var catCounts []CatCount
+		for _, c := range catOrder {
+			catCounts = append(catCounts, CatCount{Cat: c, Label: histCategoryLabel[c], Count: catTotals[c]})
 		}
 
-		// Celkový počet záznamů pro stránkování
+		// ── WHERE clause: role + kategorie ────────────────────────────────
+		var conditions []string
+		var queryArgs []interface{}
+
+		// Non-Owner admins nevidí přesné tipy uživatelů
+		if !admin.IsOwner {
+			conditions = append(conditions, `action NOT IN ('tip_save','extra_save')`)
+		}
+
+		if cat != "" {
+			if actions, ok := histCatActions[cat]; ok {
+				queryArgs = append(queryArgs, actions)
+				conditions = append(conditions, `action = ANY($`+strconv.Itoa(len(queryArgs))+`)`)
+			} else if cat == "system" {
+				var allKnown []string
+				for _, acts := range histCatActions {
+					allKnown = append(allKnown, acts...)
+				}
+				queryArgs = append(queryArgs, allKnown)
+				conditions = append(conditions, `action != ALL($`+strconv.Itoa(len(queryArgs))+`)`)
+			}
+		}
+
+		whereClause := ""
+		for i, c := range conditions {
+			if i == 0 {
+				whereClause = " WHERE " + c
+			} else {
+				whereClause += " AND " + c
+			}
+		}
+
+		// Celkový počet pro stránkování
 		var totalCount int
-		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM audit_log`+whereClause).Scan(&totalCount)
+		countArgs := make([]interface{}, len(queryArgs))
+		copy(countArgs, queryArgs)
+		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM audit_log`+whereClause, countArgs...).Scan(&totalCount)
 		totalPages := (totalCount + perPage - 1) / perPage
 		if totalPages < 1 {
 			totalPages = 1
 		}
+		offset := (page - 1) * perPage
 
+		// Hlavní dotaz
+		mainArgs := make([]interface{}, len(queryArgs))
+		copy(mainArgs, queryArgs)
+		mainArgs = append(mainArgs, perPage, offset)
 		auditQuery := `SELECT id, timestamp, admin_id, admin_username, action, entity_type, entity_id,
 			        description, old_value, new_value, undone
 			   FROM audit_log` + whereClause +
-			` ORDER BY id DESC LIMIT $1 OFFSET $2`
+			` ORDER BY id DESC LIMIT $` + strconv.Itoa(len(mainArgs)-1) +
+			` OFFSET $` + strconv.Itoa(len(mainArgs))
 
-		rows, _ := db.Pool.Query(ctx, auditQuery, perPage, offset)
+		rows, _ := db.Pool.Query(ctx, auditQuery, mainArgs...)
 		var entries []*models.AuditLog
 		for rows.Next() {
 			e := &models.AuditLog{}
@@ -304,6 +367,9 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 			"Page":            page,
 			"TotalPages":      totalPages,
 			"TotalCount":      totalCount,
+			"TotalAll":        totalAll,
+			"CatCounts":       catCounts,
+			"SelectedCat":     cat,
 		})
 	}
 }
