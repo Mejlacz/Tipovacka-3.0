@@ -265,6 +265,7 @@ func main() {
 	r.Post("/admin/competitions/{competition_id}/extra-notify", handlers.AdminExtraNotifyNow)
 	r.Post("/admin/matches/{match_id}/set-tip", handlers.AdminSetTip)
 	r.Post("/admin/tips/set-ajax", handlers.AdminSetTip) // alias (Python URL)
+	r.Post("/admin/competitions/{competition_id}/users/{user_id}/remove-tips", handlers.AdminRemoveUserTips)
 	r.Get("/admin/unscored", handlers.AdminUnscored(tmpl))
 	r.Get("/admin/unscored-count", handlers.AdminUnscoredCount)
 	r.Get("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsForm(tmpl))

@@ -450,6 +450,51 @@ func AdminSetTip(w http.ResponseWriter, r *http.Request) {
 		`,"scored":` + strconv.FormatBool(scored) + `,"pts":` + ptsJSON + `}`))
 }
 
+// POST /admin/competitions/{competition_id}/users/{user_id}/remove-tips (AJAX)
+// Smaže všechny tipy uživatele v dané soutěži → uživatel zmizí ze žebříčku.
+func AdminRemoveUserTips(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	compID, _ := strconv.Atoi(r.PathValue("competition_id"))
+	userID, _ := strconv.Atoi(r.PathValue("user_id"))
+	if compID == 0 || userID == 0 {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	ctx := context.Background()
+
+	// Ověř že uživatel existuje
+	var username string
+	if err := db.Pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, userID).Scan(&username); err != nil {
+		jsonError(w, "user_not_found", http.StatusNotFound)
+		return
+	}
+
+	// Smaž všechny tipy tohoto uživatele ve všech zápasech dané soutěže
+	res, err := db.Pool.Exec(ctx, `
+		DELETE FROM tips
+		WHERE user_id=$1
+		  AND match_id IN (
+		      SELECT m.id FROM matches m
+		      JOIN rounds r ON r.id = m.round_id
+		      WHERE r.competition_id=$2
+		  )`, userID, compID)
+	if err != nil {
+		jsonError(w, "db_error", http.StatusInternalServerError)
+		return
+	}
+	deleted := res.RowsAffected()
+
+	desc := "Smazány tipy uživatele " + username + " v soutěži ID " + strconv.Itoa(compID) + " (" + strconv.Itoa(int(deleted)) + " tipů)"
+	LogAction(&admin.ID, admin.Username, "user_tips_delete", "user", &userID, desc, nil, nil)
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"ok":true,"deleted":` + strconv.Itoa(int(deleted)) + `}`))
+}
+
 // GET /admin/unscored
 func AdminUnscored(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
