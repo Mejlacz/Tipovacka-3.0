@@ -471,6 +471,25 @@ func templateFuncs() template.FuncMap {
 		"add":      func(a, b int) int { return a + b },
 		"sub":      func(a, b int) int { return a - b },
 		"mul":      func(a, b int) int { return a * b },
+		"abs":      func(a int) int { if a < 0 { return -a }; return a },
+		// seq generates []int{from, from+1, ..., to}
+		"seq": func(from, to int) []int {
+			if to < from {
+				return nil
+			}
+			s := make([]int, to-from+1)
+			for i := range s {
+				s[i] = from + i
+			}
+			return s
+		},
+		// derefStr safely dereferences *string
+		"derefStr": func(p *string) string {
+			if p == nil {
+				return ""
+			}
+			return *p
+		},
 		// intVal dereferences *int safely; returns 0 if nil
 		"intVal": func(p *int) int {
 			if p == nil {

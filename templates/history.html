@@ -1,31 +1,137 @@
+<style>
+.hist-tabs { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:1.25rem }
+.hist-tab { display:inline-flex; align-items:center; gap:.35rem; padding:.35rem .75rem; border-radius:20px;
+            border:1px solid var(--border-d); background:var(--bg2); color:var(--muted-d);
+            font-size:.8rem; font-weight:600; text-decoration:none; white-space:nowrap; transition:all .15s }
+.hist-tab:hover { border-color:var(--accent); color:var(--accent) }
+.hist-tab.active { background:var(--accent); border-color:var(--accent); color:#fff }
+.hist-tab .cnt { font-size:.72rem; opacity:.75 }
+.hist-table { width:100%; border-collapse:collapse; font-size:.83rem }
+.hist-table th { padding:.45rem .6rem; text-align:left; font-size:.75rem; font-weight:700;
+                 text-transform:uppercase; letter-spacing:.05em; color:var(--muted-d);
+                 border-bottom:1px solid var(--border-d); white-space:nowrap }
+.hist-table td { padding:.4rem .6rem; border-bottom:1px solid rgba(255,255,255,.05); vertical-align:top }
+.hist-table tr:hover td { background:rgba(255,255,255,.03) }
+.hist-cat { display:inline-block; padding:.1rem .45rem; border-radius:4px; font-size:.72rem; font-weight:700; white-space:nowrap }
+.cat-tipy      { background:rgba(52,211,153,.15); color:#34d399 }
+.cat-zapasy    { background:rgba(59,130,246,.15); color:#60a5fa }
+.cat-kola      { background:rgba(251,191,36,.15); color:#fbbf24 }
+.cat-uzivatele { background:rgba(167,139,250,.15); color:#a78bfa }
+.cat-tymy      { background:rgba(251,146,60,.15); color:#fb923c }
+.cat-system    { background:rgba(156,163,175,.12); color:#9ca3af }
+.hist-undone { opacity:.45; text-decoration:line-through }
+.hist-val { font-family:monospace; font-size:.78rem; color:var(--muted-d);
+            background:var(--bg3); padding:.1rem .35rem; border-radius:3px;
+            max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+            display:inline-block; vertical-align:middle }
+.hist-arrow { color:var(--muted-d); margin:0 .2rem }
+.pager { display:flex; gap:.35rem; align-items:center; justify-content:center; margin-top:1.25rem; flex-wrap:wrap }
+.pager a, .pager span { padding:.3rem .65rem; border-radius:6px; border:1px solid var(--border-d);
+                         font-size:.82rem; text-decoration:none; color:var(--text-d) }
+.pager a:hover { border-color:var(--accent); color:var(--accent) }
+.pager .cur { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700 }
+.pager .disabled { opacity:.35; pointer-events:none }
+</style>
+
 <div class="page-header">
-    <h1>📜 Historie tipů</h1>
+    <h1>📜 Historie změn</h1>
     <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
 </div>
 
+{{/* ── Kategorie tabs ── */}}
+<div class="hist-tabs">
+    <a href="/admin/history" class="hist-tab {{if eq .SelectedCat ""}}active{{end}}">
+        Vše <span class="cnt">({{.TotalAll}})</span>
+    </a>
+    {{range .CatCounts}}
+    <a href="/admin/history?cat={{.Cat}}" class="hist-tab {{if eq $.SelectedCat .Cat}}active{{end}}">
+        {{.Label}} <span class="cnt">({{.Count}})</span>
+    </a>
+    {{end}}
+</div>
+
+{{/* ── Info řádek ── */}}
+<div style="font-size:.8rem;color:var(--muted-d);margin-bottom:.75rem">
+    {{if .SelectedCat}}Filtr: <strong>{{range .CatCounts}}{{if eq .Cat $.SelectedCat}}{{.Label}}{{end}}{{end}}</strong> · {{end}}
+    Celkem záznamů: <strong>{{.TotalCount}}</strong>
+    {{if gt .TotalPages 1}} · Stránka <strong>{{.Page}}</strong> / {{.TotalPages}}{{end}}
+</div>
+
+{{/* ── Tabulka ── */}}
+{{if .Entries}}
 <div style="overflow-x:auto">
-<table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+<table class="hist-table">
     <thead>
-        <tr style="background:var(--bg2)">
-            <th style="padding:.4rem .5rem;text-align:left">Čas</th>
-            <th style="padding:.4rem .5rem;text-align:left">Uživatel</th>
-            <th style="padding:.4rem .5rem;text-align:left">Akce</th>
-            <th style="padding:.4rem .5rem;text-align:left">Detail</th>
+        <tr>
+            <th style="width:120px">Čas</th>
+            <th style="width:110px">Uživatel</th>
+            <th style="width:100px">Kategorie</th>
+            <th style="width:130px">Akce</th>
+            <th>Popis</th>
+            <th style="width:260px">Změna</th>
         </tr>
     </thead>
     <tbody>
-    {{range .Events}}
-    <tr>
-        <td style="padding:.3rem .5rem;white-space:nowrap;color:var(--muted-d);font-size:.75rem">
-            {{if .TS}}{{.TS.Format "02.01. 15:04"}}{{else}}—{{end}}
+    {{range .Entries}}
+    <tr {{if .Undone}}class="hist-undone"{{end}}>
+        <td style="white-space:nowrap;color:var(--muted-d);font-size:.77rem">
+            {{if .TS}}{{.TS.Format "02.01.2006"}} <span style="opacity:.6">{{.TS.Format "15:04"}}</span>{{else}}—{{end}}
         </td>
-        <td style="padding:.3rem .5rem;font-weight:600">{{.User}}</td>
-        <td style="padding:.3rem .5rem">
-            <span style="font-size:.78rem">{{.Icon}} {{.Kind}}</span>
+        <td style="font-weight:600;white-space:nowrap;overflow:hidden;max-width:110px;text-overflow:ellipsis"
+            title="{{.User}}">{{.User}}</td>
+        <td>
+            <span class="hist-cat cat-{{.Category}}">{{.CatLabel}}</span>
         </td>
-        <td style="padding:.3rem .5rem;color:var(--muted-d);font-size:.8rem">{{.Text}}</td>
+        <td style="color:var(--muted-d);font-size:.77rem;white-space:nowrap">
+            {{.Icon}} {{.Action}}
+            {{if .Undone}}<span style="color:#f59e0b;font-size:.7rem"> ↩ undo</span>{{end}}
+        </td>
+        <td style="color:var(--text-d)">{{.Description}}</td>
+        <td>
+            {{if or .OldValue .NewValue}}
+            {{if .OldValue}}<span class="hist-val" title="{{derefStr .OldValue}}">{{truncate (derefStr .OldValue) 22}}</span>{{end}}
+            {{if and .OldValue .NewValue}}<span class="hist-arrow">→</span>{{end}}
+            {{if .NewValue}}<span class="hist-val" style="color:#a7f3d0" title="{{derefStr .NewValue}}">{{truncate (derefStr .NewValue) 22}}</span>{{end}}
+            {{end}}
+        </td>
     </tr>
     {{end}}
     </tbody>
 </table>
 </div>
+
+{{/* ── Stránkování ── */}}
+{{if gt .TotalPages 1}}
+<div class="pager">
+    {{if gt .Page 1}}
+    <a href="/admin/history?cat={{.SelectedCat}}&page={{add .Page -1}}">‹ Předchozí</a>
+    {{else}}
+    <span class="disabled">‹ Předchozí</span>
+    {{end}}
+
+    {{$cur := .Page}}
+    {{$total := .TotalPages}}
+    {{$cat := .SelectedCat}}
+    {{range $i := seq 1 $total}}
+        {{if or (le (abs (sub $i $cur)) 2) (eq $i 1) (eq $i $total)}}
+            {{if eq $i $cur}}
+            <span class="cur">{{$i}}</span>
+            {{else}}
+            <a href="/admin/history?cat={{$cat}}&page={{$i}}">{{$i}}</a>
+            {{end}}
+        {{else if or (eq $i (add $cur 3)) (eq $i (sub $cur 3))}}
+            <span style="opacity:.4">…</span>
+        {{end}}
+    {{end}}
+
+    {{if lt .Page .TotalPages}}
+    <a href="/admin/history?cat={{.SelectedCat}}&page={{add .Page 1}}">Další ›</a>
+    {{else}}
+    <span class="disabled">Další ›</span>
+    {{end}}
+</div>
+{{end}}
+
+{{else}}
+<p class="empty" style="margin-top:2rem">Žádné záznamy{{if .SelectedCat}} v této kategorii{{end}}.</p>
+{{end}}
