@@ -246,7 +246,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            if (!confirm('Nastavit "' + answerText + '" jako správnou odpověď (' + pts + ' b)?\n\nOstatní skupiny dostanou 0 b.')) return;
+            var correctInp = document.getElementById(correctInpId);
+            var existing = correctInp ? correctInp.value.trim() : '';
+            var msg = existing
+                ? 'Přidat "' + answerText + '" jako další variantu správné odpovědi (' + pts + ' b)?\n\nStávající: ' + existing + '\nNová varianta bude přidána za |.\n\nOstatní skupiny (bez jakékoli správné odpovědi) dostanou 0 b.'
+                : 'Nastavit "' + answerText + '" jako správnou odpověď (' + pts + ' b)?\n\nOstatní skupiny dostanou 0 b.';
+            if (!confirm(msg)) return;
 
             btn.disabled = true;
             btn.textContent = '⏳';

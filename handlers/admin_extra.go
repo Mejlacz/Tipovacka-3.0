@@ -1279,9 +1279,26 @@ func AdminExtraSetCorrectGroup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Nastav správnou odpověď (replace)
+	// Nastav správnou odpověď — přidej jako variantu (nenahrazuj stávající)
+	newCorrect := answerText
+	if curCorrect != nil && strings.TrimSpace(*curCorrect) != "" {
+		// Zkontroluj jestli varianta už existuje
+		already := false
+		normNew := strings.ToLower(strings.TrimSpace(answerText))
+		for _, v := range strings.Split(*curCorrect, "|") {
+			if strings.ToLower(strings.TrimSpace(v)) == normNew {
+				already = true
+				break
+			}
+		}
+		if !already {
+			newCorrect = *curCorrect + "|" + answerText
+		} else {
+			newCorrect = *curCorrect // beze změny
+		}
+	}
 	_, _ = db.Pool.Exec(ctx,
-		`UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, answerText, qID)
+		`UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, newCorrect, qID)
 
 	// Přiřaď body správné skupině, ostatním nastav 0
 	res, _ := db.Pool.Exec(ctx,
