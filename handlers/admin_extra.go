@@ -1283,12 +1283,18 @@ func AdminExtraSetCorrectGroup(w http.ResponseWriter, r *http.Request) {
 	_, _ = db.Pool.Exec(ctx,
 		`UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, answerText, qID)
 
-	// Přiřaď body všem odpovědím v této skupině
+	// Přiřaď body správné skupině, ostatním nastav 0
 	res, _ := db.Pool.Exec(ctx,
 		`UPDATE extra_answers SET points=$1
 		  WHERE question_id=$2 AND LOWER(TRIM(answer)) = LOWER(TRIM($3))`,
 		pts, qID, answerText)
 	count := res.RowsAffected()
+
+	// Ostatní odpovědi → 0 bodů
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_answers SET points=0
+		  WHERE question_id=$1 AND LOWER(TRIM(answer)) != LOWER(TRIM($2))`,
+		qID, answerText)
 
 	go RecalculateStandings(compID)
 

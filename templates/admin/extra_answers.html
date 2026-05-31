@@ -7,8 +7,11 @@
     </div>
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
       {{if .Questions}}
-      <form method="post" action="/admin/extra/{{.Comp.ID}}/auto-evaluate" style="display:inline">
-        <button type="submit" class="btn btn-primary" style="font-size:0.85rem">🎯 Vyhodnotit vše</button>
+      <form method="post" action="/admin/extra/{{.Comp.ID}}/auto-evaluate" style="display:inline"
+            onsubmit="return confirm('Vyhodnotit všechny otázky najednou dle nastavených správných odpovědí?')">
+        <button type="submit" class="btn btn-primary" style="font-size:0.85rem;background:#059669;border-color:#059669">
+          🎯 Vyhodnotit vše
+        </button>
       </form>
       {{end}}
       <a href="/admin/extra/{{.Comp.ID}}/export" class="btn btn-secondary"
@@ -120,12 +123,6 @@
           {{end}}
         </div>
         <div style="display:flex;gap:.3rem;flex-wrap:wrap">
-          {{if $q.CorrectAnswer}}
-          <form method="post" action="/admin/extra/{{$.Comp.ID}}/auto-evaluate?q={{$q.ID}}" style="margin:0">
-            <button type="submit" class="btn btn-sm btn-primary" style="font-size:.76rem"
-                    title="Správná odpověď: {{strVal $q.CorrectAnswer}}">🎯 Vyhodnotit</button>
-          </form>
-          {{end}}
           <form method="post" action="/admin/extra/questions/{{$q.ID}}/toggle-close" style="margin:0">
             <button type="submit" class="btn btn-sm btn-secondary" style="font-size:.76rem">
               {{if $q.IsClosed}}🔓 Otevřít{{else}}🔒 Uzavřít{{end}}
@@ -138,33 +135,27 @@
         </div>
       </div>
 
-      {{/* ── Správná odpověď ── */}}
+      {{/* ── Správná odpověď + body ── */}}
       <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.9rem;flex-wrap:wrap">
         <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">✓ Správná odpověď:</label>
         <input type="text" name="correct_{{$q.ID}}" id="correct_{{$q.ID}}"
                value="{{strVal $q.CorrectAnswer}}"
-               placeholder="např. McDavid  (více variant oddělit |)"
-               style="flex:1;min-width:200px;max-width:340px;font-size:.85rem;padding:.35rem .6rem;
+               placeholder="vyberte kliknutím nebo napište ručně"
+               style="flex:1;min-width:180px;max-width:300px;font-size:.85rem;padding:.35rem .6rem;
                       background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:var(--text-d)">
-        <span style="font-size:.75rem;color:var(--muted-d)">více variant: <code>McDavid|David McDavid</code></span>
+        <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">Body:</label>
+        <input type="number" id="body_{{$q.ID}}"
+               value="{{$q.MaxPoints}}"
+               min="0" max="{{$q.MaxPoints}}"
+               style="width:68px;text-align:center;font-size:.85rem;padding:.35rem .4rem;
+                      background:var(--bg3);border:1px solid var(--accent);border-radius:6px;color:var(--text-d)">
+        <span style="font-size:.75rem;color:var(--muted-d)">více variant: <code style="background:var(--bg3);padding:0 3px;border-radius:3px">Barcelona|FC Barcelona</code></span>
       </div>
 
       {{/* ── Tabulka skupin ── */}}
       {{if not $answers}}
         <p style="color:var(--muted-d);font-style:italic;font-size:.85rem">Zatím žádné odpovědi.</p>
       {{else}}
-
-      {{/* Skryté jednotlivé inputs (submit hodnoty) */}}
-      <div style="display:none">
-        {{range $answers}}
-        <input type="number" name="pts_{{.Answer.ID}}"
-               id="pts_{{.Answer.ID}}"
-               data-group="{{.Answer.Answer | printf "%s"}}"
-               value="{{if .Answer.Points}}{{intVal .Answer.Points}}{{end}}"
-               min="0" max="{{$q.MaxPoints}}">
-        {{end}}
-      </div>
-
       <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:.85rem">
         <thead>
@@ -172,8 +163,7 @@
             <th style="padding:.4rem .5rem;text-align:left;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d)">Odpověď</th>
             <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:60px">Počet</th>
             <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:80px">Shoda</th>
-            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:110px">Body (0–{{$q.MaxPoints}})</th>
-            <th style="padding:.4rem .5rem;width:140px"></th>
+            <th style="padding:.4rem .5rem;width:120px"></th>
           </tr>
         </thead>
         <tbody>
@@ -191,50 +181,30 @@
             </div>
             {{end}}
           </td>
-          <td style="padding:.4rem .5rem;text-align:center;font-weight:700;color:var(--muted-d)">
-            {{.Count}}
-          </td>
+          <td style="padding:.4rem .5rem;text-align:center;font-weight:700;color:var(--muted-d)">{{.Count}}</td>
           <td style="padding:.4rem .5rem;text-align:center;font-size:.82rem">
             {{if .IsMatch}}
-              <span style="color:#34d399" title="Přesná shoda">✅</span>
+              <span style="color:#34d399" title="Přesná shoda se správnou odpovědí">✅</span>
             {{else if .IsSimilar}}
-              <span style="color:#fbbf24" title="Podobná (vzdálenost {{.SimilarDist}})">≈{{.SimilarDist}}</span>
+              <span style="color:#fbbf24" title="Podobná odpověď (Levenshtein vzdálenost {{.SimilarDist}})">≈{{.SimilarDist}}</span>
             {{else}}
               <span style="color:var(--muted-d)">—</span>
             {{end}}
           </td>
-          <td style="padding:.4rem .5rem;text-align:center">
-            <input type="number"
-                   class="grp-pts-input"
-                   data-norm="{{.NormText}}"
-                   data-max="{{$q.MaxPoints}}"
-                   value="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
-                   min="0" max="{{$q.MaxPoints}}"
-                   style="width:72px;text-align:center;padding:.28rem .4rem;
-                          border:1px solid {{if .AllEval}}rgba(52,211,153,.4){{else}}var(--border-d){{end}};
-                          background:var(--bg3);color:var(--text-d);border-radius:4px;font-size:.88rem"
-                   placeholder="—">
-          </td>
-          <td style="padding:.4rem .5rem">
-            <div style="display:flex;gap:.3rem;justify-content:flex-end">
-              <button type="button" class="btn-max"
-                      data-norm="{{.NormText}}" data-max="{{$q.MaxPoints}}"
-                      style="padding:.25rem .5rem;border-radius:5px;border:1px solid var(--border-d);
-                             background:var(--bg3);color:var(--muted-d);cursor:pointer;font-size:.75rem;white-space:nowrap"
-                      title="Přiřadit max bodů ({{$q.MaxPoints}}) celé skupině">
-                Max ✓
-              </button>
-              <button type="button" class="btn-set-correct"
-                      data-q-id="{{$q.ID}}"
-                      data-answer="{{.Text}}"
-                      data-max="{{$q.MaxPoints}}"
-                      data-correct-input="correct_{{$q.ID}}"
-                      style="padding:.25rem .5rem;border-radius:5px;border:1px solid rgba(99,102,241,.4);
-                             background:rgba(99,102,241,.1);color:#818cf8;cursor:pointer;font-size:.75rem;white-space:nowrap"
-                      title="Nastavit jako správnou odpověď a přiřadit max bodů">
-                ✓ Správná
-              </button>
-            </div>
+          <td style="padding:.35rem .5rem;text-align:right">
+            {{if not .IsMatch}}
+            <button type="button" class="btn-set-correct"
+                    data-q-id="{{$q.ID}}"
+                    data-answer="{{.Text}}"
+                    data-body-input="body_{{$q.ID}}"
+                    data-correct-input="correct_{{$q.ID}}"
+                    style="padding:.25rem .6rem;border-radius:5px;border:1px solid rgba(99,102,241,.4);
+                           background:rgba(99,102,241,.1);color:#818cf8;cursor:pointer;font-size:.75rem;white-space:nowrap">
+              ✓ Správná
+            </button>
+            {{else}}
+            <span style="font-size:.75rem;color:#34d399;font-weight:700">✅ označena</span>
+            {{end}}
           </td>
         </tr>
         {{end}}
@@ -247,7 +217,7 @@
     {{end}}
 
     <div style="padding:.5rem 0 1.5rem">
-      <button type="submit" class="btn btn-primary">💾 Uložit bodování</button>
+      <button type="submit" class="btn btn-primary">💾 Uložit správné odpovědi</button>
     </div>
 
   </form>
@@ -260,44 +230,23 @@ var _extraCsrf = '{{.CSRFToken}}';
 
 document.addEventListener('DOMContentLoaded', function() {
 
-    // ── Sync group input → hidden individual inputs ──────────────────────────
-    function syncGroup(normText, value) {
-        document.querySelectorAll('#extra-eval-form input[name^="pts_"]').forEach(function(inp) {
-            var grpNorm = inp.dataset.group ? inp.dataset.group.trim().toLowerCase() : '';
-            if (grpNorm === normText) {
-                inp.value = value;
-            }
-        });
-    }
-
-    document.querySelectorAll('.grp-pts-input').forEach(function(inp) {
-        inp.addEventListener('input', function() {
-            syncGroup(inp.dataset.norm, inp.value);
-        });
-    });
-
-    // ── Max button ───────────────────────────────────────────────────────────
-    document.querySelectorAll('.btn-max').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var norm = btn.dataset.norm;
-            var max  = btn.dataset.max;
-            // Update group visible input
-            document.querySelectorAll('.grp-pts-input').forEach(function(inp) {
-                if (inp.dataset.norm === norm) inp.value = max;
-            });
-            syncGroup(norm, max);
-        });
-    });
-
-    // ── Nastavit jako správnou (AJAX) ────────────────────────────────────────
+    // ── ✓ Správná: AJAX set correct answer + assign points ──────────────────
     document.querySelectorAll('.btn-set-correct').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            var qId         = btn.dataset.qId;
-            var answerText  = btn.dataset.answer;
-            var maxPts      = btn.dataset.max;
+            var qId          = btn.dataset.qId;
+            var answerText   = btn.dataset.answer;
+            var bodyInpId    = btn.dataset.bodyInput;
             var correctInpId = btn.dataset.correctInput;
 
-            if (!confirm('Nastavit "' + answerText + '" jako správnou odpověď a přiřadit ' + maxPts + ' b všem v této skupině?')) return;
+            var bodyInp = document.getElementById(bodyInpId);
+            var pts = bodyInp ? parseInt(bodyInp.value, 10) : null;
+            if (isNaN(pts) || pts === null) {
+                alert('Zadej počet bodů do pole "Body" u této otázky.');
+                if (bodyInp) bodyInp.focus();
+                return;
+            }
+
+            if (!confirm('Nastavit "' + answerText + '" jako správnou odpověď (' + pts + ' b)?\n\nOstatní skupiny dostanou 0 b.')) return;
 
             btn.disabled = true;
             btn.textContent = '⏳';
@@ -305,7 +254,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var fd = new URLSearchParams();
             fd.append('_csrf', _extraCsrf);
             fd.append('answer_text', answerText);
-            fd.append('points', maxPts);
+            fd.append('points', pts);
 
             fetch('/admin/extra/questions/' + qId + '/set-correct-group', {
                 method: 'POST',
@@ -315,19 +264,12 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.ok) {
-                    // Update the correct answer input field
                     var ci = document.getElementById(correctInpId);
                     if (ci) ci.value = data.correct_answer || answerText;
-                    // Set max points in this group's visible input + hidden inputs
-                    var norm = answerText.trim().toLowerCase();
-                    document.querySelectorAll('.grp-pts-input').forEach(function(inp) {
-                        if (inp.dataset.norm === norm) inp.value = data.points;
-                    });
-                    syncGroup(norm, data.points);
                     btn.textContent = '✅ Uloženo';
                     btn.style.color = '#34d399';
                     btn.style.borderColor = 'rgba(52,211,153,.4)';
-                    setTimeout(function() { location.reload(); }, 800);
+                    setTimeout(function() { location.reload(); }, 600);
                 } else {
                     btn.disabled = false;
                     btn.textContent = '✓ Správná';
