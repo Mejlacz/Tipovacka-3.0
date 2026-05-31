@@ -292,6 +292,16 @@
             {{end}}
           </td>
           <td style="padding:.35rem .5rem;text-align:right">
+            {{if .HasMerged}}
+            <button type="button" class="btn-unmerge"
+                    data-q-id="{{$q.ID}}"
+                    data-canonical="{{.Text}}"
+                    title="Vrátit původní odpovědi"
+                    style="padding:.25rem .5rem;border-radius:5px;border:1px solid rgba(251,191,36,.4);
+                           background:rgba(251,191,36,.08);color:#fbbf24;cursor:pointer;font-size:.72rem;white-space:nowrap;margin-right:.25rem">
+              ↩ Rozdělit
+            </button>
+            {{end}}
             {{if not .IsMatch}}
             <button type="button" class="btn-set-correct"
                     data-q-id="{{$q.ID}}"
@@ -551,6 +561,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // ── ↩ Rozdělit (undo merge) ─────────────────────────────────────────────
+    document.querySelectorAll('.btn-unmerge').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId = btn.dataset.qId;
+            var canonical = btn.dataset.canonical;
+            if (!confirm('Vrátit původní odpovědi sloučené pod "' + canonical + '"?')) return;
+            btn.disabled = true; btn.textContent = '⏳';
+            var fd = new URLSearchParams();
+            fd.append('_csrf', _extraCsrf);
+            fd.append('canonical', canonical);
+            fetch('/admin/extra/questions/' + qId + '/unmerge-answers', {
+                method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd
+            }).then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.ok) { location.reload(); }
+                else { btn.disabled = false; btn.textContent = '↩ Rozdělit'; alert('Chyba: ' + (d.error || '')); }
+            }).catch(function() { btn.disabled = false; btn.textContent = '↩ Rozdělit'; alert('Chyba spojení.'); });
+        });
+    });
+
     // ── Checkboxy skupin + Sloučit vybrané ──────────────────────────────────
     function updateMergeBar(qId) {
         var checked = document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]:checked');
@@ -604,34 +634,31 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             var qId = btn.dataset.qId;
             var checked = document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]:checked');
-            if (checked.length === 0) return;
+            if (checked.length < 2) { alert('Vyber aspoň 2 skupiny ke sloučení.'); return; }
             var answers = [];
             checked.forEach(function(cb) { answers.push(cb.dataset.answer); });
+
+            // První vybraná = kanonický název (pod který se sloučí ostatní)
+            var canonical = answers[0];
+            if (!confirm('Sloučit pod název "' + canonical + '"?\n\nNásledující odpovědi budou přepsány:\n' + answers.slice(1).join('\n') + '\n\nLze vrátit tlačítkem "Rozdělit".')) return;
 
             btn.disabled = true;
             btn.textContent = '⏳';
 
-            // Ulož každou variantu do DB (bez bodů), pak reload
-            var idx = 0;
-            function next() {
-                if (idx >= answers.length) {
-                    location.reload();
-                    return;
-                }
-                var fd = new URLSearchParams();
-                fd.append('_csrf', _extraCsrf);
-                fd.append('answer_text', answers[idx]);
-                fetch('/admin/extra/questions/' + qId + '/add-correct-variant', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: fd
-                }).then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.ok) { idx++; next(); }
-                    else { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba: ' + (d.error || '')); }
-                }).catch(function() { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba spojení.'); });
-            }
-            next();
+            var fd = new URLSearchParams();
+            fd.append('_csrf', _extraCsrf);
+            fd.append('canonical', canonical);
+            answers.slice(1).forEach(function(a) { fd.append('sources[]', a); });
+
+            fetch('/admin/extra/questions/' + qId + '/merge-answers', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: fd
+            }).then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.ok) { location.reload(); }
+                else { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba: ' + (d.error || '')); }
+            }).catch(function() { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba spojení.'); });
         });
     });
 

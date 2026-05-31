@@ -46,6 +46,7 @@ func migrateSchema() {
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_deadline TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_reveal_at TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE extra_answers ADD COLUMN IF NOT EXISTS original_answer TEXT`,
 		`CREATE TABLE IF NOT EXISTS app_config (key VARCHAR(100) PRIMARY KEY, value TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS feedback (
 			id BIGSERIAL PRIMARY KEY,
@@ -389,6 +390,8 @@ func main() {
 	r.Post("/admin/extra/{competition_id}/deadline-settings", handlers.AdminExtraDeadlineSettings)
 	r.Post("/admin/extra/answers/set-ajax", handlers.AdminSetExtraAnswerAjax)
 	r.Post("/admin/extra/questions/{question_id}/set-correct-group", handlers.AdminExtraSetCorrectGroup)
+	r.Post("/admin/extra/questions/{question_id}/merge-answers", handlers.AdminExtraMergeAnswers)
+	r.Post("/admin/extra/questions/{question_id}/unmerge-answers", handlers.AdminExtraUnmergeAnswers)
 	r.Post("/admin/extra/questions/{question_id}/save-correct", handlers.AdminExtraSaveCorrect)
 	r.Post("/admin/extra/questions/{question_id}/add-correct-variant", handlers.AdminExtraAddCorrectVariant)
 	r.Post("/admin/extra/questions/{question_id}/set-pts-for-correct", handlers.AdminExtraSetPtsForCorrect)

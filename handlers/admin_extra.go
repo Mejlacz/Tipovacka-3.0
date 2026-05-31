@@ -105,6 +105,7 @@ type AnswerGroup struct {
 	IsMatch     bool // přesná shoda se správnou odpovědí
 	IsSimilar   bool // fuzzy shoda
 	SimilarDist int
+	HasMerged   bool // skupina obsahuje sloučené odpovědi (má original_answer)
 }
 
 // QStats — statistika vyhodnocení jedné otázky
@@ -189,6 +190,13 @@ func buildAnswerGroups(answers []AnswerWithUser, correctAnswer *string) ([]*Answ
 			}
 		}
 		g.AllEval = allEval
+		// HasMerged — skupina obsahuje sloučené odpovědi
+		for _, aw := range answers {
+			if strings.ToLower(strings.TrimSpace(aw.Answer.Answer)) == norm && aw.HasOriginal {
+				g.HasMerged = true
+				break
+			}
+		}
 		groups = append(groups, g)
 	}
 
@@ -276,8 +284,9 @@ func buildAnswerGroups(answers []AnswerWithUser, correctAnswer *string) ([]*Answ
 
 // AnswerWithUser sdružuje extra odpověď s uživatelem (sdílený typ v balíčku).
 type AnswerWithUser struct {
-	Answer *models.ExtraAnswer
-	User   *models.User
+	Answer         *models.ExtraAnswer
+	User           *models.User
+	HasOriginal    bool // answer byl sloučen (má original_answer v DB)
 }
 
 // GET /admin/extra/{competition_id}/questions/new
@@ -480,7 +489,8 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 		for _, q := range questions {
 			aRows, _ := db.Pool.Query(ctx,
 				`SELECT ea.id, ea.question_id, ea.user_id, ea.answer, ea.points, ea.created_at,
-				        u.id, u.username
+				        u.id, u.username,
+				        ea.original_answer IS NOT NULL AS has_original
 				   FROM extra_answers ea
 				   JOIN users u ON u.id = ea.user_id
 				  WHERE ea.question_id=$1
@@ -488,10 +498,11 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 			for aRows.Next() {
 				ea := &models.ExtraAnswer{}
 				u := &models.User{}
+				var hasOrig bool
 				_ = aRows.Scan(&ea.ID, &ea.QuestionID, &ea.UserID, &ea.Answer, &ea.Points, &ea.CreatedAt,
-					&u.ID, &u.Username)
+					&u.ID, &u.Username, &hasOrig)
 				ea.User = u
-				answersByQuestion[q.ID] = append(answersByQuestion[q.ID], AnswerWithUser{ea, u})
+				answersByQuestion[q.ID] = append(answersByQuestion[q.ID], AnswerWithUser{ea, u, hasOrig})
 			}
 			aRows.Close()
 
@@ -1327,6 +1338,80 @@ func AdminExtraNotifyNow(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(fmt.Sprintf(`{"ok":true,"total":%d}`, len(untipped))))
+}
+
+// POST /admin/extra/questions/{question_id}/merge-answers (AJAX)
+// Přepíše texty vybraných odpovědí na kanonický název. Ukládá originál pro undo.
+func AdminExtraMergeAnswers(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	canonical := strings.TrimSpace(r.FormValue("canonical"))
+	sources := r.Form["sources[]"]
+	if canonical == "" || len(sources) == 0 {
+		jsonError(w, "missing_params", http.StatusBadRequest)
+		return
+	}
+	ctx := context.Background()
+	var compID int
+	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM extra_questions WHERE id=$1`, qID).Scan(&compID)
+
+	normCanonical := strings.ToLower(strings.TrimSpace(canonical))
+	for _, src := range sources {
+		normSrc := strings.ToLower(strings.TrimSpace(src))
+		if normSrc == normCanonical {
+			continue // kanonický název nepřepisujeme
+		}
+		// Ulož originál (jen pokud ještě není uložen) a přepiš na kanonický název
+		_, _ = db.Pool.Exec(ctx,
+			`UPDATE extra_answers
+			    SET original_answer = COALESCE(original_answer, answer),
+			        answer = $1
+			  WHERE question_id = $2 AND LOWER(TRIM(answer)) = $3`,
+			canonical, qID, normSrc)
+	}
+	go RecalculateStandings(compID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+}
+
+// POST /admin/extra/questions/{question_id}/unmerge-answers (AJAX)
+// Obnoví původní texty odpovědí (undo sloučení).
+func AdminExtraUnmergeAnswers(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	canonical := strings.TrimSpace(r.FormValue("canonical"))
+	ctx := context.Background()
+	var compID int
+	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM extra_questions WHERE id=$1`, qID).Scan(&compID)
+
+	// Obnov original_answer tam kde je nastaven
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_answers
+		    SET answer = original_answer,
+		        original_answer = NULL
+		  WHERE question_id = $1 AND LOWER(TRIM(answer)) = LOWER(TRIM($2))
+		    AND original_answer IS NOT NULL`,
+		qID, canonical)
+
+	go RecalculateStandings(compID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
 }
 
 // POST /admin/extra/questions/{question_id}/save-correct (AJAX)
