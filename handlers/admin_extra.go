@@ -1329,6 +1329,52 @@ func AdminExtraNotifyNow(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(fmt.Sprintf(`{"ok":true,"total":%d}`, len(untipped))))
 }
 
+// POST /admin/extra/questions/{question_id}/add-correct-variant (AJAX)
+// Přidá variantu do correct_answer bez změny bodů.
+func AdminExtraAddCorrectVariant(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	answerText := strings.TrimSpace(r.FormValue("answer_text"))
+	if answerText == "" {
+		jsonError(w, "empty", http.StatusBadRequest)
+		return
+	}
+	ctx := context.Background()
+	var curCorrect *string
+	err := db.Pool.QueryRow(ctx, `SELECT correct_answer FROM extra_questions WHERE id=$1`, qID).Scan(&curCorrect)
+	if err != nil {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+	newCorrect := answerText
+	normNew := strings.ToLower(strings.TrimSpace(answerText))
+	if curCorrect != nil && strings.TrimSpace(*curCorrect) != "" {
+		already := false
+		for _, v := range strings.Split(*curCorrect, "|") {
+			if strings.ToLower(strings.TrimSpace(v)) == normNew {
+				already = true
+				break
+			}
+		}
+		if !already {
+			newCorrect = *curCorrect + "|" + answerText
+		} else {
+			newCorrect = *curCorrect
+		}
+	}
+	_, _ = db.Pool.Exec(ctx, `UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, newCorrect, qID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "correct_answer": newCorrect})
+}
+
 // POST /admin/extra/questions/{question_id}/set-pts-for-correct (AJAX)
 // Nastaví body pro všechny správné varianty, ostatním 0.
 func AdminExtraSetPtsForCorrect(w http.ResponseWriter, r *http.Request) {

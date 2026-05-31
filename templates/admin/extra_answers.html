@@ -593,91 +593,35 @@ document.addEventListener('DOMContentLoaded', function() {
             var qId = btn.dataset.qId;
             var checked = document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]:checked');
             if (checked.length === 0) return;
+            var answers = [];
+            checked.forEach(function(cb) { answers.push(cb.dataset.answer); });
 
-            // Sesbírej data ze všech vybraných řádků
-            var totalCount = 0, allNames = [], allAnswers = [];
-            checked.forEach(function(cb) {
-                var row = cb.closest('tr');
-                allAnswers.push(cb.dataset.answer);
-                var countEl = row ? row.querySelector('td:nth-child(3)') : null;
-                if (countEl) totalCount += parseInt(countEl.textContent.trim(), 10) || 0;
-                var namesEl = row ? row.querySelector('div[style*="muted"]') : null;
-                if (namesEl) allNames.push(namesEl.textContent.trim());
-            });
+            btn.disabled = true;
+            btn.textContent = '⏳';
 
-            // Skryj vybrané řádky
-            checked.forEach(function(cb) {
-                var row = cb.closest('tr');
-                if (row) row.style.display = 'none';
-            });
-
-            // Vlož sloučený řádek
-            var tbody = document.querySelector('#grp-table-' + qId + ' tbody');
-            var mergedRow = document.createElement('tr');
-            mergedRow.id = 'merged-row-' + qId;
-            mergedRow.style.cssText = 'border-bottom:1px solid rgba(255,255,255,.05);background:rgba(99,102,241,.08)';
-            mergedRow.setAttribute('data-merged-answers', JSON.stringify(allAnswers));
-            mergedRow.innerHTML = '<td style="padding:.4rem .3rem"></td>'
-                + '<td style="padding:.4rem .5rem">'
-                + '<span style="font-weight:700;color:#818cf8">🔀 ' + allAnswers[0] + ' <span style="font-size:.72rem;opacity:.7">+ ' + (allAnswers.length - 1) + ' variant</span></span>'
-                + '<div style="font-size:.72rem;color:var(--muted-d);margin-top:.1rem">' + allNames.join(', ') + '</div>'
-                + '</td>'
-                + '<td style="padding:.4rem .5rem;text-align:center;font-weight:700;color:#818cf8">' + totalCount + '</td>'
-                + '<td style="text-align:center"><span style="color:#818cf8">∪</span></td>'
-                + '<td></td>'
-                + '<td style="padding:.35rem .5rem;text-align:right;display:flex;gap:.3rem;justify-content:flex-end">'
-                + '<button type="button" class="btn-set-correct-merged" data-q-id="' + qId + '" data-body-input="body_' + qId + '" data-correct-input="correct_' + qId + '"'
-                + ' style="padding:.25rem .6rem;border-radius:5px;border:1px solid rgba(99,102,241,.4);background:rgba(99,102,241,.2);color:#818cf8;cursor:pointer;font-size:.75rem;white-space:nowrap">✓ Správná</button>'
-                + '<button type="button" onclick="cancelMerge(\'' + qId + '\')" style="padding:.25rem .5rem;border-radius:5px;border:1px solid var(--border-d);background:transparent;color:var(--muted-d);cursor:pointer;font-size:.73rem">✕ Zrušit</button>'
-                + '</td>';
-            tbody.insertBefore(mergedRow, tbody.firstChild);
-
-            // Skryj merge bar, zruš výběr
-            document.getElementById('merge-bar-' + qId).style.display = 'none';
-            checked.forEach(function(cb) { cb.checked = false; });
-
-            // Handler pro ✓ Správná na sloučeném řádku
-            mergedRow.querySelector('.btn-set-correct-merged').addEventListener('click', function() {
-                var bodyInp = document.getElementById('body_' + qId);
-                var pts = bodyInp ? parseInt(bodyInp.value, 10) : NaN;
-                if (isNaN(pts) || pts < 0) { alert('Zadej Body.'); return; }
-                var answers = JSON.parse(mergedRow.getAttribute('data-merged-answers'));
-                if (!confirm('Nastavit ' + answers.length + ' variant jako správné (' + pts + ' b)?\n\n' + answers.join('\n'))) return;
-
-                mergedRow.querySelector('.btn-set-correct-merged').disabled = true;
-                mergedRow.querySelector('.btn-set-correct-merged').textContent = '⏳';
-
-                var idx = 0;
-                function next() {
-                    if (idx >= answers.length) {
-                        var fd2 = new URLSearchParams();
-                        fd2.append('_csrf', _extraCsrf); fd2.append('points', pts);
-                        fetch('/admin/extra/questions/' + qId + '/set-pts-for-correct', {
-                            method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:fd2
-                        }).then(function() { setTimeout(function() { location.reload(); }, 400); });
-                        return;
-                    }
-                    var fd = new URLSearchParams();
-                    fd.append('_csrf', _extraCsrf); fd.append('answer_text', answers[idx]); fd.append('points', pts);
-                    fetch('/admin/extra/questions/' + qId + '/set-correct-group', {
-                        method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:fd
-                    }).then(function(r){return r.json();}).then(function(d){
-                        if (d.ok) { idx++; next(); }
-                        else { alert('Chyba: '+(d.error||'neznámá')); }
-                    });
+            // Ulož každou variantu do DB (bez bodů), pak reload
+            var idx = 0;
+            function next() {
+                if (idx >= answers.length) {
+                    location.reload();
+                    return;
                 }
-                next();
-            });
+                var fd = new URLSearchParams();
+                fd.append('_csrf', _extraCsrf);
+                fd.append('answer_text', answers[idx]);
+                fetch('/admin/extra/questions/' + qId + '/add-correct-variant', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: fd
+                }).then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.ok) { idx++; next(); }
+                    else { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba: ' + (d.error || '')); }
+                }).catch(function() { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba spojení.'); });
+            }
+            next();
         });
     });
-
-    window.cancelMerge = function(qId) {
-        var merged = document.getElementById('merged-row-' + qId);
-        if (merged) merged.remove();
-        document.querySelectorAll('#grp-table-' + qId + ' tbody tr[style*="display: none"]').forEach(function(r) {
-            r.style.display = '';
-        });
-    };
 
 });
 </script>
