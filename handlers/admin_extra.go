@@ -192,23 +192,82 @@ func buildAnswerGroups(answers []AnswerWithUser, correctAnswer *string) ([]*Answ
 		groups = append(groups, g)
 	}
 
-	// Seřadit: exact match → similar → count desc → abecedně
-	for i := 0; i < len(groups)-1; i++ {
-		for j := i + 1; j < len(groups); j++ {
-			a, b := groups[i], groups[j]
-			swap := false
-			switch {
-			case a.IsMatch != b.IsMatch:
-				swap = b.IsMatch
-			case a.IsSimilar != b.IsSimilar:
-				swap = b.IsSimilar
-			case a.Count != b.Count:
-				swap = b.Count > a.Count
-			default:
-				swap = b.NormText < a.NormText
+	// Sloučit všechny IsMatch skupiny do jednoho řádku
+	if len(variants) > 0 {
+		var merged *AnswerGroup
+		var rest []*AnswerGroup
+		for _, g := range groups {
+			if g.IsMatch {
+				if merged == nil {
+					// Kanonický text = první varianta správné odpovědi
+					canonical := variants[0]
+					merged = &AnswerGroup{
+						Text:     canonical,
+						NormText: strings.ToLower(strings.TrimSpace(canonical)),
+						IsMatch:  true,
+						AllEval:  true,
+					}
+				}
+				merged.Count += g.Count
+				merged.AnswerIDs = append(merged.AnswerIDs, g.AnswerIDs...)
+				merged.UserNames = append(merged.UserNames, g.UserNames...)
+				if !g.AllEval {
+					merged.AllEval = false
+				}
+				if g.CurPoints != nil {
+					merged.CurPoints = g.CurPoints // použij body z poslední správné skupiny
+				}
+			} else {
+				rest = append(rest, g)
 			}
-			if swap {
-				groups[i], groups[j] = groups[j], groups[i]
+		}
+		if merged != nil {
+			// Seřadit zbytek: similar → count desc → abecedně
+			for i := 0; i < len(rest)-1; i++ {
+				for j := i + 1; j < len(rest); j++ {
+					a, b := rest[i], rest[j]
+					swap := false
+					switch {
+					case a.IsSimilar != b.IsSimilar:
+						swap = b.IsSimilar
+					case a.Count != b.Count:
+						swap = b.Count > a.Count
+					default:
+						swap = b.NormText < a.NormText
+					}
+					if swap {
+						rest[i], rest[j] = rest[j], rest[i]
+					}
+				}
+			}
+			groups = append([]*AnswerGroup{merged}, rest...)
+		} else {
+			// Žádná správná odpověď — seřadit podle count desc
+			for i := 0; i < len(groups)-1; i++ {
+				for j := i + 1; j < len(groups); j++ {
+					a, b := groups[i], groups[j]
+					swap := false
+					switch {
+					case a.IsSimilar != b.IsSimilar:
+						swap = b.IsSimilar
+					case a.Count != b.Count:
+						swap = b.Count > a.Count
+					default:
+						swap = b.NormText < a.NormText
+					}
+					if swap {
+						groups[i], groups[j] = groups[j], groups[i]
+					}
+				}
+			}
+		}
+	} else {
+		// Bez správné odpovědi — seřadit count desc
+		for i := 0; i < len(groups)-1; i++ {
+			for j := i + 1; j < len(groups); j++ {
+				if groups[j].Count > groups[i].Count {
+					groups[i], groups[j] = groups[j], groups[i]
+				}
 			}
 		}
 	}
