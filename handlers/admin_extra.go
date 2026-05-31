@@ -441,17 +441,45 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 			statsByQuestion[q.ID] = stats
 		}
 
+		// Přímý dotaz na body správné odpovědi pro každou otázku
+		// (spolehlivější než CurPoints z groupů, které může být nil při smíšených hodnotách)
+		correctPtsByQuestion := map[int]*int{}
+		for _, q := range questions {
+			if q.CorrectAnswer == nil || *q.CorrectAnswer == "" {
+				continue
+			}
+			variants := strings.Split(*q.CorrectAnswer, "|")
+			var normVariants []string
+			for _, v := range variants {
+				v = strings.TrimSpace(v)
+				if v != "" {
+					normVariants = append(normVariants, strings.ToLower(v))
+				}
+			}
+			if len(normVariants) == 0 {
+				continue
+			}
+			var pts *int
+			_ = db.Pool.QueryRow(ctx,
+				`SELECT points FROM extra_answers
+				  WHERE question_id=$1 AND LOWER(TRIM(answer)) = ANY($2)
+				  AND points IS NOT NULL
+				  LIMIT 1`, q.ID, normVariants).Scan(&pts)
+			correctPtsByQuestion[q.ID] = pts
+		}
+
 		flash := middleware.GetFlash(w, r)
 
 		RenderTemplate(w, r, tmpl, "admin/extra_answers.html", TemplateData{
-			"User":              admin,
-			"Comp":              comp,
-			"Questions":         questions,
-			"AnswersByQuestion": answersByQuestion,
-			"GroupsByQuestion":  groupsByQuestion,
-			"StatsByQuestion":   statsByQuestion,
-			"Flash":             flash,
-			"AutoDeadline":      autoDeadline,
+			"User":                  admin,
+			"Comp":                  comp,
+			"Questions":             questions,
+			"AnswersByQuestion":     answersByQuestion,
+			"GroupsByQuestion":      groupsByQuestion,
+			"StatsByQuestion":       statsByQuestion,
+			"CorrectPtsByQuestion":  correctPtsByQuestion,
+			"Flash":                 flash,
+			"AutoDeadline":          autoDeadline,
 		})
 	}
 }

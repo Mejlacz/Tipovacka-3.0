@@ -155,8 +155,9 @@
         </button>
         {{end}}
         <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">Body:</label>
+        {{$correctPts := index $.CorrectPtsByQuestion $q.ID}}
         <input type="number" id="body_{{$q.ID}}"
-               value="{{/* inicializuje JS z DB hodnoty správné skupiny */}}"
+               value="{{if $correctPts}}{{intVal $correctPts}}{{else}}{{$q.MaxPoints}}{{end}}"
                data-max="{{$q.MaxPoints}}"
                data-q-id="{{$q.ID}}"
                min="0"
@@ -291,19 +292,13 @@ var _extraCsrf = '{{.CSRFToken}}';
 
 document.addEventListener('DOMContentLoaded', function() {
 
-    // ── Body input: inicializace + live-sync → správné skupiny ──────────────
+    // ── Body input → live-sync do zelených readonly inputů ──────────────────
     document.querySelectorAll('input[id^="body_"]').forEach(function(bodyInp) {
         var qId = bodyInp.id.replace('body_', '');
         var correctInps = document.querySelectorAll('.grp-pts-correct[data-q-id="' + qId + '"]');
 
-        // Inicializace: Body = DB hodnota správné skupiny (nebo max_points pokud není)
-        var initVal = bodyInp.dataset.max; // fallback = max_points
-        if (correctInps.length > 0 && correctInps[0].dataset.dbVal !== '') {
-            initVal = correctInps[0].dataset.dbVal;
-        }
-        bodyInp.value = initVal;
-
-        // Nastav zelené readonly inputy na Body hodnotu
+        // Při načtení: nastav zelené inputy a hidden pts_ na hodnotu Body (přichází z DB)
+        var initVal = bodyInp.value;
         correctInps.forEach(function(inp) {
             inp.value = initVal;
             syncGroupPts(inp.dataset.norm, initVal);
