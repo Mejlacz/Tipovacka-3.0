@@ -156,7 +156,9 @@
         {{end}}
         <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">Body:</label>
         <input type="number" id="body_{{$q.ID}}"
-               value="{{$q.MaxPoints}}"
+               value="{{/* inicializuje JS z DB hodnoty správné skupiny */}}"
+               data-max="{{$q.MaxPoints}}"
+               data-q-id="{{$q.ID}}"
                min="0"
                style="width:68px;text-align:center;font-size:.85rem;padding:.35rem .4rem;
                       background:var(--bg3);border:1px solid var(--accent);border-radius:6px;color:var(--text-d)">
@@ -228,7 +230,8 @@
                    data-norm="{{.NormText}}"
                    data-q-id="{{$q.ID}}"
                    data-is-match="1"
-                   value="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
+                   data-db-val="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
+                   value=""
                    min="0"
                    readonly
                    style="width:62px;text-align:center;padding:.25rem .3rem;
@@ -288,18 +291,32 @@ var _extraCsrf = '{{.CSRFToken}}';
 
 document.addEventListener('DOMContentLoaded', function() {
 
-    // ── Body input live-sync → správné skupiny (readonly) ───────────────────
+    // ── Body input: inicializace + live-sync → správné skupiny ──────────────
     document.querySelectorAll('input[id^="body_"]').forEach(function(bodyInp) {
         var qId = bodyInp.id.replace('body_', '');
+        var correctInps = document.querySelectorAll('.grp-pts-correct[data-q-id="' + qId + '"]');
+
+        // Inicializace: Body = DB hodnota správné skupiny (nebo max_points pokud není)
+        var initVal = bodyInp.dataset.max; // fallback = max_points
+        if (correctInps.length > 0 && correctInps[0].dataset.dbVal !== '') {
+            initVal = correctInps[0].dataset.dbVal;
+        }
+        bodyInp.value = initVal;
+
+        // Nastav zelené readonly inputy na Body hodnotu
+        correctInps.forEach(function(inp) {
+            inp.value = initVal;
+            syncGroupPts(inp.dataset.norm, initVal);
+        });
+
+        // Live-sync při změně
         bodyInp.addEventListener('input', function() {
             var val = bodyInp.value;
-            document.querySelectorAll('.grp-pts-correct[data-q-id="' + qId + '"]').forEach(function(inp) {
+            correctInps.forEach(function(inp) {
                 inp.value = val;
                 syncGroupPts(inp.dataset.norm, val);
             });
         });
-        // Inicializace při načtení — nastav readonly správné skupiny na aktuální body hodnotu
-        // (jen pokud jsou prázdné/0 a body je vyplněné)
     });
 
     // ── ✓ Uložit body: přenese hodnotu do správných skupin a uloží formulář ──
