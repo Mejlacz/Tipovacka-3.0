@@ -389,6 +389,7 @@ func main() {
 	r.Post("/admin/extra/{competition_id}/deadline-settings", handlers.AdminExtraDeadlineSettings)
 	r.Post("/admin/extra/answers/set-ajax", handlers.AdminSetExtraAnswerAjax)
 	r.Post("/admin/extra/questions/{question_id}/set-correct-group", handlers.AdminExtraSetCorrectGroup)
+	r.Post("/admin/extra/questions/{question_id}/save-correct", handlers.AdminExtraSaveCorrect)
 	r.Post("/admin/extra/questions/{question_id}/add-correct-variant", handlers.AdminExtraAddCorrectVariant)
 	r.Post("/admin/extra/questions/{question_id}/set-pts-for-correct", handlers.AdminExtraSetPtsForCorrect)
 	r.Post("/admin/extra/questions/{question_id}/clear-correct", handlers.AdminExtraClearCorrect)

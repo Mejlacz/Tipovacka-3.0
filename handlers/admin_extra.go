@@ -1329,6 +1329,30 @@ func AdminExtraNotifyNow(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(fmt.Sprintf(`{"ok":true,"total":%d}`, len(untipped))))
 }
 
+// POST /admin/extra/questions/{question_id}/save-correct (AJAX)
+// Uloží libovolnou hodnotu correct_answer (pro odebrání varianty přes chip ×).
+func AdminExtraSaveCorrect(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	newVal := strings.TrimSpace(r.FormValue("correct_answer"))
+	ctx := context.Background()
+	var ptr *string
+	if newVal != "" {
+		ptr = &newVal
+	}
+	_, _ = db.Pool.Exec(ctx, `UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, ptr, qID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+}
+
 // POST /admin/extra/questions/{question_id}/add-correct-variant (AJAX)
 // Přidá variantu do correct_answer bez změny bodů.
 func AdminExtraAddCorrectVariant(w http.ResponseWriter, r *http.Request) {

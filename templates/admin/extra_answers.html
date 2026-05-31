@@ -329,13 +329,25 @@
 <script>
 var _extraCsrf = '{{.CSRFToken}}';
 
-// Odebrání varianty z chips + hidden input
+// Odebrání varianty — uloží rovnou do DB
 window.removeVariant = function(qId, variant) {
     var inp = document.getElementById('correct_' + qId);
     if (!inp) return;
     var parts = inp.value.split('|').map(function(v){return v.trim();}).filter(function(v){return v && v !== variant;});
-    inp.value = parts.join('|');
+    var newVal = parts.join('|');
+    inp.value = newVal;
     renderChips(qId, parts);
+
+    // Uloži do DB přes form submit s aktuální hodnotou
+    var fd = new URLSearchParams();
+    fd.append('_csrf', _extraCsrf);
+    fd.append('correct_answer', newVal);
+    fd.append('question_id', qId);
+    fetch('/admin/extra/questions/' + qId + '/save-correct', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: fd
+    }).catch(function() {});
 };
 
 function renderChips(qId, parts) {
