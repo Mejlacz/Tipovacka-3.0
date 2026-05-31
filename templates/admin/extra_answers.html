@@ -157,8 +157,7 @@
         <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">Body:</label>
         {{$correctPts := index $.CorrectPtsByQuestion $q.ID}}
         <input type="number" id="body_{{$q.ID}}"
-               value="{{if $correctPts}}{{intVal $correctPts}}{{else}}{{$q.MaxPoints}}{{end}}"
-               data-max="{{$q.MaxPoints}}"
+               value="{{if $correctPts}}{{intVal $correctPts}}{{end}}"
                data-q-id="{{$q.ID}}"
                min="0"
                style="width:68px;text-align:center;font-size:.85rem;padding:.35rem .4rem;
@@ -297,8 +296,8 @@ document.addEventListener('DOMContentLoaded', function() {
         var qId = bodyInp.id.replace('body_', '');
         var correctInps = document.querySelectorAll('.grp-pts-correct[data-q-id="' + qId + '"]');
 
-        // Při načtení: nastav zelené inputy a hidden pts_ na hodnotu Body (přichází z DB)
-        var initVal = bodyInp.value;
+        // Při načtení: nastav zelené inputy a hidden pts_ na hodnotu Body (z DB, nebo prázdné)
+        var initVal = bodyInp.value; // prázdné pokud není v DB
         correctInps.forEach(function(inp) {
             inp.value = initVal;
             syncGroupPts(inp.dataset.norm, initVal);
