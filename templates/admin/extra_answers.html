@@ -89,89 +89,164 @@
     <p class="empty">Žádné extra otázky pro tuto soutěž.</p>
     <p><a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary">➕ Přidat první otázku</a></p>
   {{else}}
-  <form method="post" action="/admin/extra/{{.Comp.ID}}/answers">
+  <form method="post" action="/admin/extra/{{.Comp.ID}}/answers" id="extra-eval-form">
 
     {{range $idx, $q := .Questions}}
     {{$answers := index $.AnswersByQuestion $q.ID}}
-    <div class="card mb-3">
-      <div class="card-body">
+    {{$groups  := index $.GroupsByQuestion  $q.ID}}
+    {{$stats   := index $.StatsByQuestion   $q.ID}}
+    <div class="card mb-3" style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem 1.2rem;margin-bottom:1.1rem">
 
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem">
-          <div>
-            <span style="font-size:0.8rem;color:var(--muted-d);margin-right:0.3rem">{{add $idx 1}}.</span>
-            <strong style="font-size:1.05rem">{{$q.Text}}</strong>
-            <span style="font-size:0.78rem;color:var(--muted-d);margin-left:0.4rem">(max {{$q.MaxPoints}} b.)</span>
-            {{if $q.IsClosed}}
-              <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#f87171;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">zavřeno</span>
-            {{else}}
-              <span style="font-size:0.75rem;background:rgba(16,185,129,0.15);color:#34d399;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">otevřeno</span>
-            {{end}}
-          </div>
-          <div style="display:flex;gap:0.35rem;flex-wrap:wrap">
-            {{if $q.CorrectAnswer}}
-            <form method="post" action="/admin/extra/{{$.Comp.ID}}/auto-evaluate?q={{$q.ID}}" style="margin:0">
-              <button type="submit" class="btn btn-sm btn-primary" style="font-size:0.78rem"
-                      title="Správná odpověď: {{$q.CorrectAnswer}}">
-                🎯 Vyhodnotit
-              </button>
-            </form>
-            {{end}}
-            <form method="post" action="/admin/extra/questions/{{$q.ID}}/toggle-close" style="margin:0">
-              <button type="submit" class="btn btn-sm btn-secondary" style="font-size:0.78rem">
-                {{if $q.IsClosed}}🔓 Otevřít{{else}}🔒 Uzavřít{{end}}
-              </button>
-            </form>
-            <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete" style="margin:0"
-                  onsubmit="return confirm('Smazat otázku a všechny její odpovědi?')">
-              <button type="submit" class="btn btn-sm" style="font-size:0.78rem;color:var(--red,#ef4444)">🗑 Smazat</button>
-            </form>
-          </div>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap">
-          <label style="font-size:0.85rem;font-weight:600;white-space:nowrap">Správná odpověď:</label>
-          <input type="text" name="correct_{{$q.ID}}"
-                 value="{{if $q.CorrectAnswer}}{{$q.CorrectAnswer}}{{end}}"
-                 placeholder="např. McDavid (více možností oddělit |)"
-                 class="form-control" style="max-width:300px;font-size:0.85rem">
-        </div>
-
-        {{if not $answers}}
-          <p style="color:var(--muted-d);font-style:italic;font-size:0.85rem">Zatím žádné odpovědi.</p>
-        {{else}}
-        <div style="overflow-x:auto">
-        <table class="table" style="font-size:0.88rem;margin-bottom:0">
-          <thead>
-            <tr>
-              <th style="width:160px">Tipér</th>
-              <th>Odpověď</th>
-              <th style="width:130px;text-align:center">Body (0–{{$q.MaxPoints}})</th>
-            </tr>
-          </thead>
-          <tbody>
-          {{range $answers}}
-          <tr>
-            <td>{{.User.Username}}</td>
-            <td>{{.Answer.Answer}}</td>
-            <td style="text-align:center">
-              <input type="number" name="pts_{{.Answer.ID}}"
-                     value="{{if .Answer.Points}}{{.Answer.Points}}{{end}}"
-                     min="0" max="{{$q.MaxPoints}}"
-                     style="width:70px;text-align:center;padding:0.25rem 0.4rem;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);border-radius:4px;font-size:0.88rem"
-                     placeholder="–">
-            </td>
-          </tr>
+      {{/* ── Hlavička otázky ── */}}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+          <span style="font-size:.8rem;color:var(--muted-d)">{{add $idx 1}}.</span>
+          <strong style="font-size:1rem">{{$q.Text}}</strong>
+          <span style="font-size:.75rem;color:var(--muted-d)">(max {{$q.MaxPoints}} b.)</span>
+          {{if $q.IsClosed}}
+            <span style="font-size:.72rem;background:rgba(239,68,68,.15);color:#f87171;padding:.12rem .45rem;border-radius:10px">zavřeno</span>
+          {{else}}
+            <span style="font-size:.72rem;background:rgba(16,185,129,.15);color:#34d399;padding:.12rem .45rem;border-radius:10px">otevřeno</span>
           {{end}}
-          </tbody>
-        </table>
+          {{/* ── Progress badge ── */}}
+          {{if $stats.Total}}
+          <span style="font-size:.72rem;padding:.12rem .5rem;border-radius:10px;font-weight:700;
+                       background:{{if eq $stats.Evaluated $stats.Total}}rgba(52,211,153,.18){{else if eq $stats.Evaluated 0}}rgba(156,163,175,.12){{else}}rgba(251,191,36,.15){{end}};
+                       color:{{if eq $stats.Evaluated $stats.Total}}#34d399{{else if eq $stats.Evaluated 0}}#9ca3af{{else}}#fbbf24{{end}}"
+                title="{{$stats.Evaluated}} z {{$stats.Total}} odpovědí má přiřazeny body">
+            {{if eq $stats.Evaluated $stats.Total}}✅{{else if eq $stats.Evaluated 0}}⏳{{else}}⚡{{end}}
+            {{$stats.Evaluated}}/{{$stats.Total}} ohodnoceno
+          </span>
+          {{end}}
         </div>
-        {{end}}
-
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+          {{if $q.CorrectAnswer}}
+          <form method="post" action="/admin/extra/{{$.Comp.ID}}/auto-evaluate?q={{$q.ID}}" style="margin:0">
+            <button type="submit" class="btn btn-sm btn-primary" style="font-size:.76rem"
+                    title="Správná odpověď: {{strVal $q.CorrectAnswer}}">🎯 Vyhodnotit</button>
+          </form>
+          {{end}}
+          <form method="post" action="/admin/extra/questions/{{$q.ID}}/toggle-close" style="margin:0">
+            <button type="submit" class="btn btn-sm btn-secondary" style="font-size:.76rem">
+              {{if $q.IsClosed}}🔓 Otevřít{{else}}🔒 Uzavřít{{end}}
+            </button>
+          </form>
+          <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete" style="margin:0"
+                onsubmit="return confirm('Smazat otázku a všechny její odpovědi?')">
+            <button type="submit" class="btn btn-sm" style="font-size:.76rem;color:#ef4444">🗑</button>
+          </form>
+        </div>
       </div>
+
+      {{/* ── Správná odpověď ── */}}
+      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.9rem;flex-wrap:wrap">
+        <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">✓ Správná odpověď:</label>
+        <input type="text" name="correct_{{$q.ID}}" id="correct_{{$q.ID}}"
+               value="{{strVal $q.CorrectAnswer}}"
+               placeholder="např. McDavid  (více variant oddělit |)"
+               style="flex:1;min-width:200px;max-width:340px;font-size:.85rem;padding:.35rem .6rem;
+                      background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:var(--text-d)">
+        <span style="font-size:.75rem;color:var(--muted-d)">více variant: <code>McDavid|David McDavid</code></span>
+      </div>
+
+      {{/* ── Tabulka skupin ── */}}
+      {{if not $answers}}
+        <p style="color:var(--muted-d);font-style:italic;font-size:.85rem">Zatím žádné odpovědi.</p>
+      {{else}}
+
+      {{/* Skryté jednotlivé inputs (submit hodnoty) */}}
+      <div style="display:none">
+        {{range $answers}}
+        <input type="number" name="pts_{{.Answer.ID}}"
+               id="pts_{{.Answer.ID}}"
+               data-group="{{.Answer.Answer | printf "%s"}}"
+               value="{{if .Answer.Points}}{{intVal .Answer.Points}}{{end}}"
+               min="0" max="{{$q.MaxPoints}}">
+        {{end}}
+      </div>
+
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border-d)">
+            <th style="padding:.4rem .5rem;text-align:left;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d)">Odpověď</th>
+            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:60px">Počet</th>
+            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:80px">Shoda</th>
+            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:110px">Body (0–{{$q.MaxPoints}})</th>
+            <th style="padding:.4rem .5rem;width:140px"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {{range $groups}}
+        <tr style="border-bottom:1px solid rgba(255,255,255,.05);
+                   {{if .IsMatch}}background:rgba(52,211,153,.07){{else if .IsSimilar}}background:rgba(251,191,36,.05){{end}}">
+          <td style="padding:.4rem .5rem">
+            <span style="font-weight:{{if .IsMatch}}700{{else}}400{{end}};
+                         color:{{if .IsMatch}}#34d399{{else if .IsSimilar}}#fbbf24{{else}}var(--text-d){{end}}">
+              {{.Text}}
+            </span>
+            {{if .UserNames}}
+            <div style="font-size:.72rem;color:var(--muted-d);margin-top:.1rem">
+              {{range $i, $u := .UserNames}}{{if $i}}, {{end}}{{$u}}{{end}}
+            </div>
+            {{end}}
+          </td>
+          <td style="padding:.4rem .5rem;text-align:center;font-weight:700;color:var(--muted-d)">
+            {{.Count}}
+          </td>
+          <td style="padding:.4rem .5rem;text-align:center;font-size:.82rem">
+            {{if .IsMatch}}
+              <span style="color:#34d399" title="Přesná shoda">✅</span>
+            {{else if .IsSimilar}}
+              <span style="color:#fbbf24" title="Podobná (vzdálenost {{.SimilarDist}})">≈{{.SimilarDist}}</span>
+            {{else}}
+              <span style="color:var(--muted-d)">—</span>
+            {{end}}
+          </td>
+          <td style="padding:.4rem .5rem;text-align:center">
+            <input type="number"
+                   class="grp-pts-input"
+                   data-norm="{{.NormText}}"
+                   data-max="{{$q.MaxPoints}}"
+                   value="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
+                   min="0" max="{{$q.MaxPoints}}"
+                   style="width:72px;text-align:center;padding:.28rem .4rem;
+                          border:1px solid {{if .AllEval}}rgba(52,211,153,.4){{else}}var(--border-d){{end}};
+                          background:var(--bg3);color:var(--text-d);border-radius:4px;font-size:.88rem"
+                   placeholder="—">
+          </td>
+          <td style="padding:.4rem .5rem">
+            <div style="display:flex;gap:.3rem;justify-content:flex-end">
+              <button type="button" class="btn-max"
+                      data-norm="{{.NormText}}" data-max="{{$q.MaxPoints}}"
+                      style="padding:.25rem .5rem;border-radius:5px;border:1px solid var(--border-d);
+                             background:var(--bg3);color:var(--muted-d);cursor:pointer;font-size:.75rem;white-space:nowrap"
+                      title="Přiřadit max bodů ({{$q.MaxPoints}}) celé skupině">
+                Max ✓
+              </button>
+              <button type="button" class="btn-set-correct"
+                      data-q-id="{{$q.ID}}"
+                      data-answer="{{.Text}}"
+                      data-max="{{$q.MaxPoints}}"
+                      data-correct-input="correct_{{$q.ID}}"
+                      style="padding:.25rem .5rem;border-radius:5px;border:1px solid rgba(99,102,241,.4);
+                             background:rgba(99,102,241,.1);color:#818cf8;cursor:pointer;font-size:.75rem;white-space:nowrap"
+                      title="Nastavit jako správnou odpověď a přiřadit max bodů">
+                ✓ Správná
+              </button>
+            </div>
+          </td>
+        </tr>
+        {{end}}
+        </tbody>
+      </table>
+      </div>
+      {{end}}
+
     </div>
     {{end}}
 
-    <div style="padding:0.5rem 0 1.5rem">
+    <div style="padding:.5rem 0 1.5rem">
       <button type="submit" class="btn btn-primary">💾 Uložit bodování</button>
     </div>
 
@@ -179,3 +254,93 @@
   {{end}}
 
 </div>
+
+<script>
+var _extraCsrf = '{{.CSRFToken}}';
+
+document.addEventListener('DOMContentLoaded', function() {
+
+    // ── Sync group input → hidden individual inputs ──────────────────────────
+    function syncGroup(normText, value) {
+        document.querySelectorAll('#extra-eval-form input[name^="pts_"]').forEach(function(inp) {
+            var grpNorm = inp.dataset.group ? inp.dataset.group.trim().toLowerCase() : '';
+            if (grpNorm === normText) {
+                inp.value = value;
+            }
+        });
+    }
+
+    document.querySelectorAll('.grp-pts-input').forEach(function(inp) {
+        inp.addEventListener('input', function() {
+            syncGroup(inp.dataset.norm, inp.value);
+        });
+    });
+
+    // ── Max button ───────────────────────────────────────────────────────────
+    document.querySelectorAll('.btn-max').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var norm = btn.dataset.norm;
+            var max  = btn.dataset.max;
+            // Update group visible input
+            document.querySelectorAll('.grp-pts-input').forEach(function(inp) {
+                if (inp.dataset.norm === norm) inp.value = max;
+            });
+            syncGroup(norm, max);
+        });
+    });
+
+    // ── Nastavit jako správnou (AJAX) ────────────────────────────────────────
+    document.querySelectorAll('.btn-set-correct').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId         = btn.dataset.qId;
+            var answerText  = btn.dataset.answer;
+            var maxPts      = btn.dataset.max;
+            var correctInpId = btn.dataset.correctInput;
+
+            if (!confirm('Nastavit "' + answerText + '" jako správnou odpověď a přiřadit ' + maxPts + ' b všem v této skupině?')) return;
+
+            btn.disabled = true;
+            btn.textContent = '⏳';
+
+            var fd = new URLSearchParams();
+            fd.append('_csrf', _extraCsrf);
+            fd.append('answer_text', answerText);
+            fd.append('points', maxPts);
+
+            fetch('/admin/extra/questions/' + qId + '/set-correct-group', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    // Update the correct answer input field
+                    var ci = document.getElementById(correctInpId);
+                    if (ci) ci.value = data.correct_answer || answerText;
+                    // Set max points in this group's visible input + hidden inputs
+                    var norm = answerText.trim().toLowerCase();
+                    document.querySelectorAll('.grp-pts-input').forEach(function(inp) {
+                        if (inp.dataset.norm === norm) inp.value = data.points;
+                    });
+                    syncGroup(norm, data.points);
+                    btn.textContent = '✅ Uloženo';
+                    btn.style.color = '#34d399';
+                    btn.style.borderColor = 'rgba(52,211,153,.4)';
+                    setTimeout(function() { location.reload(); }, 800);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '✓ Správná';
+                    alert('Chyba: ' + (data.error || 'neznámá'));
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = '✓ Správná';
+                alert('Chyba spojení.');
+            });
+        });
+    });
+
+});
+</script>

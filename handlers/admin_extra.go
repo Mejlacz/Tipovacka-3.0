@@ -20,6 +20,207 @@ import (
 	"tipovacka/models"
 )
 
+// ── Levenshtein distance (case-insensitive, rune-aware) ──────────────────────
+
+func levenshtein(a, b string) int {
+	ra := []rune(strings.ToLower(a))
+	rb := []rune(strings.ToLower(b))
+	la, lb := len(ra), len(rb)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+	row := make([]int, lb+1)
+	for j := range row {
+		row[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		prev := row[0]
+		row[0] = i
+		for j := 1; j <= lb; j++ {
+			old := row[j]
+			if ra[i-1] == rb[j-1] {
+				row[j] = prev
+			} else {
+				m := prev
+				if row[j-1] < m {
+					m = row[j-1]
+				}
+				if row[j] < m {
+					m = row[j]
+				}
+				row[j] = 1 + m
+			}
+			prev = old
+		}
+	}
+	return row[lb]
+}
+
+// isFuzzyMatch returns true when answer is similar but not identical to any correct variant.
+func isFuzzyMatch(answer string, correctVariants []string) (bool, int) {
+	norm := strings.ToLower(strings.TrimSpace(answer))
+	bestDist := 999
+	for _, cv := range correctVariants {
+		cv = strings.ToLower(strings.TrimSpace(cv))
+		if norm == cv {
+			return false, 0 // exact — handled separately
+		}
+		d := levenshtein(norm, cv)
+		if d < bestDist {
+			bestDist = d
+		}
+	}
+	maxLen := len([]rune(norm))
+	for _, cv := range correctVariants {
+		if l := len([]rune(strings.TrimSpace(cv))); l > maxLen {
+			maxLen = l
+		}
+	}
+	threshold := 2
+	if maxLen > 8 {
+		threshold = maxLen / 4
+		if threshold < 2 {
+			threshold = 2
+		}
+		if threshold > 4 {
+			threshold = 4
+		}
+	}
+	return bestDist <= threshold, bestDist
+}
+
+// ── AnswerGroup — skupina odpovědí se stejným textem ─────────────────────────
+
+type AnswerGroup struct {
+	Text        string
+	NormText    string
+	Count       int
+	AnswerIDs   []int
+	UserNames   []string
+	CurPoints   *int // společná hodnota bodů; nil = různé nebo nenastaveno
+	AllEval     bool // všechny mají body
+	IsMatch     bool // přesná shoda se správnou odpovědí
+	IsSimilar   bool // fuzzy shoda
+	SimilarDist int
+}
+
+// QStats — statistika vyhodnocení jedné otázky
+type QStats struct {
+	Total     int
+	Evaluated int
+}
+
+// buildAnswerGroups sestrojí skupiny z plochého seznamu odpovědí.
+func buildAnswerGroups(answers []AnswerWithUser, correctAnswer *string) ([]*AnswerGroup, QStats) {
+	groupMap := map[string]*AnswerGroup{}
+	var order []string // pořadí prvního výskytu
+
+	for _, aw := range answers {
+		norm := strings.ToLower(strings.TrimSpace(aw.Answer.Answer))
+		if norm == "" {
+			continue
+		}
+		g, ok := groupMap[norm]
+		if !ok {
+			g = &AnswerGroup{Text: aw.Answer.Answer, NormText: norm}
+			groupMap[norm] = g
+			order = append(order, norm)
+		}
+		g.Count++
+		g.AnswerIDs = append(g.AnswerIDs, aw.Answer.ID)
+		g.UserNames = append(g.UserNames, aw.User.Username)
+		if aw.Answer.Points != nil {
+			if g.CurPoints == nil && g.Count == 1 {
+				v := *aw.Answer.Points
+				g.CurPoints = &v
+			} else if g.CurPoints != nil && *g.CurPoints != *aw.Answer.Points {
+				g.CurPoints = nil
+			}
+		} else if g.Count > 1 && g.CurPoints != nil {
+			g.CurPoints = nil
+		}
+	}
+
+	// Správná odpověď — varianty
+	var variants []string
+	if correctAnswer != nil && *correctAnswer != "" {
+		for _, v := range strings.Split(*correctAnswer, "|") {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				variants = append(variants, v)
+			}
+		}
+	}
+
+	// Příznaky match / similar; AllEval
+	stats := QStats{Total: len(answers)}
+	evalCount := 0
+	for _, aw := range answers {
+		if aw.Answer.Points != nil {
+			evalCount++
+		}
+	}
+	stats.Evaluated = evalCount
+
+	groups := make([]*AnswerGroup, 0, len(order))
+	for _, norm := range order {
+		g := groupMap[norm]
+		if len(variants) > 0 {
+			for _, v := range variants {
+				if strings.ToLower(strings.TrimSpace(v)) == norm {
+					g.IsMatch = true
+					break
+				}
+			}
+			if !g.IsMatch {
+				g.IsSimilar, g.SimilarDist = isFuzzyMatch(g.Text, variants)
+			}
+		}
+		allEval := true
+		for _, aw := range answers {
+			if strings.ToLower(strings.TrimSpace(aw.Answer.Answer)) == norm {
+				if aw.Answer.Points == nil {
+					allEval = false
+					break
+				}
+			}
+		}
+		g.AllEval = allEval
+		groups = append(groups, g)
+	}
+
+	// Seřadit: exact match → similar → count desc → abecedně
+	for i := 0; i < len(groups)-1; i++ {
+		for j := i + 1; j < len(groups); j++ {
+			a, b := groups[i], groups[j]
+			swap := false
+			switch {
+			case a.IsMatch != b.IsMatch:
+				swap = b.IsMatch
+			case a.IsSimilar != b.IsSimilar:
+				swap = b.IsSimilar
+			case a.Count != b.Count:
+				swap = b.Count > a.Count
+			default:
+				swap = b.NormText < a.NormText
+			}
+			if swap {
+				groups[i], groups[j] = groups[j], groups[i]
+			}
+		}
+	}
+	return groups, stats
+}
+
+// AnswerWithUser sdružuje extra odpověď s uživatelem (sdílený typ v balíčku).
+type AnswerWithUser struct {
+	Answer *models.ExtraAnswer
+	User   *models.User
+}
+
 // GET /admin/extra/{competition_id}/questions/new
 func AdminExtraQuestionNewForm(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -212,12 +413,11 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 		}
 		qRows.Close()
 
-		// Per question, load answers with user
-		type AnswerWithUser struct {
-			Answer *models.ExtraAnswer
-			User   *models.User
-		}
+		// Per question, load answers with user; build groups
 		answersByQuestion := map[int][]AnswerWithUser{}
+		groupsByQuestion := map[int][]*AnswerGroup{}
+		statsByQuestion := map[int]QStats{}
+
 		for _, q := range questions {
 			aRows, _ := db.Pool.Query(ctx,
 				`SELECT ea.id, ea.question_id, ea.user_id, ea.answer, ea.points, ea.created_at,
@@ -235,6 +435,10 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 				answersByQuestion[q.ID] = append(answersByQuestion[q.ID], AnswerWithUser{ea, u})
 			}
 			aRows.Close()
+
+			groups, stats := buildAnswerGroups(answersByQuestion[q.ID], q.CorrectAnswer)
+			groupsByQuestion[q.ID] = groups
+			statsByQuestion[q.ID] = stats
 		}
 
 		flash := middleware.GetFlash(w, r)
@@ -244,6 +448,8 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 			"Comp":              comp,
 			"Questions":         questions,
 			"AnswersByQuestion": answersByQuestion,
+			"GroupsByQuestion":  groupsByQuestion,
+			"StatsByQuestion":   statsByQuestion,
 			"Flash":             flash,
 			"AutoDeadline":      autoDeadline,
 		})
@@ -1034,4 +1240,68 @@ func AdminExtraNotifyNow(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(fmt.Sprintf(`{"ok":true,"total":%d}`, len(untipped))))
+}
+
+// POST /admin/extra/questions/{question_id}/set-correct-group (AJAX)
+// Nastaví správnou odpověď pro otázku a přiřadí body všem odpovědím v dané skupině.
+func AdminExtraSetCorrectGroup(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+
+	answerText := strings.TrimSpace(r.FormValue("answer_text"))
+	ptsStr := r.FormValue("points")
+	ctx := context.Background()
+
+	// Načti otázku
+	var compID, maxPts int
+	var curCorrect *string
+	err := db.Pool.QueryRow(ctx,
+		`SELECT competition_id, max_points, correct_answer FROM extra_questions WHERE id=$1`, qID).
+		Scan(&compID, &maxPts, &curCorrect)
+	if err != nil {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+
+	// Body (default = max)
+	pts := maxPts
+	if ptsStr != "" {
+		if p, e := strconv.Atoi(ptsStr); e == nil && p >= 0 && p <= maxPts {
+			pts = p
+		}
+	}
+
+	// Nastav správnou odpověď (replace)
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, answerText, qID)
+
+	// Přiřaď body všem odpovědím v této skupině
+	res, _ := db.Pool.Exec(ctx,
+		`UPDATE extra_answers SET points=$1
+		  WHERE question_id=$2 AND LOWER(TRIM(answer)) = LOWER(TRIM($3))`,
+		pts, qID, answerText)
+	count := res.RowsAffected()
+
+	go RecalculateStandings(compID)
+
+	newVal := fmt.Sprintf("%q → %d b", answerText, pts)
+	LogAction(&admin.ID, admin.Username, "extra_answer", "question", &qID,
+		fmt.Sprintf("Správná odpověď nastavena: %q, %d tipérů → %d b", answerText, count, pts),
+		nil, &newVal)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":             true,
+		"evaluated":      count,
+		"correct_answer": answerText,
+		"points":         pts,
+	})
 }
