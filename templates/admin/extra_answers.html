@@ -93,6 +93,7 @@
     <p><a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary">➕ Přidat první otázku</a></p>
   {{else}}
   <form method="post" action="/admin/extra/{{.Comp.ID}}/answers" id="extra-eval-form">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
 
     {{range $idx, $q := .Questions}}
     {{$answers := index $.AnswersByQuestion $q.ID}}
