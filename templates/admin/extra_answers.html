@@ -313,30 +313,44 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // ── ✓ Uložit body: přenese hodnotu do správných skupin a uloží formulář ──
+    // ── ✓ Uložit body: AJAX, bez scrollu nahoru ─────────────────────────────
     document.querySelectorAll('.btn-apply-pts').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            var qId      = btn.dataset.qId;
-            var bodyInp  = document.getElementById(btn.dataset.bodyInput);
-            var pts      = bodyInp ? parseInt(bodyInp.value, 10) : NaN;
+            var qId     = btn.dataset.qId;
+            var bodyInp = document.getElementById(btn.dataset.bodyInput);
+            var pts     = bodyInp ? parseInt(bodyInp.value, 10) : NaN;
             if (isNaN(pts) || pts < 0) {
                 alert('Zadej platný počet bodů.');
                 if (bodyInp) bodyInp.focus();
                 return;
             }
-            // Najdi správné skupiny pro tuto otázku a nastav jim body
-            var matched = 0;
-            document.querySelectorAll('.grp-pts-vis[data-is-match][data-q-id="' + qId + '"]').forEach(function(inp) {
-                inp.value = pts;
-                syncGroupPts(inp.dataset.norm, pts);
-                matched++;
-            });
-            if (matched === 0) {
-                alert('Nejdřív označ správnou odpověď kliknutím na "✓ Správná".');
-                return;
-            }
-            // Odešli formulář
-            document.getElementById('extra-eval-form').submit();
+            var origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳';
+            var fd = new URLSearchParams();
+            fd.append('_csrf', _extraCsrf);
+            fd.append('points', pts);
+            fetch('/admin/extra/questions/' + qId + '/set-pts-for-correct', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    document.querySelectorAll('.grp-pts-correct[data-q-id="' + qId + '"]').forEach(function(inp) {
+                        inp.value = data.points;
+                    });
+                    if (bodyInp) bodyInp.value = data.points;
+                    btn.textContent = '✅ Uloženo';
+                    btn.style.background = '#059669';
+                    setTimeout(function() { btn.disabled = false; btn.textContent = origText; btn.style.background = ''; }, 2000);
+                } else {
+                    btn.disabled = false; btn.textContent = origText;
+                    alert('Chyba: ' + (data.error || 'neznámá'));
+                }
+            })
+            .catch(function() { btn.disabled = false; btn.textContent = origText; alert('Chyba spojení.'); });
         });
     });
 

@@ -1270,6 +1270,63 @@ func AdminExtraNotifyNow(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(fmt.Sprintf(`{"ok":true,"total":%d}`, len(untipped))))
 }
 
+// POST /admin/extra/questions/{question_id}/set-pts-for-correct (AJAX)
+// Nastaví body pro všechny správné varianty, ostatním 0.
+func AdminExtraSetPtsForCorrect(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	ptsStr := strings.TrimSpace(r.FormValue("points"))
+	ctx := context.Background()
+
+	var compID, maxPts int
+	var correctAnswer *string
+	err := db.Pool.QueryRow(ctx,
+		`SELECT competition_id, max_points, correct_answer FROM extra_questions WHERE id=$1`, qID).
+		Scan(&compID, &maxPts, &correctAnswer)
+	if err != nil {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+	if correctAnswer == nil || strings.TrimSpace(*correctAnswer) == "" {
+		jsonError(w, "no_correct_answer", http.StatusBadRequest)
+		return
+	}
+
+	pts, e := strconv.Atoi(ptsStr)
+	if e != nil || pts < 0 {
+		jsonError(w, "invalid_points", http.StatusBadRequest)
+		return
+	}
+
+	var normVariants []string
+	for _, v := range strings.Split(*correctAnswer, "|") {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			normVariants = append(normVariants, strings.ToLower(v))
+		}
+	}
+
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_answers SET points=$1 WHERE question_id=$2 AND LOWER(TRIM(answer)) = ANY($3)`,
+		pts, qID, normVariants)
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_answers SET points=0 WHERE question_id=$1 AND LOWER(TRIM(answer)) != ALL($2)`,
+		qID, normVariants)
+
+	go RecalculateStandings(compID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "points": pts})
+}
+
 // POST /admin/extra/questions/{question_id}/clear-correct (AJAX)
 // Vymaže správnou odpověď a resetuje všechny body na NULL pro danou otázku.
 func AdminExtraClearCorrect(w http.ResponseWriter, r *http.Request) {
