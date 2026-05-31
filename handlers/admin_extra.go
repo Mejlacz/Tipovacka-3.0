@@ -1329,10 +1329,10 @@ func AdminExtraSetCorrectGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Body (default = max)
+	// Body — admin může zadat libovolnou kladnou hodnotu
 	pts := maxPts
 	if ptsStr != "" {
-		if p, e := strconv.Atoi(ptsStr); e == nil && p >= 0 && p <= maxPts {
+		if p, e := strconv.Atoi(ptsStr); e == nil && p >= 0 {
 			pts = p
 		}
 	}
