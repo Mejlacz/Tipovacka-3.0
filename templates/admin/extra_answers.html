@@ -156,9 +156,17 @@
         <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">Body:</label>
         <input type="number" id="body_{{$q.ID}}"
                value="{{$q.MaxPoints}}"
-               min="0" max="{{$q.MaxPoints}}"
+               min="0"
                style="width:68px;text-align:center;font-size:.85rem;padding:.35rem .4rem;
                       background:var(--bg3);border:1px solid var(--accent);border-radius:6px;color:var(--text-d)">
+        <button type="button" class="btn-apply-pts"
+                data-q-id="{{$q.ID}}"
+                data-body-input="body_{{$q.ID}}"
+                style="padding:.35rem .7rem;border-radius:6px;border:none;
+                       background:var(--accent);color:#fff;cursor:pointer;font-size:.82rem;font-weight:700;white-space:nowrap"
+                title="Přenese zadané body do správných skupin a uloží">
+          ✓ Uložit body
+        </button>
         <span style="font-size:.75rem;color:var(--muted-d)">více variant: <code style="background:var(--bg3);padding:0 3px;border-radius:3px">Barcelona|FC Barcelona</code></span>
       </div>
 
@@ -216,8 +224,10 @@
             <input type="number"
                    class="grp-pts-vis"
                    data-norm="{{.NormText}}"
+                   data-q-id="{{$q.ID}}"
+                   {{if .IsMatch}}data-is-match="1"{{end}}
                    value="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
-                   min="0" max="{{$q.MaxPoints}}"
+                   min="0"
                    style="width:62px;text-align:center;padding:.25rem .3rem;
                           border:1px solid {{if .IsMatch}}rgba(52,211,153,.5){{else if .AllEval}}rgba(156,163,175,.3){{else}}var(--border-d){{end}};
                           background:var(--bg3);color:var(--text-d);border-radius:4px;font-size:.85rem"
@@ -262,6 +272,33 @@
 var _extraCsrf = '{{.CSRFToken}}';
 
 document.addEventListener('DOMContentLoaded', function() {
+
+    // ── ✓ Uložit body: přenese hodnotu do správných skupin a uloží formulář ──
+    document.querySelectorAll('.btn-apply-pts').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId      = btn.dataset.qId;
+            var bodyInp  = document.getElementById(btn.dataset.bodyInput);
+            var pts      = bodyInp ? parseInt(bodyInp.value, 10) : NaN;
+            if (isNaN(pts) || pts < 0) {
+                alert('Zadej platný počet bodů.');
+                if (bodyInp) bodyInp.focus();
+                return;
+            }
+            // Najdi správné skupiny pro tuto otázku a nastav jim body
+            var matched = 0;
+            document.querySelectorAll('.grp-pts-vis[data-is-match][data-q-id="' + qId + '"]').forEach(function(inp) {
+                inp.value = pts;
+                syncGroupPts(inp.dataset.norm, pts);
+                matched++;
+            });
+            if (matched === 0) {
+                alert('Nejdřív označ správnou odpověď kliknutím na "✓ Správná".');
+                return;
+            }
+            // Odešli formulář
+            document.getElementById('extra-eval-form').submit();
+        });
+    });
 
     // ── Sync viditelný group input → hidden pts_{id} inputs ─────────────────
     function syncGroupPts(normText, value) {
