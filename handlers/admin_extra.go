@@ -1242,6 +1242,36 @@ func AdminExtraNotifyNow(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(fmt.Sprintf(`{"ok":true,"total":%d}`, len(untipped))))
 }
 
+// POST /admin/extra/questions/{question_id}/clear-correct (AJAX)
+// Vymaže správnou odpověď a resetuje všechny body na NULL pro danou otázku.
+func AdminExtraClearCorrect(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	ctx := context.Background()
+
+	var compID int
+	err := db.Pool.QueryRow(ctx, `SELECT competition_id FROM extra_questions WHERE id=$1`, qID).Scan(&compID)
+	if err != nil {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+
+	_, _ = db.Pool.Exec(ctx, `UPDATE extra_questions SET correct_answer=NULL WHERE id=$1`, qID)
+	_, _ = db.Pool.Exec(ctx, `UPDATE extra_answers SET points=NULL WHERE question_id=$1`, qID)
+
+	go RecalculateStandings(compID)
+
+	LogAction(&admin.ID, admin.Username, "extra_answer", "question", &qID,
+		"Reset správné odpovědi a bodů", nil, nil)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+}
+
 // POST /admin/extra/questions/{question_id}/set-correct-group (AJAX)
 // Nastaví správnou odpověď pro otázku a přiřadí body všem odpovědím v dané skupině.
 func AdminExtraSetCorrectGroup(w http.ResponseWriter, r *http.Request) {

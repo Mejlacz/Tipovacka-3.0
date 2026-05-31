@@ -389,6 +389,7 @@ func main() {
 	r.Post("/admin/extra/{competition_id}/deadline-settings", handlers.AdminExtraDeadlineSettings)
 	r.Post("/admin/extra/answers/set-ajax", handlers.AdminSetExtraAnswerAjax)
 	r.Post("/admin/extra/questions/{question_id}/set-correct-group", handlers.AdminExtraSetCorrectGroup)
+	r.Post("/admin/extra/questions/{question_id}/clear-correct", handlers.AdminExtraClearCorrect)
 	r.Get("/admin/extra/teams-ajax", handlers.AdminExtraTeamsAjax)
 
 	// Admin feedback

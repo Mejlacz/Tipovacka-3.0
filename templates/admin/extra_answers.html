@@ -143,6 +143,16 @@
                placeholder="vyberte kliknutím nebo napište ručně"
                style="flex:1;min-width:180px;max-width:300px;font-size:.85rem;padding:.35rem .6rem;
                       background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:var(--text-d)">
+        {{if $q.CorrectAnswer}}
+        <button type="button" class="btn-clear-correct"
+                data-q-id="{{$q.ID}}"
+                data-correct-input="correct_{{$q.ID}}"
+                title="Vymazat správnou odpověď a resetovat všechny body na nevyhodnoceno"
+                style="padding:.32rem .55rem;border-radius:6px;border:1px solid rgba(239,68,68,.4);
+                       background:rgba(239,68,68,.08);color:#f87171;cursor:pointer;font-size:.8rem;white-space:nowrap">
+          🗑 Reset
+        </button>
+        {{end}}
         <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">Body:</label>
         <input type="number" id="body_{{$q.ID}}"
                value="{{$q.MaxPoints}}"
@@ -229,6 +239,46 @@
 var _extraCsrf = '{{.CSRFToken}}';
 
 document.addEventListener('DOMContentLoaded', function() {
+
+    // ── 🗑 Reset: vymaž správnou odpověď a všechny body ─────────────────────
+    document.querySelectorAll('.btn-clear-correct').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId          = btn.dataset.qId;
+            var correctInpId = btn.dataset.correctInput;
+            var ci = document.getElementById(correctInpId);
+            var cur = ci ? ci.value : '';
+            if (!confirm('Resetovat otázku?\n\nVymaže se správná odpověď' + (cur ? ' ("' + cur + '")' : '') + ' a všem tipérům se smažou body (vrátí se na nevyhodnoceno).')) return;
+
+            btn.disabled = true;
+            btn.textContent = '⏳';
+
+            var fd = new URLSearchParams();
+            fd.append('_csrf', _extraCsrf);
+
+            fetch('/admin/extra/questions/' + qId + '/clear-correct', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    if (ci) ci.value = '';
+                    btn.textContent = '✅';
+                    setTimeout(function() { location.reload(); }, 400);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '🗑 Reset';
+                    alert('Chyba: ' + (data.error || 'neznámá'));
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = '🗑 Reset';
+                alert('Chyba spojení.');
+            });
+        });
+    });
 
     // ── ✓ Správná: AJAX set correct answer + assign points ──────────────────
     document.querySelectorAll('.btn-set-correct').forEach(function(btn) {
