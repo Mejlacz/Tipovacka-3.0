@@ -166,13 +166,24 @@
       {{if not $answers}}
         <p style="color:var(--muted-d);font-style:italic;font-size:.85rem">Zatím žádné odpovědi.</p>
       {{else}}
+      {{/* Skryté inputs pro form submit — pts_{answer_id} */}}
+      <div style="display:none">
+        {{range $answers}}
+        <input type="number" name="pts_{{.Answer.ID}}" id="pts_{{.Answer.ID}}"
+               data-norm="{{.Answer.Answer}}"
+               value="{{if .Answer.Points}}{{intVal .Answer.Points}}{{end}}"
+               min="0" max="{{$q.MaxPoints}}">
+        {{end}}
+      </div>
+
       <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:.85rem">
         <thead>
           <tr style="border-bottom:1px solid var(--border-d)">
             <th style="padding:.4rem .5rem;text-align:left;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d)">Odpověď</th>
             <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:60px">Počet</th>
-            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:80px">Shoda</th>
+            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:70px">Shoda</th>
+            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:90px">Body</th>
             <th style="padding:.4rem .5rem;width:120px"></th>
           </tr>
         </thead>
@@ -196,16 +207,28 @@
             {{if .IsMatch}}
               <span style="color:#34d399" title="Přesná shoda se správnou odpovědí">✅</span>
             {{else if .IsSimilar}}
-              <span style="color:#fbbf24" title="Podobná odpověď (Levenshtein vzdálenost {{.SimilarDist}})">≈{{.SimilarDist}}</span>
+              <span style="color:#fbbf24" title="Podobná odpověď (vzdálenost {{.SimilarDist}})">≈{{.SimilarDist}}</span>
             {{else}}
               <span style="color:var(--muted-d)">—</span>
             {{end}}
+          </td>
+          <td style="padding:.3rem .4rem;text-align:center">
+            <input type="number"
+                   class="grp-pts-vis"
+                   data-norm="{{.NormText}}"
+                   value="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
+                   min="0" max="{{$q.MaxPoints}}"
+                   style="width:62px;text-align:center;padding:.25rem .3rem;
+                          border:1px solid {{if .IsMatch}}rgba(52,211,153,.5){{else if .AllEval}}rgba(156,163,175,.3){{else}}var(--border-d){{end}};
+                          background:var(--bg3);color:var(--text-d);border-radius:4px;font-size:.85rem"
+                   placeholder="—">
           </td>
           <td style="padding:.35rem .5rem;text-align:right">
             {{if not .IsMatch}}
             <button type="button" class="btn-set-correct"
                     data-q-id="{{$q.ID}}"
                     data-answer="{{.Text}}"
+                    data-norm="{{.NormText}}"
                     data-body-input="body_{{$q.ID}}"
                     data-correct-input="correct_{{$q.ID}}"
                     style="padding:.25rem .6rem;border-radius:5px;border:1px solid rgba(99,102,241,.4);
@@ -227,7 +250,7 @@
     {{end}}
 
     <div style="padding:.5rem 0 1.5rem">
-      <button type="submit" class="btn btn-primary">💾 Uložit správné odpovědi</button>
+      <button type="submit" class="btn btn-primary">💾 Uložit (správné odpovědi + upravené body)</button>
     </div>
 
   </form>
@@ -239,6 +262,19 @@
 var _extraCsrf = '{{.CSRFToken}}';
 
 document.addEventListener('DOMContentLoaded', function() {
+
+    // ── Sync viditelný group input → hidden pts_{id} inputs ─────────────────
+    function syncGroupPts(normText, value) {
+        document.querySelectorAll('input[name^="pts_"]').forEach(function(inp) {
+            var n = (inp.dataset.norm || '').trim().toLowerCase();
+            if (n === normText) inp.value = value;
+        });
+    }
+    document.querySelectorAll('.grp-pts-vis').forEach(function(inp) {
+        inp.addEventListener('input', function() {
+            syncGroupPts(inp.dataset.norm, inp.value);
+        });
+    });
 
     // ── 🗑 Reset: vymaž správnou odpověď a všechny body ─────────────────────
     document.querySelectorAll('.btn-clear-correct').forEach(function(btn) {
@@ -285,6 +321,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             var qId          = btn.dataset.qId;
             var answerText   = btn.dataset.answer;
+            var normText     = btn.dataset.norm || answerText.trim().toLowerCase();
             var bodyInpId    = btn.dataset.bodyInput;
             var correctInpId = btn.dataset.correctInput;
 
@@ -321,6 +358,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.ok) {
                     var ci = document.getElementById(correctInpId);
                     if (ci) ci.value = data.correct_answer || answerText;
+                    // Aktualizuj viditelný input správné skupiny
+                    document.querySelectorAll('.grp-pts-vis').forEach(function(inp) {
+                        if (inp.dataset.norm === normText) inp.value = data.points;
+                    });
+                    syncGroupPts(normText, data.points);
                     btn.textContent = '✅ Uloženo';
                     btn.style.color = '#34d399';
                     btn.style.borderColor = 'rgba(52,211,153,.4)';
