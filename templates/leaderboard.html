@@ -131,7 +131,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             <th class="col-place">#</th>
             <th class="col-user">Tipér</th>
             {{if .ExtraCols}}<th class="col-total" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>{{end}}
-            <th class="col-pts">Body</th>
             {{range .Matches}}
             {{$htName := coalesce .HomeTeam.DisplayName .HomeTeam.Name}}
             {{$atName := coalesce .AwayTeam.DisplayName .AwayTeam.Name}}
@@ -191,6 +190,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 {{end}}
             </th>
             {{end}}
+            <th class="col-pts" style="font-size:0.75rem;color:var(--muted-d)">Body</th>
             <th class="col-match" title="Tipy">
                 <div class="match-header" style="font-size:0.78rem">Tipy</div>
             </th>
@@ -200,7 +200,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             <td class="col-place" style="color:var(--muted-d)"></td>
             <td class="col-user" style="font-size:0.75rem;color:var(--muted-d)">Výsledky</td>
             {{if .ExtraCols}}<td class="col-total" style="border-left:2px solid #dee2e6"></td>{{end}}
-            <td class="col-pts"></td>
             {{range .Matches}}
             <td class="cell-result{{if or $.User.IsAdmin $.User.IsOwner}} result-editable{{end}}"
                 {{if or $.User.IsAdmin $.User.IsOwner}}
@@ -225,6 +224,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 {{end}}
             </td>
             {{end}}
+            <td class="col-pts"></td>
             <td></td>
         </tr>
     </thead>
@@ -260,7 +260,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             {{end}}
         </td>
         {{end}}
-        <td class="col-pts"><strong>{{$row.Total}}</strong></td>
         {{range $.Matches}}
         {{$tip := index (index $.TipsByUser $row.User.ID) .ID}}
         {{$started := index $.StartedMatchIDs .ID}}
@@ -315,6 +314,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             {{end}}
         </td>
         {{end}}
+        <td class="col-pts" style="text-align:center"><strong>{{$row.Total}}</strong></td>
         {{/* ── Tip ratio ── */}}
         <td class="col-match" style="font-size:0.82rem;text-align:center;white-space:nowrap">
             {{$row.TipRatio}}
