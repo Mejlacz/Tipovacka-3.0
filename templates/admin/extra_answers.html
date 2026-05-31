@@ -222,17 +222,31 @@
             {{end}}
           </td>
           <td style="padding:.3rem .4rem;text-align:center">
+            {{if .IsMatch}}
+            <input type="number"
+                   class="grp-pts-vis grp-pts-correct"
+                   data-norm="{{.NormText}}"
+                   data-q-id="{{$q.ID}}"
+                   data-is-match="1"
+                   value="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
+                   min="0"
+                   readonly
+                   style="width:62px;text-align:center;padding:.25rem .3rem;
+                          border:1px solid rgba(52,211,153,.5);
+                          background:rgba(52,211,153,.08);color:#34d399;border-radius:4px;font-size:.85rem;font-weight:700;cursor:default"
+                   placeholder="—">
+            {{else}}
             <input type="number"
                    class="grp-pts-vis"
                    data-norm="{{.NormText}}"
                    data-q-id="{{$q.ID}}"
-                   {{if .IsMatch}}data-is-match="1"{{end}}
                    value="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
                    min="0"
                    style="width:62px;text-align:center;padding:.25rem .3rem;
-                          border:1px solid {{if .IsMatch}}rgba(52,211,153,.5){{else if .AllEval}}rgba(156,163,175,.3){{else}}var(--border-d){{end}};
+                          border:1px solid {{if .AllEval}}rgba(156,163,175,.3){{else}}var(--border-d){{end}};
                           background:var(--bg3);color:var(--text-d);border-radius:4px;font-size:.85rem"
                    placeholder="—">
+            {{end}}
           </td>
           <td style="padding:.35rem .5rem;text-align:right">
             {{if not .IsMatch}}
@@ -273,6 +287,20 @@
 var _extraCsrf = '{{.CSRFToken}}';
 
 document.addEventListener('DOMContentLoaded', function() {
+
+    // ── Body input live-sync → správné skupiny (readonly) ───────────────────
+    document.querySelectorAll('input[id^="body_"]').forEach(function(bodyInp) {
+        var qId = bodyInp.id.replace('body_', '');
+        bodyInp.addEventListener('input', function() {
+            var val = bodyInp.value;
+            document.querySelectorAll('.grp-pts-correct[data-q-id="' + qId + '"]').forEach(function(inp) {
+                inp.value = val;
+                syncGroupPts(inp.dataset.norm, val);
+            });
+        });
+        // Inicializace při načtení — nastav readonly správné skupiny na aktuální body hodnotu
+        // (jen pokud jsou prázdné/0 a body je vyplněné)
+    });
 
     // ── ✓ Uložit body: přenese hodnotu do správných skupin a uloží formulář ──
     document.querySelectorAll('.btn-apply-pts').forEach(function(btn) {

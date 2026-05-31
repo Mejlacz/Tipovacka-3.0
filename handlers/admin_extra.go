@@ -1330,18 +1330,28 @@ func AdminExtraSetCorrectGroup(w http.ResponseWriter, r *http.Request) {
 	_, _ = db.Pool.Exec(ctx,
 		`UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, newCorrect, qID)
 
-	// Přiřaď body správné skupině, ostatním nastav 0
+	// Přiřaď body VŠEM správným variantám (nejen té právě kliknuté)
+	allVariants := strings.Split(newCorrect, "|")
+	var normVariants []string
+	for _, v := range allVariants {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			normVariants = append(normVariants, strings.ToLower(v))
+		}
+	}
+
+	// Správné skupiny → přiřazené body
 	res, _ := db.Pool.Exec(ctx,
 		`UPDATE extra_answers SET points=$1
-		  WHERE question_id=$2 AND LOWER(TRIM(answer)) = LOWER(TRIM($3))`,
-		pts, qID, answerText)
+		  WHERE question_id=$2 AND LOWER(TRIM(answer)) = ANY($3)`,
+		pts, qID, normVariants)
 	count := res.RowsAffected()
 
-	// Ostatní odpovědi → 0 bodů
+	// Nesprávné skupiny → 0 bodů (jen ty co nejsou v žádné variantě)
 	_, _ = db.Pool.Exec(ctx,
 		`UPDATE extra_answers SET points=0
-		  WHERE question_id=$1 AND LOWER(TRIM(answer)) != LOWER(TRIM($2))`,
-		qID, answerText)
+		  WHERE question_id=$1 AND LOWER(TRIM(answer)) != ALL($2)`,
+		qID, normVariants)
 
 	go RecalculateStandings(compID)
 
