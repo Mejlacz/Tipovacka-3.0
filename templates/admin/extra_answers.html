@@ -546,7 +546,9 @@ document.addEventListener('DOMContentLoaded', function() {
         var info = document.getElementById('merge-info-' + qId);
         if (checked.length >= 1) {
             bar.style.display = 'flex';
-            info.textContent = checked.length + ' ' + (checked.length === 1 ? 'vybraná' : checked.length <= 4 ? 'vybrané' : 'vybraných');
+            var names = [];
+            checked.forEach(function(cb) { names.push(cb.dataset.answer); });
+            info.textContent = names.join(' + ');
         } else {
             bar.style.display = 'none';
         }
