@@ -300,7 +300,10 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             data-ans="{{$ansText}}"
             {{end}}>
             {{if and $ansText $extraVisible}}
-                <span style="color:#94a3b8">{{truncate $ansText 12}}</span>{{if and $isLast (not (isNilInt $pts))}} <strong style="color:#4ade80">{{intVal $pts}}</strong>{{end}}
+                <span style="color:#94a3b8;display:block;overflow:hidden;text-overflow:ellipsis">{{truncate $ansText 12}}</span>
+                {{if not (isNilInt $pts)}}
+                <strong style="font-size:.8rem;color:{{if gt (intVal $pts) 0}}#4ade80{{else}}#6b7280{{end}}">{{intVal $pts}} b</strong>
+                {{end}}
             {{else if $ansText}}
                 <span class="tip-hidden" title="Skryto do odhalení" style="color:var(--accent)">✓</span>
             {{else}}
