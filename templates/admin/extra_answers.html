@@ -184,7 +184,7 @@
         <input type="number" name="pts_{{.Answer.ID}}" id="pts_{{.Answer.ID}}"
                data-norm="{{.Answer.Answer}}"
                value="{{if .Answer.Points}}{{intVal .Answer.Points}}{{end}}"
-               min="0" max="{{$q.MaxPoints}}">
+               min="0">
         {{end}}
       </div>
 
