@@ -187,10 +187,31 @@
         {{end}}
       </div>
 
+      {{/* ── Sloučit panel (zobrazí se při výběru) ── */}}
+      <div id="merge-bar-{{$q.ID}}" style="display:none;margin-bottom:.6rem;padding:.5rem .75rem;
+           background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);border-radius:8px;
+           display:none;align-items:center;gap:.6rem;flex-wrap:wrap">
+        <span style="font-size:.82rem;color:#818cf8" id="merge-info-{{$q.ID}}">0 vybraných</span>
+        <button type="button" class="btn-merge-selected"
+                data-q-id="{{$q.ID}}"
+                data-body-input="body_{{$q.ID}}"
+                data-correct-input="correct_{{$q.ID}}"
+                style="padding:.3rem .7rem;border-radius:6px;border:none;background:#6366f1;
+                       color:#fff;cursor:pointer;font-size:.82rem;font-weight:700">
+          🔀 Sloučit vybrané jako správnou
+        </button>
+        <button type="button" class="btn-clear-selection" data-q-id="{{$q.ID}}"
+                style="padding:.3rem .6rem;border-radius:6px;border:1px solid var(--border-d);
+                       background:transparent;color:var(--muted-d);cursor:pointer;font-size:.78rem">
+          Zrušit výběr
+        </button>
+      </div>
+
       <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <table style="width:100%;border-collapse:collapse;font-size:.85rem" id="grp-table-{{$q.ID}}">
         <thead>
           <tr style="border-bottom:1px solid var(--border-d)">
+            <th style="padding:.4rem .3rem;width:28px"></th>
             <th style="padding:.4rem .5rem;text-align:left;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d)">Odpověď</th>
             <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:60px">Počet</th>
             <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:70px">Shoda</th>
@@ -200,8 +221,13 @@
         </thead>
         <tbody>
         {{range $groups}}
-        <tr style="border-bottom:1px solid rgba(255,255,255,.05);
+        <tr class="grp-row" data-q-id="{{$q.ID}}" data-answer="{{.Text}}"
+            style="border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;
                    {{if .IsMatch}}background:rgba(52,211,153,.07){{else if .IsSimilar}}background:rgba(251,191,36,.05){{end}}">
+          <td style="padding:.4rem .3rem;text-align:center">
+            <input type="checkbox" class="grp-check" data-q-id="{{$q.ID}}" data-answer="{{.Text}}"
+                   style="width:15px;height:15px;cursor:pointer;accent-color:#6366f1">
+          </td>
           <td style="padding:.4rem .5rem">
             <span style="font-weight:{{if .IsMatch}}700{{else}}400{{end}};
                          color:{{if .IsMatch}}#34d399{{else if .IsSimilar}}#fbbf24{{else}}var(--text-d){{end}}">
@@ -469,6 +495,121 @@ document.addEventListener('DOMContentLoaded', function() {
                 btn.textContent = '✓ Správná';
                 alert('Chyba spojení.');
             });
+        });
+    });
+
+    // ── Checkboxy skupin + Sloučit vybrané ──────────────────────────────────
+    function updateMergeBar(qId) {
+        var checked = document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]:checked');
+        var bar = document.getElementById('merge-bar-' + qId);
+        var info = document.getElementById('merge-info-' + qId);
+        if (checked.length >= 1) {
+            bar.style.display = 'flex';
+            info.textContent = checked.length + ' ' + (checked.length === 1 ? 'vybraná' : checked.length <= 4 ? 'vybrané' : 'vybraných');
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    document.querySelectorAll('.grp-check').forEach(function(cb) {
+        cb.addEventListener('change', function(e) {
+            e.stopPropagation();
+            updateMergeBar(cb.dataset.qId);
+            // Vizuálně zvýrazni řádek
+            var row = cb.closest('tr');
+            if (cb.checked) row.style.outline = '2px solid rgba(99,102,241,.5)';
+            else row.style.outline = '';
+        });
+    });
+
+    // Klik na řádek = toggle checkbox
+    document.querySelectorAll('.grp-row').forEach(function(row) {
+        row.addEventListener('click', function(e) {
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+            var cb = row.querySelector('.grp-check');
+            if (!cb) return;
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event('change'));
+        });
+    });
+
+    document.querySelectorAll('.btn-clear-selection').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId = btn.dataset.qId;
+            document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]').forEach(function(cb) {
+                cb.checked = false;
+                var row = cb.closest('tr');
+                if (row) row.style.outline = '';
+            });
+            updateMergeBar(qId);
+        });
+    });
+
+    document.querySelectorAll('.btn-merge-selected').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId       = btn.dataset.qId;
+            var bodyInp   = document.getElementById(btn.dataset.bodyInput);
+            var correctInp = document.getElementById(btn.dataset.correctInput);
+            var pts = bodyInp ? parseInt(bodyInp.value, 10) : NaN;
+            if (isNaN(pts) || pts < 0) {
+                alert('Zadej počet bodů do pole "Body" u této otázky.');
+                if (bodyInp) bodyInp.focus();
+                return;
+            }
+            var checked = document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]:checked');
+            if (checked.length === 0) return;
+            var answers = [];
+            checked.forEach(function(cb) { answers.push(cb.dataset.answer); });
+
+            if (!confirm('Sloučit ' + answers.length + ' skupiny jako správné odpovědi (' + pts + ' b)?\n\n' + answers.join('\n') + '\n\nOstatní dostanou 0 b.')) return;
+
+            btn.disabled = true;
+            btn.textContent = '⏳';
+
+            // Postupně přidej každou odpověď jako variantu
+            var idx = 0;
+            function next() {
+                if (idx >= answers.length) {
+                    // Hotovo — spusť set-pts-for-correct pro aktualizaci bodů
+                    var fd2 = new URLSearchParams();
+                    fd2.append('_csrf', _extraCsrf);
+                    fd2.append('points', pts);
+                    fetch('/admin/extra/questions/' + qId + '/set-pts-for-correct', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: fd2
+                    }).then(function() {
+                        btn.textContent = '✅ Sloučeno';
+                        setTimeout(function() { location.reload(); }, 600);
+                    });
+                    return;
+                }
+                var fd = new URLSearchParams();
+                fd.append('_csrf', _extraCsrf);
+                fd.append('answer_text', answers[idx]);
+                fd.append('points', pts);
+                fetch('/admin/extra/questions/' + qId + '/set-correct-group', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: fd
+                }).then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.ok) {
+                        if (correctInp) correctInp.value = data.correct_answer || correctInp.value;
+                        idx++;
+                        next();
+                    } else {
+                        btn.disabled = false;
+                        btn.textContent = '🔀 Sloučit vybrané jako správnou';
+                        alert('Chyba: ' + (data.error || 'neznámá'));
+                    }
+                }).catch(function() {
+                    btn.disabled = false;
+                    btn.textContent = '🔀 Sloučit vybrané jako správnou';
+                    alert('Chyba spojení.');
+                });
+            }
+            next();
         });
     });
 
