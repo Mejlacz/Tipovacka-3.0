@@ -476,6 +476,18 @@ func templateFuncs() template.FuncMap {
 		"sub":      func(a, b int) int { return a - b },
 		"mul":      func(a, b int) int { return a * b },
 		"abs":      func(a int) int { if a < 0 { return -a }; return a },
+		// splitPipe splits a string by | and trims whitespace
+		"splitPipe": func(s string) []string {
+			parts := strings.Split(s, "|")
+			var out []string
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					out = append(out, p)
+				}
+			}
+			return out
+		},
 		// seq generates []int{from, from+1, ..., to}
 		"seq": func(from, to int) []int {
 			if to < from {

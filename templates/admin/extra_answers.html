@@ -136,21 +136,35 @@
         </div>
       </div>
 
-      {{/* ── Správná odpověď + body ── */}}
-      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.9rem;flex-wrap:wrap">
-        <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">✓ Správná odpověď:</label>
-        <input type="text" name="correct_{{$q.ID}}" id="correct_{{$q.ID}}"
-               value="{{strVal $q.CorrectAnswer}}"
-               placeholder="vyberte kliknutím nebo napište ručně"
-               style="flex:1;min-width:180px;max-width:300px;font-size:.85rem;padding:.35rem .6rem;
-                      background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:var(--text-d)">
+      {{/* ── Správná odpověď + chips ── */}}
+      {{/* Skrytý input pro form submit */}}
+      <input type="hidden" name="correct_{{$q.ID}}" id="correct_{{$q.ID}}" value="{{strVal $q.CorrectAnswer}}">
+      <div style="display:flex;align-items:flex-start;gap:.6rem;margin-bottom:.9rem;flex-wrap:wrap">
+        <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d);padding-top:.3rem">✓ Správná:</label>
+        <div id="chips_{{$q.ID}}" style="display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;min-height:2rem">
+          {{if $q.CorrectAnswer}}
+            {{range splitPipe (strVal $q.CorrectAnswer)}}
+            <span class="variant-chip" data-q-id="{{$q.ID}}" data-variant="{{.}}"
+                  style="display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .5rem;
+                         background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.35);
+                         border-radius:20px;font-size:.8rem;color:#34d399">
+              {{.}}
+              <button type="button" onclick="removeVariant('{{$q.ID}}','{{.}}')"
+                      style="background:none;border:none;color:#f87171;cursor:pointer;font-size:.85rem;
+                             padding:0;line-height:1;margin-left:.1rem" title="Odebrat variantu">×</button>
+            </span>
+            {{end}}
+          {{else}}
+          <span style="font-size:.82rem;color:var(--muted-d);font-style:italic">žádná — vyberte kliknutím níže</span>
+          {{end}}
+        </div>
         {{if $q.CorrectAnswer}}
         <button type="button" class="btn-clear-correct"
                 data-q-id="{{$q.ID}}"
                 data-correct-input="correct_{{$q.ID}}"
-                title="Vymazat správnou odpověď a resetovat všechny body na nevyhodnoceno"
-                style="padding:.32rem .55rem;border-radius:6px;border:1px solid rgba(239,68,68,.4);
-                       background:rgba(239,68,68,.08);color:#f87171;cursor:pointer;font-size:.8rem;white-space:nowrap">
+                title="Vymazat vše a resetovat body"
+                style="padding:.28rem .5rem;border-radius:6px;border:1px solid rgba(239,68,68,.4);
+                       background:rgba(239,68,68,.08);color:#f87171;cursor:pointer;font-size:.78rem;white-space:nowrap">
           🗑 Reset
         </button>
         {{end}}
@@ -315,6 +329,30 @@
 <script>
 var _extraCsrf = '{{.CSRFToken}}';
 
+// Odebrání varianty z chips + hidden input
+window.removeVariant = function(qId, variant) {
+    var inp = document.getElementById('correct_' + qId);
+    if (!inp) return;
+    var parts = inp.value.split('|').map(function(v){return v.trim();}).filter(function(v){return v && v !== variant;});
+    inp.value = parts.join('|');
+    renderChips(qId, parts);
+};
+
+function renderChips(qId, parts) {
+    var container = document.getElementById('chips_' + qId);
+    if (!container) return;
+    if (parts.length === 0) {
+        container.innerHTML = '<span style="font-size:.82rem;color:var(--muted-d);font-style:italic">žádná — vyberte kliknutím níže</span>';
+        return;
+    }
+    container.innerHTML = parts.map(function(v) {
+        return '<span style="display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .5rem;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.35);border-radius:20px;font-size:.8rem;color:#34d399">'
+            + v
+            + '<button type="button" onclick="removeVariant(\'' + qId + '\',\'' + v.replace(/'/g, "\\'") + '\')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:.85rem;padding:0;line-height:1;margin-left:.1rem" title="Odebrat">×</button>'
+            + '</span>';
+    }).join('');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
 
     // ── Body input → live-sync do zelených readonly inputů ──────────────────
@@ -474,7 +512,10 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(function(data) {
                 if (data.ok) {
                     var ci = document.getElementById(correctInpId);
-                    if (ci) ci.value = data.correct_answer || answerText;
+                    var newVal = data.correct_answer || answerText;
+                    if (ci) ci.value = newVal;
+                    // Aktualizuj chips
+                    renderChips(qId, newVal.split('|').map(function(v){return v.trim();}).filter(Boolean));
                     // Aktualizuj viditelný input správné skupiny
                     document.querySelectorAll('.grp-pts-vis').forEach(function(inp) {
                         if (inp.dataset.norm === normText) inp.value = data.points;
@@ -547,71 +588,94 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.btn-merge-selected').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            var qId       = btn.dataset.qId;
-            var bodyInp   = document.getElementById(btn.dataset.bodyInput);
-            var correctInp = document.getElementById(btn.dataset.correctInput);
-            var pts = bodyInp ? parseInt(bodyInp.value, 10) : NaN;
-            if (isNaN(pts) || pts < 0) {
-                alert('Zadej počet bodů do pole "Body" u této otázky.');
-                if (bodyInp) bodyInp.focus();
-                return;
-            }
+            var qId = btn.dataset.qId;
             var checked = document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]:checked');
             if (checked.length === 0) return;
-            var answers = [];
-            checked.forEach(function(cb) { answers.push(cb.dataset.answer); });
 
-            if (!confirm('Sloučit ' + answers.length + ' skupiny jako správné odpovědi (' + pts + ' b)?\n\n' + answers.join('\n') + '\n\nOstatní dostanou 0 b.')) return;
+            // Sesbírej data ze všech vybraných řádků
+            var totalCount = 0, allNames = [], allAnswers = [];
+            checked.forEach(function(cb) {
+                var row = cb.closest('tr');
+                allAnswers.push(cb.dataset.answer);
+                var countEl = row ? row.querySelector('td:nth-child(3)') : null;
+                if (countEl) totalCount += parseInt(countEl.textContent.trim(), 10) || 0;
+                var namesEl = row ? row.querySelector('div[style*="muted"]') : null;
+                if (namesEl) allNames.push(namesEl.textContent.trim());
+            });
 
-            btn.disabled = true;
-            btn.textContent = '⏳';
+            // Skryj vybrané řádky
+            checked.forEach(function(cb) {
+                var row = cb.closest('tr');
+                if (row) row.style.display = 'none';
+            });
 
-            // Postupně přidej každou odpověď jako variantu
-            var idx = 0;
-            function next() {
-                if (idx >= answers.length) {
-                    // Hotovo — spusť set-pts-for-correct pro aktualizaci bodů
-                    var fd2 = new URLSearchParams();
-                    fd2.append('_csrf', _extraCsrf);
-                    fd2.append('points', pts);
-                    fetch('/admin/extra/questions/' + qId + '/set-pts-for-correct', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                        body: fd2
-                    }).then(function() {
-                        btn.textContent = '✅ Sloučeno';
-                        setTimeout(function() { location.reload(); }, 600);
-                    });
-                    return;
-                }
-                var fd = new URLSearchParams();
-                fd.append('_csrf', _extraCsrf);
-                fd.append('answer_text', answers[idx]);
-                fd.append('points', pts);
-                fetch('/admin/extra/questions/' + qId + '/set-correct-group', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: fd
-                }).then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (data.ok) {
-                        if (correctInp) correctInp.value = data.correct_answer || correctInp.value;
-                        idx++;
-                        next();
-                    } else {
-                        btn.disabled = false;
-                        btn.textContent = '🔀 Sloučit vybrané jako správnou';
-                        alert('Chyba: ' + (data.error || 'neznámá'));
+            // Vlož sloučený řádek
+            var tbody = document.querySelector('#grp-table-' + qId + ' tbody');
+            var mergedRow = document.createElement('tr');
+            mergedRow.id = 'merged-row-' + qId;
+            mergedRow.style.cssText = 'border-bottom:1px solid rgba(255,255,255,.05);background:rgba(99,102,241,.08)';
+            mergedRow.setAttribute('data-merged-answers', JSON.stringify(allAnswers));
+            mergedRow.innerHTML = '<td style="padding:.4rem .3rem"></td>'
+                + '<td style="padding:.4rem .5rem">'
+                + '<span style="font-weight:700;color:#818cf8">🔀 ' + allAnswers[0] + ' <span style="font-size:.72rem;opacity:.7">+ ' + (allAnswers.length - 1) + ' variant</span></span>'
+                + '<div style="font-size:.72rem;color:var(--muted-d);margin-top:.1rem">' + allNames.join(', ') + '</div>'
+                + '</td>'
+                + '<td style="padding:.4rem .5rem;text-align:center;font-weight:700;color:#818cf8">' + totalCount + '</td>'
+                + '<td style="text-align:center"><span style="color:#818cf8">∪</span></td>'
+                + '<td></td>'
+                + '<td style="padding:.35rem .5rem;text-align:right;display:flex;gap:.3rem;justify-content:flex-end">'
+                + '<button type="button" class="btn-set-correct-merged" data-q-id="' + qId + '" data-body-input="body_' + qId + '" data-correct-input="correct_' + qId + '"'
+                + ' style="padding:.25rem .6rem;border-radius:5px;border:1px solid rgba(99,102,241,.4);background:rgba(99,102,241,.2);color:#818cf8;cursor:pointer;font-size:.75rem;white-space:nowrap">✓ Správná</button>'
+                + '<button type="button" onclick="cancelMerge(\'' + qId + '\')" style="padding:.25rem .5rem;border-radius:5px;border:1px solid var(--border-d);background:transparent;color:var(--muted-d);cursor:pointer;font-size:.73rem">✕ Zrušit</button>'
+                + '</td>';
+            tbody.insertBefore(mergedRow, tbody.firstChild);
+
+            // Skryj merge bar, zruš výběr
+            document.getElementById('merge-bar-' + qId).style.display = 'none';
+            checked.forEach(function(cb) { cb.checked = false; });
+
+            // Handler pro ✓ Správná na sloučeném řádku
+            mergedRow.querySelector('.btn-set-correct-merged').addEventListener('click', function() {
+                var bodyInp = document.getElementById('body_' + qId);
+                var pts = bodyInp ? parseInt(bodyInp.value, 10) : NaN;
+                if (isNaN(pts) || pts < 0) { alert('Zadej Body.'); return; }
+                var answers = JSON.parse(mergedRow.getAttribute('data-merged-answers'));
+                if (!confirm('Nastavit ' + answers.length + ' variant jako správné (' + pts + ' b)?\n\n' + answers.join('\n'))) return;
+
+                mergedRow.querySelector('.btn-set-correct-merged').disabled = true;
+                mergedRow.querySelector('.btn-set-correct-merged').textContent = '⏳';
+
+                var idx = 0;
+                function next() {
+                    if (idx >= answers.length) {
+                        var fd2 = new URLSearchParams();
+                        fd2.append('_csrf', _extraCsrf); fd2.append('points', pts);
+                        fetch('/admin/extra/questions/' + qId + '/set-pts-for-correct', {
+                            method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:fd2
+                        }).then(function() { setTimeout(function() { location.reload(); }, 400); });
+                        return;
                     }
-                }).catch(function() {
-                    btn.disabled = false;
-                    btn.textContent = '🔀 Sloučit vybrané jako správnou';
-                    alert('Chyba spojení.');
-                });
-            }
-            next();
+                    var fd = new URLSearchParams();
+                    fd.append('_csrf', _extraCsrf); fd.append('answer_text', answers[idx]); fd.append('points', pts);
+                    fetch('/admin/extra/questions/' + qId + '/set-correct-group', {
+                        method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:fd
+                    }).then(function(r){return r.json();}).then(function(d){
+                        if (d.ok) { idx++; next(); }
+                        else { alert('Chyba: '+(d.error||'neznámá')); }
+                    });
+                }
+                next();
+            });
         });
     });
+
+    window.cancelMerge = function(qId) {
+        var merged = document.getElementById('merged-row-' + qId);
+        if (merged) merged.remove();
+        document.querySelectorAll('#grp-table-' + qId + ' tbody tr[style*="display: none"]').forEach(function(r) {
+            r.style.display = '';
+        });
+    };
 
 });
 </script>
