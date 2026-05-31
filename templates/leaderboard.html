@@ -130,6 +130,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         <tr>
             <th class="col-place">#</th>
             <th class="col-user">Tipér</th>
+            {{if .ExtraCols}}<th class="col-total" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>{{end}}
             <th class="col-pts">Body</th>
             {{range .Matches}}
             {{$htName := coalesce .HomeTeam.DisplayName .HomeTeam.Name}}
@@ -190,9 +191,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 {{end}}
             </th>
             {{end}}
-            {{if .ExtraCols}}
-            <th class="col-total" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>
-            {{end}}
             <th class="col-match" title="Tipy">
                 <div class="match-header" style="font-size:0.78rem">Tipy</div>
             </th>
@@ -201,6 +199,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         <tr class="results-row">
             <td class="col-place" style="color:var(--muted-d)"></td>
             <td class="col-user" style="font-size:0.75rem;color:var(--muted-d)">Výsledky</td>
+            {{if .ExtraCols}}<td class="col-total" style="border-left:2px solid #dee2e6"></td>{{end}}
             <td class="col-pts"></td>
             {{range .Matches}}
             <td class="cell-result{{if or $.User.IsAdmin $.User.IsOwner}} result-editable{{end}}"
@@ -225,9 +224,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                     <span style="color:var(--muted-d)">—</span>
                 {{end}}
             </td>
-            {{end}}
-            {{if .ExtraCols}}
-            <td class="col-total" style="border-left:2px solid #dee2e6"></td>
             {{end}}
             <td></td>
         </tr>
@@ -256,6 +252,14 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                     onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4">🗑</button>
             {{end}}
         </td>
+        {{if $.ExtraCols}}
+        <td class="col-total" style="border-left:2px solid #dee2e6;text-align:center">
+            <strong>{{$row.GrandTotal}}</strong>
+            {{if gt $row.Extra 0}}
+            <br><span style="font-size:0.7rem;color:#888">(+{{$row.Extra}} 🎯)</span>
+            {{end}}
+        </td>
+        {{end}}
         <td class="col-pts"><strong>{{$row.Total}}</strong></td>
         {{range $.Matches}}
         {{$tip := index (index $.TipsByUser $row.User.ID) .ID}}
@@ -308,15 +312,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 <span class="tip-hidden" title="Skryto do odhalení" style="color:var(--accent)">✓</span>
             {{else}}
                 <span style="color:var(--muted-d)">–</span>
-            {{end}}
-        </td>
-        {{end}}
-        {{/* ── Grand total (tipy + extra) ── */}}
-        {{if $.ExtraCols}}
-        <td class="col-total" style="border-left:2px solid #dee2e6;text-align:center">
-            <strong>{{$row.GrandTotal}}</strong>
-            {{if gt $row.Extra 0}}
-            <br><span style="font-size:0.7rem;color:#888">(+{{$row.Extra}} 🎯)</span>
             {{end}}
         </td>
         {{end}}
