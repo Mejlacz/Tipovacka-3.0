@@ -143,13 +143,15 @@
         var cid = compFilter.value;
         rows.forEach(function(row) {
             var inactive = row.dataset.inactive === '1';
-            if (inactive && !showInactive) { row.style.display = 'none'; return; }
-            if (!cid) {
-                row.style.display = '';
-            } else {
+            var hide = false;
+            if (inactive && !showInactive) {
+                hide = true;
+            } else if (cid) {
                 var comps = JSON.parse(row.dataset.comps || '[]');
-                row.style.display = comps.indexOf(parseInt(cid)) >= 0 ? '' : 'none';
+                if (comps.indexOf(parseInt(cid)) < 0) hide = true;
             }
+            row.style.display = hide ? 'none' : '';
+            if (hide) row.querySelector('input[type=checkbox]').checked = false;
         });
         updateCount();
     }
