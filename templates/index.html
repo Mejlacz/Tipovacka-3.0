@@ -20,7 +20,7 @@
         {{if ne .CompName $prevComp}}
             {{if $prevComp}}</div>{{end}}
             <div style="font-size:.72rem;font-weight:700;color:var(--accent);letter-spacing:.05em;padding:.5rem 0 .2rem;border-top:{{if $prevComp}}1px solid var(--border-d){{else}}none{{end}};margin-top:{{if $prevComp}}.4rem{{else}}0{{end}}">
-                {{.CompName}} · {{.RoundName}}
+                {{.CompName}}
             </div>
             <div class="qt-group">
             {{$prevComp = .CompName}}

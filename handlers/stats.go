@@ -446,8 +446,7 @@ func StatsExtended(tmpl *template.Template) http.HandlerFunc {
 			JOIN matches m ON m.id = t.match_id
 			JOIN teams ht ON ht.id = m.home_team_id
 			JOIN teams at ON at.id = m.away_team_id
-			JOIN rounds ro ON ro.id = m.round_id
-			WHERE ro.competition_id = $1 AND t.user_id = $2
+			WHERE m.competition_id = $1 AND t.user_id = $2
 			  AND m.is_finished = TRUE AND t.points IS NOT NULL
 			ORDER BY m.match_date`, compID, targetUser.ID)
 

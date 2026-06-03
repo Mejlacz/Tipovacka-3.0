@@ -12,7 +12,6 @@
         <thead>
             <tr style="background:var(--bg2)">
                 <th style="text-align:left;padding:.4rem .5rem">Zápas</th>
-                <th style="text-align:left;padding:.4rem .5rem">Kolo</th>
                 <th style="text-align:left;padding:.4rem .5rem">Datum</th>
                 <th style="padding:.4rem .5rem">Výsledek</th>
             </tr>
@@ -24,9 +23,6 @@
                 {{if .HomeTeam}}{{coalesce .HomeTeam.DisplayName .HomeTeam.Name}}{{else}}tým {{.HomeTeamID}}{{end}}
                 vs
                 {{if .AwayTeam}}{{coalesce .AwayTeam.DisplayName .AwayTeam.Name}}{{else}}tým {{.AwayTeamID}}{{end}}
-            </td>
-            <td style="padding:.4rem .5rem;color:var(--muted-d);font-size:.8rem">
-                {{if .Round}}{{.Round.Name}}{{end}}
             </td>
             <td style="padding:.4rem .5rem;color:var(--muted-d);font-size:.8rem">
                 {{if .MatchDate}}{{.MatchDate.Format "02.01. 15:04"}}{{else}}—{{end}}

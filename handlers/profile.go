@@ -55,24 +55,11 @@ func ProfilePage(tmpl *template.Template) http.HandlerFunc {
 		var stats []CompStat
 
 		for _, comp := range competitions {
-			// Get round IDs for this competition
-			var roundIDs []int
-			rRows, _ := db.Pool.Query(ctx, `SELECT id FROM rounds WHERE competition_id=$1`, comp.ID)
-			for rRows.Next() {
-				var rid int
-				_ = rRows.Scan(&rid)
-				roundIDs = append(roundIDs, rid)
-			}
-			rRows.Close()
-			if len(roundIDs) == 0 {
-				continue
-			}
-
-			// Matches
+			// Matches přímo podle competition_id
 			var matchIDs []int
 			finishedIDs := map[int]bool{}
 			mRows, _ := db.Pool.Query(ctx,
-				`SELECT id, is_finished FROM matches WHERE round_id = ANY($1)`, roundIDs)
+				`SELECT id, is_finished FROM matches WHERE competition_id = $1`, comp.ID)
 			for mRows.Next() {
 				var mid int
 				var fin bool
