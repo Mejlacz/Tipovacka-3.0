@@ -125,50 +125,12 @@ func fdCall(path string, dst interface{}) error {
 }
 
 // ── GET /admin/api/rounds ─────────────────────────────────────────────────────
-// Vrátí JSON seznam kol pro zadanou soutěž.
-// Query params: competition_id
+// Kola odstraněna — vždy vrátí prázdný seznam (zachováno pro zpětnou kompatibilitu URL).
 
 func AdminAPIRounds(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
-	admin := RequireAdmin(w, r)
-	if admin == nil {
-		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
-		return
-	}
-
-	compID, _ := strconv.Atoi(r.URL.Query().Get("competition_id"))
-	if compID == 0 {
-		w.Write([]byte(`{"ok":true,"rounds":[]}`))
-		return
-	}
-
-	ctx := context.Background()
-	rows, err := db.Pool.Query(ctx,
-		`SELECT id, name FROM rounds WHERE competition_id=$1 ORDER BY id`, compID)
-	if err != nil {
-		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": err.Error()})
-		w.Write(b)
-		return
-	}
-	defer rows.Close()
-
-	type roundItem struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	}
-	var rounds []roundItem
-	for rows.Next() {
-		var ri roundItem
-		if err := rows.Scan(&ri.ID, &ri.Name); err == nil {
-			rounds = append(rounds, ri)
-		}
-	}
-	if rounds == nil {
-		rounds = []roundItem{}
-	}
-	b, _ := json.Marshal(map[string]interface{}{"ok": true, "rounds": rounds})
-	w.Write(b)
+	RequireAdmin(w, r)
+	w.Write([]byte(`{"ok":true,"rounds":[]}`))
 }
 
 // ── GET /admin/api/competitions ───────────────────────────────────────────────

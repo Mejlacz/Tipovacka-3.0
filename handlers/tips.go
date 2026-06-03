@@ -306,21 +306,10 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 }
 
 // ─── GET /round/{id} (redirect) ──────────────────────────────────────────────
+// Kola odstraněna — staré URL /round/{id} přesměruje na hlavní stránku.
 
 func RoundRedirect(w http.ResponseWriter, r *http.Request) {
-	roundID, err := strconv.Atoi(r.PathValue("round_id"))
-	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	ctx := context.Background()
-	var compID int
-	err = db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id = $1`, roundID).Scan(&compID)
-	if err != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	http.Redirect(w, r, "/competition/"+strconv.Itoa(compID), http.StatusMovedPermanently)
+	http.Redirect(w, r, "/", http.StatusMovedPermanently)
 }
 
 // ─── POST /tips/submit ────────────────────────────────────────────────────────

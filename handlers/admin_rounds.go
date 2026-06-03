@@ -1,15 +1,11 @@
 // handlers/admin_rounds.go — Tipovačka 3.0
-// Kola jsou odstraněna — všechny endpointy přesměrují na /admin/competitions/{id}/matches.
+// Kola jsou odstraněna — všechny endpointy přesměrují na admin.
 package handlers
 
 import (
-	"context"
 	"html/template"
 	"net/http"
 	"strconv"
-
-	"tipovacka/db"
-	"tipovacka/middleware"
 )
 
 // GET /admin/competitions/{id}/rounds → redirect na matches
@@ -28,7 +24,7 @@ func AdminRoundCreate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
 }
 
-// POST /admin/rounds/quick-new → redirect na přidání zápasů (bez kola)
+// POST /admin/rounds/quick-new → redirect na přidání zápasů
 func AdminRoundQuickNew(w http.ResponseWriter, r *http.Request) {
 	RequireAdmin(w, r)
 	if err := r.ParseForm(); err == nil {
@@ -41,33 +37,20 @@ func AdminRoundQuickNew(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/add-matches", http.StatusSeeOther)
 }
 
-// POST /admin/rounds/{id}/edit → redirect na competition matches
+// POST /admin/rounds/{id}/edit → redirect na admin
 func AdminRoundEdit(w http.ResponseWriter, r *http.Request) {
 	RequireAdmin(w, r)
-	roundID, _ := strconv.Atoi(r.PathValue("round_id"))
-	ctx := context.Background()
-	var compID int
-	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
-	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
-// POST /admin/rounds/{id}/toggle → redirect na competition matches
+// POST /admin/rounds/{id}/toggle → redirect na admin
 func AdminRoundToggle(w http.ResponseWriter, r *http.Request) {
 	RequireAdmin(w, r)
-	roundID, _ := strconv.Atoi(r.PathValue("round_id"))
-	ctx := context.Background()
-	var compID int
-	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
-	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
 
-// POST /admin/rounds/{id}/notify-new → redirect na competition matches
+// POST /admin/rounds/{id}/notify-new → redirect na admin
 func AdminRoundNotifyNew(w http.ResponseWriter, r *http.Request) {
 	RequireAdmin(w, r)
-	roundID, _ := strconv.Atoi(r.PathValue("round_id"))
-	ctx := context.Background()
-	var compID int
-	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
-	middleware.SetFlash(w, r, "ok", "Kola jsou odstraněna — zápasy jsou přímo pod soutěží.")
-	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }

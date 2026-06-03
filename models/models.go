@@ -71,16 +71,6 @@ type Competition struct {
 	ExtraRevealAt *time.Time // NULL = zveřejní se ve stejný čas jako deadline; jinak konkrétní čas
 }
 
-// ─── Round ────────────────────────────────────────────────────────────────────
-
-type Round struct {
-	ID            int
-	CompetitionID int
-	Name          string
-	Deadline      *time.Time
-	IsActive      bool
-}
-
 // ─── Team ─────────────────────────────────────────────────────────────────────
 
 type Team struct {
@@ -105,8 +95,7 @@ func (t *Team) Display() string {
 
 type Match struct {
 	ID            int
-	RoundID       int  // deprecated — zachováno pro zpětnou kompatibilitu, používej CompetitionID
-	CompetitionID int  // přímý odkaz na soutěž
+	CompetitionID int
 	HomeTeamID    int
 	AwayTeamID    int
 	HomeScore     *int
@@ -117,11 +106,9 @@ type Match struct {
 	// Joined fields (přes JOIN, ne vždy naplněny)
 	HomeTeam     *Team
 	AwayTeam     *Team
-	Round        *Round
 	// Flattened JOIN fields (rychlé query bez objektů)
 	HomeTeamName string
 	AwayTeamName string
-	RoundName    string
 }
 
 // ─── Tip ──────────────────────────────────────────────────────────────────────

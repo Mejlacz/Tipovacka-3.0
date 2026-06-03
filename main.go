@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -263,18 +262,12 @@ func main() {
 	// Admin matches
 	r.Get("/admin/competitions/{competition_id}/matches", handlers.AdminMatchesList(tmpl))
 	r.Post("/admin/competitions/{competition_id}/matches/new", handlers.AdminMatchCreate)
-	// Backward compat: staré round-based URL přesměruje na competition matches
+	// Backward compat: staré round-based URL přesměruje na admin
 	r.Get("/admin/rounds/{round_id}/matches", func(w http.ResponseWriter, r *http.Request) {
-		roundID := chi.URLParam(r, "round_id")
-		var compID int
-		_ = db.Pool.QueryRow(r.Context(), `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
-		http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusMovedPermanently)
+		http.Redirect(w, r, "/admin", http.StatusMovedPermanently)
 	})
 	r.Post("/admin/rounds/{round_id}/matches/new", func(w http.ResponseWriter, r *http.Request) {
-		roundID := chi.URLParam(r, "round_id")
-		var compID int
-		_ = db.Pool.QueryRow(r.Context(), `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
-		http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 	})
 	r.Post("/admin/matches/{match_id}/edit", handlers.AdminMatchEdit)
 	r.Post("/admin/matches/{match_id}/set-result", handlers.AdminMatchSetResult)

@@ -386,19 +386,6 @@ func NowPrague() time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
 }
 
-// IsBeforeDeadline vrátí true pokud tipování ještě není uzavřeno.
-// Deprecated: používej IsBeforeDeadlineComp.
-func IsBeforeDeadline(round *models.Round, match *models.Match) bool {
-	now := NowPrague()
-	if match.MatchDate != nil {
-		return now.Before(*match.MatchDate)
-	}
-	if round != nil && round.Deadline != nil {
-		return now.Before(*round.Deadline)
-	}
-	return false
-}
-
 // IsBeforeDeadlineComp vrátí true pokud tipování pro zápas v dané soutěži ještě není uzavřeno.
 // Priorita: competition.Deadline (pokud nastavena) → match.MatchDate → false.
 func IsBeforeDeadlineComp(comp *models.Competition, match *models.Match) bool {
