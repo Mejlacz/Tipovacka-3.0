@@ -16,40 +16,40 @@ import (
 	"tipovacka/models"
 )
 
-// GET /admin/rounds/{id}/matches
+// GET /admin/competitions/{competition_id}/matches
 func AdminMatchesList(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		admin := RequireAdmin(w, r)
 		if admin == nil {
 			return
 		}
-		roundID, _ := strconv.Atoi(r.PathValue("round_id"))
+		compID, _ := strconv.Atoi(r.PathValue("competition_id"))
 		ctx := context.Background()
 
-		rnd := &models.Round{}
+		comp := &models.Competition{}
 		err := db.Pool.QueryRow(ctx,
-			`SELECT id, competition_id, name, deadline, is_active FROM rounds WHERE id=$1`, roundID).
-			Scan(&rnd.ID, &rnd.CompetitionID, &rnd.Name, &rnd.Deadline, &rnd.IsActive)
+			`SELECT id, name, season, is_active, sport, sort_order, deadline FROM competitions WHERE id=$1`, compID).
+			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder, &comp.Deadline)
 		if err != nil {
 			http.Redirect(w, r, "/admin", http.StatusSeeOther)
 			return
 		}
 
 		matchRows, _ := db.Pool.Query(ctx,
-			`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
+			`SELECT m.id, m.competition_id, m.home_team_id, m.away_team_id,
 			        m.home_score, m.away_score, m.match_date, m.is_finished,
 			        ht.id, ht.name, ht.display_name,
 			        at.id, at.name, at.display_name
 			   FROM matches m
 			   JOIN teams ht ON ht.id = m.home_team_id
 			   JOIN teams at ON at.id = m.away_team_id
-			  WHERE m.round_id=$1
-			  ORDER BY m.is_finished ASC, m.match_date DESC NULLS LAST`, roundID)
+			  WHERE m.competition_id=$1
+			  ORDER BY m.is_finished ASC, m.match_date ASC NULLS LAST`, compID)
 		var matches []*models.Match
 		for matchRows.Next() {
 			m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}}
 			_ = matchRows.Scan(
-				&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
+				&m.ID, &m.CompetitionID, &m.HomeTeamID, &m.AwayTeamID,
 				&m.HomeScore, &m.AwayScore, &m.MatchDate, &m.IsFinished,
 				&m.HomeTeam.ID, &m.HomeTeam.Name, &m.HomeTeam.DisplayName,
 				&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName)
@@ -63,7 +63,7 @@ func AdminMatchesList(tmpl *template.Template) http.HandlerFunc {
 			   FROM teams t
 			   JOIN competition_teams ct ON ct.team_id = t.id
 			  WHERE ct.competition_id=$1
-			  ORDER BY t.name`, rnd.CompetitionID)
+			  ORDER BY t.name`, compID)
 		var teams []*models.Team
 		for teamRows.Next() {
 			t := &models.Team{}
@@ -72,36 +72,23 @@ func AdminMatchesList(tmpl *template.Template) http.HandlerFunc {
 		}
 		teamRows.Close()
 
-		// Všechna kola soutěže (pro přesun zápasu)
-		allRoundRows, _ := db.Pool.Query(ctx,
-			`SELECT id, competition_id, name, deadline, is_active FROM rounds
-			  WHERE competition_id=$1 ORDER BY id DESC`, rnd.CompetitionID)
-		var allRounds []*models.Round
-		for allRoundRows.Next() {
-			ar := &models.Round{}
-			_ = allRoundRows.Scan(&ar.ID, &ar.CompetitionID, &ar.Name, &ar.Deadline, &ar.IsActive)
-			allRounds = append(allRounds, ar)
-		}
-		allRoundRows.Close()
-
 		RenderTemplate(w, r, tmpl, "matches.html", TemplateData{
-			"User":      admin,
-			"Round":     rnd,
-			"Matches":   matches,
-			"Teams":     teams,
-			"AllRounds": allRounds,
-			"Flash":     middleware.GetFlash(w, r),
+			"User":    admin,
+			"Comp":    comp,
+			"Matches": matches,
+			"Teams":   teams,
+			"Flash":   middleware.GetFlash(w, r),
 		})
 	}
 }
 
-// POST /admin/rounds/{id}/matches/new
+// POST /admin/competitions/{competition_id}/matches/new
 func AdminMatchCreate(w http.ResponseWriter, r *http.Request) {
 	admin := RequireAdmin(w, r)
 	if admin == nil {
 		return
 	}
-	roundID, _ := strconv.Atoi(r.PathValue("round_id"))
+	compID, _ := strconv.Atoi(r.PathValue("competition_id"))
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
@@ -117,10 +104,10 @@ func AdminMatchCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_, _ = db.Pool.Exec(context.Background(),
-		`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, is_finished)
+		`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, is_finished)
 		 VALUES ($1,$2,$3,$4,false)`,
-		roundID, homeTeamID, awayTeamID, matchDate)
-	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+		compID, homeTeamID, awayTeamID, matchDate)
+	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
 }
 
 // POST /admin/matches/{id}/edit
@@ -136,24 +123,27 @@ func AdminMatchEdit(w http.ResponseWriter, r *http.Request) {
 	}
 	homeTeamID, _ := strconv.Atoi(r.FormValue("home_team_id"))
 	awayTeamID, _ := strconv.Atoi(r.FormValue("away_team_id"))
-	roundID, _ := strconv.Atoi(r.FormValue("round_id"))
 	matchDateStr := r.FormValue("match_date")
+
+	ctx := context.Background()
+	// Zjisti competition_id zápasu
+	var compID int
+	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM matches WHERE id=$1`, matchID).Scan(&compID)
+
 	if matchDateStr != "" {
-		// Datum zadáno — aktualizuj vč. data
 		var matchDate *time.Time
 		if t, err := time.ParseInLocation("2006-01-02T15:04", matchDateStr, pragueLocation); err == nil {
 			matchDate = &t
 		}
-		_, _ = db.Pool.Exec(context.Background(),
-			`UPDATE matches SET home_team_id=$1, away_team_id=$2, round_id=$3, match_date=$4 WHERE id=$5`,
-			homeTeamID, awayTeamID, roundID, matchDate, matchID)
+		_, _ = db.Pool.Exec(ctx,
+			`UPDATE matches SET home_team_id=$1, away_team_id=$2, match_date=$3 WHERE id=$4`,
+			homeTeamID, awayTeamID, matchDate, matchID)
 	} else {
-		// Datum nevyplněno — zachovej existující datum (nesmaž ho)
-		_, _ = db.Pool.Exec(context.Background(),
-			`UPDATE matches SET home_team_id=$1, away_team_id=$2, round_id=$3 WHERE id=$4`,
-			homeTeamID, awayTeamID, roundID, matchID)
+		_, _ = db.Pool.Exec(ctx,
+			`UPDATE matches SET home_team_id=$1, away_team_id=$2 WHERE id=$3`,
+			homeTeamID, awayTeamID, matchID)
 	}
-	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
 }
 
 // POST /admin/matches/{id}/result
@@ -175,11 +165,11 @@ func AdminMatchSetResult(w http.ResponseWriter, r *http.Request) {
 	// Načti starý stav pro audit
 	var oldHome, oldAway *int
 	var oldFinished bool
-	var roundID int
+	var compIDForResult int
 	var homeTeamID, awayTeamID int
 	_ = db.Pool.QueryRow(ctx,
-		`SELECT round_id, home_team_id, away_team_id, home_score, away_score, is_finished FROM matches WHERE id=$1`, matchID).
-		Scan(&roundID, &homeTeamID, &awayTeamID, &oldHome, &oldAway, &oldFinished)
+		`SELECT competition_id, home_team_id, away_team_id, home_score, away_score, is_finished FROM matches WHERE id=$1`, matchID).
+		Scan(&compIDForResult, &homeTeamID, &awayTeamID, &oldHome, &oldAway, &oldFinished)
 
 	// Načti jména týmů
 	var homeName, awayName string
@@ -205,12 +195,9 @@ func AdminMatchSetResult(w http.ResponseWriter, r *http.Request) {
 	LogAction(&admin.ID, admin.Username, "match_score", "match", &matchID, desc, &oldStr, &newStr)
 
 	RecalculateTips(ctx, matchID, homeScore, awayScore)
+	RecalculateStandings(compIDForResult)
 
-	var compID int
-	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
-	RecalculateStandings(compID)
-
-	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compIDForResult)+"/matches", http.StatusSeeOther)
 }
 
 // POST /admin/matches/{id}/clear-result
@@ -222,12 +209,12 @@ func AdminMatchClearResult(w http.ResponseWriter, r *http.Request) {
 	matchID, _ := strconv.Atoi(r.PathValue("match_id"))
 	ctx := context.Background()
 
-	var roundID int
+	var compIDClear int
 	var oldHome, oldAway *int
 	var homeTeamID, awayTeamID int
 	_ = db.Pool.QueryRow(ctx,
-		`SELECT round_id, home_team_id, away_team_id, home_score, away_score FROM matches WHERE id=$1`, matchID).
-		Scan(&roundID, &homeTeamID, &awayTeamID, &oldHome, &oldAway)
+		`SELECT competition_id, home_team_id, away_team_id, home_score, away_score FROM matches WHERE id=$1`, matchID).
+		Scan(&compIDClear, &homeTeamID, &awayTeamID, &oldHome, &oldAway)
 
 	var homeName, awayName string
 	_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(display_name, name) FROM teams WHERE id=$1`, homeTeamID).Scan(&homeName)
@@ -237,9 +224,7 @@ func AdminMatchClearResult(w http.ResponseWriter, r *http.Request) {
 		`UPDATE matches SET home_score=NULL, away_score=NULL, is_finished=false WHERE id=$1`, matchID)
 	_, _ = db.Pool.Exec(ctx, `UPDATE tips SET points=NULL WHERE match_id=$1`, matchID)
 
-	var compID int
-	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
-	RecalculateStandings(compID)
+	RecalculateStandings(compIDClear)
 
 	oldHS := "–"
 	if oldHome != nil && oldAway != nil {
@@ -248,7 +233,7 @@ func AdminMatchClearResult(w http.ResponseWriter, r *http.Request) {
 	desc := "Smazáno skóre " + homeName + " – " + awayName + ": " + oldHS + " → —"
 	LogAction(&admin.ID, admin.Username, "match_score_clear", "match", &matchID, desc, nil, nil)
 
-	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compIDClear)+"/matches", http.StatusSeeOther)
 }
 
 // POST /admin/matches/{id}/delete (AJAX)
@@ -262,11 +247,11 @@ func AdminMatchDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	var isFinished bool
-	var homeTeamID, awayTeamID, roundID int
+	var homeTeamID, awayTeamID int
 	var matchDate *time.Time
 	err := db.Pool.QueryRow(ctx,
-		`SELECT is_finished, home_team_id, away_team_id, round_id, match_date FROM matches WHERE id=$1`, matchID).
-		Scan(&isFinished, &homeTeamID, &awayTeamID, &roundID, &matchDate)
+		`SELECT is_finished, home_team_id, away_team_id, match_date FROM matches WHERE id=$1`, matchID).
+		Scan(&isFinished, &homeTeamID, &awayTeamID, &matchDate)
 	if err != nil {
 		jsonError(w, "not_found", http.StatusNotFound)
 		return
@@ -478,9 +463,7 @@ func AdminRemoveUserTips(w http.ResponseWriter, r *http.Request) {
 		DELETE FROM tips
 		WHERE user_id=$1
 		  AND match_id IN (
-		      SELECT m.id FROM matches m
-		      JOIN rounds r ON r.id = m.round_id
-		      WHERE r.competition_id=$2
+		      SELECT id FROM matches WHERE competition_id=$2
 		  )`, userID, compID)
 	if err != nil {
 		jsonError(w, "db_error", http.StatusInternalServerError)
@@ -504,15 +487,13 @@ func AdminUnscored(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 		matchRows, _ := db.Pool.Query(ctx,
-			`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
+			`SELECT m.id, m.competition_id, m.home_team_id, m.away_team_id,
 			        m.home_score, m.away_score, m.match_date, m.is_finished,
 			        ht.id, ht.name, ht.display_name,
 			        at.id, at.name, at.display_name,
-			        r.id, r.name, r.competition_id,
 			        c.id, c.name
 			   FROM matches m
-			   JOIN rounds r ON r.id = m.round_id
-			   JOIN competitions c ON c.id = r.competition_id
+			   JOIN competitions c ON c.id = m.competition_id
 			   JOIN teams ht ON ht.id = m.home_team_id
 			   JOIN teams at ON at.id = m.away_team_id
 			  WHERE m.is_finished = false AND c.is_active = true
@@ -526,14 +507,13 @@ func AdminUnscored(tmpl *template.Template) http.HandlerFunc {
 		comps := map[int]*compEntry{}
 		var compOrder []int
 		for matchRows.Next() {
-			m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}, Round: &models.Round{}}
+			m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}}
 			comp := &models.Competition{}
 			_ = matchRows.Scan(
-				&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
+				&m.ID, &m.CompetitionID, &m.HomeTeamID, &m.AwayTeamID,
 				&m.HomeScore, &m.AwayScore, &m.MatchDate, &m.IsFinished,
 				&m.HomeTeam.ID, &m.HomeTeam.Name, &m.HomeTeam.DisplayName,
 				&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName,
-				&m.Round.ID, &m.Round.Name, &m.Round.CompetitionID,
 				&comp.ID, &comp.Name)
 			if _, ok := comps[comp.ID]; !ok {
 				comps[comp.ID] = &compEntry{Comp: comp}
@@ -560,51 +540,39 @@ func AdminBulkResultsForm(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 		matchRows, _ := db.Pool.Query(ctx,
-			`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
+			`SELECT m.id, m.competition_id, m.home_team_id, m.away_team_id,
 			        m.home_score, m.away_score, m.match_date, m.is_finished,
 			        ht.id, ht.name, at.id, at.name,
-			        r.id, r.name, r.competition_id,
 			        c.id, c.name
 			   FROM matches m
-			   JOIN rounds r ON r.id = m.round_id
-			   JOIN competitions c ON c.id = r.competition_id
+			   JOIN competitions c ON c.id = m.competition_id
 			   JOIN teams ht ON ht.id = m.home_team_id
 			   JOIN teams at ON at.id = m.away_team_id
 			  WHERE m.is_finished = false AND c.is_active = true
 			  ORDER BY m.match_date ASC NULLS LAST`)
 
-		type roundEntry struct {
-			Round   *models.Round
+		type compEntry2 struct {
+			Comp    *models.Competition
 			Matches []*models.Match
 		}
-		type compEntry struct {
-			Comp       *models.Competition
-			Rounds     map[int]*roundEntry
-			RoundOrder []int
-		}
-		comps := map[int]*compEntry{}
+		comps2 := map[int]*compEntry2{}
 		var compOrder []int
 		for matchRows.Next() {
-			m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}, Round: &models.Round{}}
+			m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}}
 			comp := &models.Competition{}
 			_ = matchRows.Scan(
-				&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
+				&m.ID, &m.CompetitionID, &m.HomeTeamID, &m.AwayTeamID,
 				&m.HomeScore, &m.AwayScore, &m.MatchDate, &m.IsFinished,
 				&m.HomeTeam.ID, &m.HomeTeam.Name, &m.AwayTeam.ID, &m.AwayTeam.Name,
-				&m.Round.ID, &m.Round.Name, &m.Round.CompetitionID,
 				&comp.ID, &comp.Name)
-			if _, ok := comps[comp.ID]; !ok {
-				comps[comp.ID] = &compEntry{Comp: comp, Rounds: map[int]*roundEntry{}}
+			if _, ok := comps2[comp.ID]; !ok {
+				comps2[comp.ID] = &compEntry2{Comp: comp}
 				compOrder = append(compOrder, comp.ID)
 			}
-			ce := comps[comp.ID]
-			if _, ok := ce.Rounds[m.Round.ID]; !ok {
-				ce.Rounds[m.Round.ID] = &roundEntry{Round: m.Round}
-				ce.RoundOrder = append(ce.RoundOrder, m.Round.ID)
-			}
-			ce.Rounds[m.Round.ID].Matches = append(ce.Rounds[m.Round.ID].Matches, m)
+			comps2[comp.ID].Matches = append(comps2[comp.ID].Matches, m)
 		}
 		matchRows.Close()
+		comps := comps2
 
 		flash := GetFlash(w, r)
 		RenderTemplate(w, r, tmpl, "bulk_results.html", TemplateData{
@@ -654,9 +622,9 @@ func AdminBulkResultsSubmit(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		var isFinished bool
-		var roundID int
-		err = db.Pool.QueryRow(ctx, `SELECT is_finished, round_id FROM matches WHERE id=$1`, mid).
-			Scan(&isFinished, &roundID)
+		var compID int
+		err = db.Pool.QueryRow(ctx, `SELECT is_finished, competition_id FROM matches WHERE id=$1`, mid).
+			Scan(&isFinished, &compID)
 		if err != nil || isFinished {
 			continue
 		}
@@ -664,9 +632,6 @@ func AdminBulkResultsSubmit(w http.ResponseWriter, r *http.Request) {
 			`UPDATE matches SET home_score=$1, away_score=$2, is_finished=true WHERE id=$3`,
 			homeScore, awayScore, mid)
 		RecalculateTips(ctx, mid, homeScore, awayScore)
-
-		var compID int
-		_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
 		affectedComps[compID] = true
 		saved++
 	}
@@ -695,8 +660,7 @@ func AdminUnscoredCount(w http.ResponseWriter, r *http.Request) {
 	var count int
 	_ = db.Pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM matches m
-		   JOIN rounds r ON r.id = m.round_id
-		   JOIN competitions c ON c.id = r.competition_id
+		   JOIN competitions c ON c.id = m.competition_id
 		  WHERE m.is_finished = false AND c.is_active = true`).Scan(&count)
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"count":` + strconv.Itoa(count) + `}`))
@@ -720,24 +684,6 @@ func AdminQuickAddMatchAjax(w http.ResponseWriter, r *http.Request) {
 	matchDateStr := r.FormValue("match_date")
 
 	ctx := context.Background()
-	var actualRoundID int
-	if roundIDStr == "new" {
-		name := newRoundName
-		if name == "" {
-			name = "Nové kolo"
-		}
-		_ = db.Pool.QueryRow(ctx,
-			`INSERT INTO rounds (competition_id, name, is_active) VALUES ($1,$2,true) RETURNING id`,
-			compID, name).Scan(&actualRoundID)
-	} else {
-		actualRoundID, _ = strconv.Atoi(roundIDStr)
-		var rndCompID int
-		err := db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, actualRoundID).Scan(&rndCompID)
-		if err != nil || rndCompID != compID {
-			jsonError(w, "round_not_found", http.StatusNotFound)
-			return
-		}
-	}
 
 	var matchDate *time.Time
 	if matchDateStr != "" {
@@ -749,13 +695,17 @@ func AdminQuickAddMatchAjax(w http.ResponseWriter, r *http.Request) {
 
 	var newMatchID int
 	_ = db.Pool.QueryRow(ctx,
-		`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, is_finished)
+		`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, is_finished)
 		 VALUES ($1,$2,$3,$4,false) RETURNING id`,
-		actualRoundID, homeTeamID, awayTeamID, matchDate).Scan(&newMatchID)
+		compID, homeTeamID, awayTeamID, matchDate).Scan(&newMatchID)
 
-	newVal := `{"round_id":` + strconv.Itoa(actualRoundID) + `,"home":` + strconv.Itoa(homeTeamID) + `,"away":` + strconv.Itoa(awayTeamID) + `}`
+	newVal := `{"competition_id":` + strconv.Itoa(compID) + `,"home":` + strconv.Itoa(homeTeamID) + `,"away":` + strconv.Itoa(awayTeamID) + `}`
 	LogAction(&admin.ID, admin.Username, "match_add_quick", "match", &newMatchID,
-		"Rychlé přidání zápasu přes žebříček", nil, &newVal)
+		"Rychlé přidání zápasu", nil, &newVal)
+
+	// suppress unused variables from old code
+	_ = roundIDStr
+	_ = newRoundName
 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"ok":true}`))

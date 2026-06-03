@@ -305,16 +305,15 @@ func parseMatchImportText(text string, knownTeams []string) []importMatchParsed 
 	return results
 }
 
-// ── loadCompTeams: týmy soutěže pro daný round ────────────────────────────────
+// ── loadCompTeams: týmy soutěže ──────────────────────────────────────────────
 
-func loadCompTeams(ctx context.Context, roundID int) []string {
+func loadCompTeams(ctx context.Context, compID int) []string {
 	rows, _ := db.Pool.Query(ctx,
 		`SELECT COALESCE(t.display_name, t.name)
 		   FROM teams t
 		   JOIN competition_teams ct ON ct.team_id = t.id
-		   JOIN rounds r ON r.competition_id = ct.competition_id
-		  WHERE r.id = $1
-		  ORDER BY t.name`, roundID)
+		  WHERE ct.competition_id = $1
+		  ORDER BY t.name`, compID)
 	var teams []string
 	for rows.Next() {
 		var name string
@@ -328,11 +327,11 @@ func loadCompTeams(ctx context.Context, roundID int) []string {
 
 // ── session helpers ───────────────────────────────────────────────────────────
 
-func miSetSession(w http.ResponseWriter, r *http.Request, matches []importMatchParsed, roundID int) {
+func miSetSession(w http.ResponseWriter, r *http.Request, matches []importMatchParsed, compID int) {
 	sess := middleware.GetSession(r)
 	b, _ := json.Marshal(matches)
-	sess.Values["mi_parsed"] = string(b)
-	sess.Values["mi_round_id"] = roundID
+	sess.Values["mi_parsed"]  = string(b)
+	sess.Values["mi_comp_id"] = compID
 	_ = sess.Save(r, w)
 }
 
@@ -342,37 +341,41 @@ func miGetSession(r *http.Request) ([]importMatchParsed, int) {
 	if v, ok := sess.Values["mi_parsed"].(string); ok {
 		_ = json.Unmarshal([]byte(v), &matches)
 	}
-	roundID := 0
-	if v, ok := sess.Values["mi_round_id"].(int); ok {
-		roundID = v
+	compID := 0
+	if v, ok := sess.Values["mi_comp_id"].(int); ok {
+		compID = v
 	}
-	return matches, roundID
+	return matches, compID
 }
 
 func miClearSession(w http.ResponseWriter, r *http.Request) {
 	sess := middleware.GetSession(r)
 	delete(sess.Values, "mi_parsed")
-	delete(sess.Values, "mi_round_id")
+	delete(sess.Values, "mi_comp_id")
 	_ = sess.Save(r, w)
 }
 
-// ── loadActiveRounds ─ sdílený helper pro dropdown ────────────────────────────
+// ── loadActiveComps ─ sdílený helper pro dropdown ────────────────────────────
 
-func loadActiveRounds(ctx context.Context) []ocrRoundItem {
+func loadActiveComps(ctx context.Context) []ocrCompItem {
 	rows, _ := db.Pool.Query(ctx,
-		`SELECT r.id, r.name, c.name, c.season
-		   FROM rounds r
-		   JOIN competitions c ON c.id = r.competition_id
-		  WHERE COALESCE(c.is_active, false) = true
-		  ORDER BY c.sort_order ASC NULLS LAST, c.id DESC, r.id DESC`)
-	var rounds []ocrRoundItem
+		`SELECT id, name, season, COALESCE(sport,'football')
+		   FROM competitions
+		  WHERE COALESCE(is_active, false) = true
+		  ORDER BY COALESCE(sort_order,9999) ASC, id DESC`)
+	var comps []ocrCompItem
 	for rows.Next() {
-		var ri ocrRoundItem
-		_ = rows.Scan(&ri.ID, &ri.Name, &ri.CompName, &ri.CompSeason)
-		rounds = append(rounds, ri)
+		var ci ocrCompItem
+		_ = rows.Scan(&ci.ID, &ci.Name, &ci.Season, &ci.Sport)
+		comps = append(comps, ci)
 	}
 	rows.Close()
-	return rounds
+	return comps
+}
+
+// Deprecated: kept for any remaining callers — wraps loadActiveComps
+func loadActiveRounds(ctx context.Context) []ocrCompItem {
+	return loadActiveComps(ctx)
 }
 
 // ── GET /admin/matches/import ─────────────────────────────────────────────────
@@ -384,9 +387,9 @@ func AdminMatchImportForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		RenderTemplate(w, r, tmpl, "admin/match_import.html", TemplateData{
-			"User":   admin,
-			"Rounds": loadActiveRounds(context.Background()),
-			"Error":  nil,
+			"User":  admin,
+			"Comps": loadActiveComps(context.Background()),
+			"Error": nil,
 		})
 	}
 }
@@ -405,21 +408,21 @@ func AdminMatchImportParse(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		ctx := context.Background()
-		rounds := loadActiveRounds(ctx)
+		comps := loadActiveComps(ctx)
 
 		showError := func(msg string) {
 			RenderTemplate(w, r, tmpl, "admin/match_import.html", TemplateData{
-				"User":   admin,
-				"Rounds": rounds,
-				"Error":  msg,
+				"User":  admin,
+				"Comps": comps,
+				"Error": msg,
 			})
 		}
 
-		roundID, _ := strconv.Atoi(r.FormValue("round_id"))
+		compID, _ := strconv.Atoi(r.FormValue("competition_id"))
 		text := strings.TrimSpace(r.FormValue("text"))
 
-		if roundID == 0 {
-			showError("Vyber kolo.")
+		if compID == 0 {
+			showError("Vyber soutěž.")
 			return
 		}
 		if text == "" {
@@ -427,18 +430,17 @@ func AdminMatchImportParse(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		// Ověř kolo
-		var roundName, compName string
+		// Ověř soutěž
+		var compName string
 		err := db.Pool.QueryRow(ctx,
-			`SELECT r.name, c.name FROM rounds r JOIN competitions c ON c.id = r.competition_id WHERE r.id = $1`,
-			roundID).Scan(&roundName, &compName)
+			`SELECT name FROM competitions WHERE id = $1`, compID).Scan(&compName)
 		if err != nil {
-			showError("Kolo nenalezeno.")
+			showError("Soutěž nenalezena.")
 			return
 		}
 
 		// Načti týmy soutěže pro chytré rozpoznávání
-		knownTeams := loadCompTeams(ctx, roundID)
+		knownTeams := loadCompTeams(ctx, compID)
 
 		parsed := parseMatchImportText(text, knownTeams)
 		if len(parsed) == 0 {
@@ -446,14 +448,13 @@ func AdminMatchImportParse(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		miSetSession(w, r, parsed, roundID)
+		miSetSession(w, r, parsed, compID)
 
 		RenderTemplate(w, r, tmpl, "admin/match_import_preview.html", TemplateData{
-			"User":      admin,
-			"Parsed":    parsed,
-			"RoundID":   roundID,
-			"RoundName": roundName,
-			"CompName":  compName,
+			"User":     admin,
+			"Parsed":   parsed,
+			"CompID":   compID,
+			"CompName": compName,
 		})
 	}
 }
@@ -466,26 +467,19 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsed, roundID := miGetSession(r)
+	parsed, compID := miGetSession(r)
 	miClearSession(w, r)
 
-	if len(parsed) == 0 || roundID == 0 {
+	if len(parsed) == 0 || compID == 0 {
 		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
 		return
 	}
 
 	ctx := context.Background()
 
-	var compID int
 	sport := "football"
-	if err := db.Pool.QueryRow(ctx,
-		`SELECT r.competition_id, COALESCE(c.sport,'football')
-		   FROM rounds r JOIN competitions c ON c.id = r.competition_id
-		  WHERE r.id = $1`, roundID).Scan(&compID, &sport); err != nil {
-		middleware.SetFlash(w, r, "error", "Kolo nenalezeno.")
-		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
-		return
-	}
+	_ = db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(sport,'football') FROM competitions WHERE id=$1`, compID).Scan(&sport)
 
 	created, skipped, errCount := 0, 0, 0
 	for _, m := range parsed {
@@ -514,8 +508,8 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			roundID, homeID, awayID).Scan(&existingID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			compID, homeID, awayID).Scan(&existingID)
 		if existingID > 0 {
 			if m.ParsedDate != nil && *m.ParsedDate != "" {
 				t, err := time.ParseInLocation("2006-01-02T15:04", *m.ParsedDate, pragueLocation)
@@ -535,9 +529,9 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		_, err := db.Pool.Exec(ctx,
-			`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, is_finished)
+			`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, is_finished)
 			 VALUES ($1,$2,$3,$4,false)`,
-			roundID, homeID, awayID, matchDate)
+			compID, homeID, awayID, matchDate)
 		if err != nil {
 			errCount++
 			continue
@@ -554,7 +548,7 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 	msg += "."
 	middleware.SetFlash(w, r, "ok", msg)
-	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
 }
 
 // ── POST /admin/matches/import/cancel ────────────────────────────────────────

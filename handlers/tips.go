@@ -1,5 +1,6 @@
-// handlers/tips.go — Tipovačka 2.0
+// handlers/tips.go — Tipovačka 3.0
 // Zobrazení zápasů a zadávání tipů.
+// Kola odstraněna — zápasy jsou přímo pod soutěží.
 package handlers
 
 import (
@@ -18,11 +19,10 @@ import (
 
 // IndexMatchCtx drží data pro jedno tipovatelné utkání na hlavní stránce.
 type IndexMatchCtx struct {
-	Match     *models.Match
-	Tip       *models.Tip
-	CompName  string
-	CompID    int
-	RoundName string
+	Match    *models.Match
+	Tip      *models.Tip
+	CompName string
+	CompID   int
 }
 
 func Index(tmpl *template.Template) http.HandlerFunc {
@@ -38,7 +38,7 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 			hiddenCond = ""
 		}
 		rows, err := db.Pool.Query(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order
+			`SELECT id, name, season, is_active, sport, sort_order, deadline
 			   FROM competitions WHERE is_active = true `+hiddenCond+` ORDER BY COALESCE(sort_order,9999) ASC, id DESC`)
 		if err != nil {
 			http.Error(w, "DB error", http.StatusInternalServerError)
@@ -47,7 +47,7 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 		var comps []*models.Competition
 		for rows.Next() {
 			c := &models.Competition{}
-			_ = rows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.Sport, &c.SortOrder)
+			_ = rows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.Sport, &c.SortOrder, &c.Deadline)
 			comps = append(comps, c)
 		}
 		rows.Close()
@@ -67,90 +67,61 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 				compByID[c.ID] = c
 			}
 
-			// Aktivní kola
-			type roundRow struct {
-				ID       int
-				CompID   int
-				Name     string
-				Deadline *time.Time
+			// Otevřené zápasy přímo ze soutěže
+			mRows, _ := db.Pool.Query(ctx,
+				`SELECT m.id, m.competition_id, m.home_team_id, m.away_team_id,
+				        m.home_score, m.away_score, m.match_date, m.is_finished,
+				        ht.id, ht.name, ht.display_name,
+				        at.id, at.name, at.display_name
+				   FROM matches m
+				   JOIN teams ht ON ht.id = m.home_team_id
+				   JOIN teams at ON at.id = m.away_team_id
+				  WHERE m.competition_id = ANY($1) AND m.is_finished = false
+				  ORDER BY m.match_date ASC NULLS LAST`, compIDs)
+
+			var matchIDs []int
+			var pendingMatches []*models.Match
+			for mRows.Next() {
+				m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}}
+				_ = mRows.Scan(
+					&m.ID, &m.CompetitionID, &m.HomeTeamID, &m.AwayTeamID,
+					&m.HomeScore, &m.AwayScore, &m.MatchDate, &m.IsFinished,
+					&m.HomeTeam.ID, &m.HomeTeam.Name, &m.HomeTeam.DisplayName,
+					&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName)
+				comp := compByID[m.CompetitionID]
+				if IsBeforeDeadlineComp(comp, m) {
+					pendingMatches = append(pendingMatches, m)
+					matchIDs = append(matchIDs, m.ID)
+				}
 			}
-			rndByID := map[int]roundRow{}
-			rndRows, _ := db.Pool.Query(ctx,
-				`SELECT id, competition_id, name, deadline FROM rounds
-				  WHERE competition_id = ANY($1) AND is_active = true`, compIDs)
-			for rndRows.Next() {
-				var rr roundRow
-				_ = rndRows.Scan(&rr.ID, &rr.CompID, &rr.Name, &rr.Deadline)
-				rndByID[rr.ID] = rr
+			mRows.Close()
+
+			// Tipy uživatele
+			tipMap := map[int]*models.Tip{}
+			if len(matchIDs) > 0 {
+				tRows, _ := db.Pool.Query(ctx,
+					`SELECT id, user_id, match_id, home_score, away_score, points, created_at
+					   FROM tips WHERE user_id = $1 AND match_id = ANY($2)`,
+					u.ID, matchIDs)
+				for tRows.Next() {
+					t := &models.Tip{}
+					_ = tRows.Scan(&t.ID, &t.UserID, &t.MatchID, &t.HomeScore, &t.AwayScore, &t.Points, &t.CreatedAt)
+					tipMap[t.MatchID] = t
+				}
+				tRows.Close()
 			}
-			rndRows.Close()
 
-			if len(rndByID) > 0 {
-				rndIDs := make([]int, 0, len(rndByID))
-				for id := range rndByID {
-					rndIDs = append(rndIDs, id)
+			for _, m := range pendingMatches {
+				comp := compByID[m.CompetitionID]
+				ctx2 := IndexMatchCtx{
+					Match: m,
+					Tip:   tipMap[m.ID],
 				}
-
-				// Otevřené zápasy
-				mRows, _ := db.Pool.Query(ctx,
-					`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
-					        m.home_score, m.away_score, m.match_date, m.is_finished,
-					        ht.id, ht.name, ht.display_name,
-					        at.id, at.name, at.display_name
-					   FROM matches m
-					   JOIN teams ht ON ht.id = m.home_team_id
-					   JOIN teams at ON at.id = m.away_team_id
-					  WHERE m.round_id = ANY($1) AND m.is_finished = false
-					  ORDER BY m.match_date ASC NULLS LAST`, rndIDs)
-
-				var matchIDs []int
-				var pendingMatches []*models.Match
-				for mRows.Next() {
-					m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}}
-					_ = mRows.Scan(
-						&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
-						&m.HomeScore, &m.AwayScore, &m.MatchDate, &m.IsFinished,
-						&m.HomeTeam.ID, &m.HomeTeam.Name, &m.HomeTeam.DisplayName,
-						&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName)
-					rr := rndByID[m.RoundID]
-					// Filtruj: musí mít otevřenou uzávěrku
-					rndModel := &models.Round{ID: rr.ID, CompetitionID: rr.CompID, Name: rr.Name, Deadline: rr.Deadline}
-					if IsBeforeDeadline(rndModel, m) {
-						pendingMatches = append(pendingMatches, m)
-						matchIDs = append(matchIDs, m.ID)
-					}
+				if comp != nil {
+					ctx2.CompName = comp.Name
+					ctx2.CompID = comp.ID
 				}
-				mRows.Close()
-
-				// Tipy uživatele
-				tipMap := map[int]*models.Tip{}
-				if len(matchIDs) > 0 {
-					tRows, _ := db.Pool.Query(ctx,
-						`SELECT id, user_id, match_id, home_score, away_score, points, created_at
-						   FROM tips WHERE user_id = $1 AND match_id = ANY($2)`,
-						u.ID, matchIDs)
-					for tRows.Next() {
-						t := &models.Tip{}
-						_ = tRows.Scan(&t.ID, &t.UserID, &t.MatchID, &t.HomeScore, &t.AwayScore, &t.Points, &t.CreatedAt)
-						tipMap[t.MatchID] = t
-					}
-					tRows.Close()
-				}
-
-				for _, m := range pendingMatches {
-					rr := rndByID[m.RoundID]
-					comp := compByID[rr.CompID]
-					ctx2 := IndexMatchCtx{
-						Match:     m,
-						Tip:       tipMap[m.ID],
-						RoundName: rr.Name,
-					}
-					if comp != nil {
-						ctx2.CompName = comp.Name
-						ctx2.CompID = comp.ID
-					}
-					openMatches = append(openMatches, ctx2)
-				}
+				openMatches = append(openMatches, ctx2)
 			}
 		}
 
@@ -175,8 +146,7 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 					var firstMatch time.Time
 					err2 := db.Pool.QueryRow(ctx,
 						`SELECT MIN(m.match_date) FROM matches m
-						   JOIN rounds r ON r.id = m.round_id
-						  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, c.ID).Scan(&firstMatch)
+						  WHERE m.competition_id = $1 AND m.match_date IS NOT NULL`, c.ID).Scan(&firstMatch)
 					if err2 == nil && !firstMatch.IsZero() {
 						effectiveDeadline = &firstMatch
 					}
@@ -213,61 +183,36 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 
 		ctx := context.Background()
 
-		// Načti soutěž — admin vidí i skryté (pro testování)
+		// Načti soutěž
 		comp := &models.Competition{}
 		hiddenFilter := "AND COALESCE(is_hidden,false)=false"
 		if u.IsAdmin {
 			hiddenFilter = ""
 		}
 		err = db.Pool.QueryRow(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE id = $1 `+hiddenFilter, compID).
-			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder)
+			`SELECT id, name, season, is_active, sport, sort_order, deadline FROM competitions WHERE id = $1 `+hiddenFilter, compID).
+			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder, &comp.Deadline)
 		if err != nil {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
 
-		// Aktivní kola
-		roundRows, _ := db.Pool.Query(ctx,
-			`SELECT id, competition_id, name, deadline, is_active FROM rounds
-			  WHERE competition_id = $1 AND is_active = true ORDER BY id`, compID)
-		roundsByID := map[int]*models.Round{}
-		for roundRows.Next() {
-			rnd := &models.Round{}
-			_ = roundRows.Scan(&rnd.ID, &rnd.CompetitionID, &rnd.Name, &rnd.Deadline, &rnd.IsActive)
-			roundsByID[rnd.ID] = rnd
-		}
-		roundRows.Close()
-
-		if len(roundsByID) == 0 {
-			RenderTemplate(w, r, tmpl, "competition.html", TemplateData{
-				"User": u, "Comp": comp, "MatchContext": nil, "AllLocked": false,
-			})
-			return
-		}
-
-		roundIDs := make([]int, 0, len(roundsByID))
-		for id := range roundsByID {
-			roundIDs = append(roundIDs, id)
-		}
-
-		// Nevyhodnocené zápasy v aktivních kolech
+		// Nevyhodnocené zápasy
 		matchRows, _ := db.Pool.Query(ctx,
-			`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
+			`SELECT m.id, m.competition_id, m.home_team_id, m.away_team_id,
 			        m.home_score, m.away_score, m.match_date, m.is_finished,
 			        ht.id, ht.name, ht.display_name,
 			        at.id, at.name, at.display_name
 			   FROM matches m
 			   JOIN teams ht ON ht.id = m.home_team_id
 			   JOIN teams at ON at.id = m.away_team_id
-			  WHERE m.round_id = ANY($1) AND m.is_finished = false
-			  ORDER BY m.match_date ASC NULLS LAST`, roundIDs)
+			  WHERE m.competition_id = $1 AND m.is_finished = false
+			  ORDER BY m.match_date ASC NULLS LAST`, compID)
 
 		type matchCtxRow struct {
-			Match     *models.Match
-			Tip       *models.Tip
-			CanTip    bool
-			RoundName string
+			Match  *models.Match
+			Tip    *models.Tip
+			CanTip bool
 		}
 
 		var matchContextAll []matchCtxRow
@@ -275,15 +220,12 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 		for matchRows.Next() {
 			m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}}
 			_ = matchRows.Scan(
-				&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
+				&m.ID, &m.CompetitionID, &m.HomeTeamID, &m.AwayTeamID,
 				&m.HomeScore, &m.AwayScore, &m.MatchDate, &m.IsFinished,
 				&m.HomeTeam.ID, &m.HomeTeam.Name, &m.HomeTeam.DisplayName,
 				&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName)
-			rnd := roundsByID[m.RoundID]
-			canTip := IsBeforeDeadline(rnd, m)
-			matchContextAll = append(matchContextAll, matchCtxRow{
-				Match: m, CanTip: canTip, RoundName: rnd.Name,
-			})
+			canTip := IsBeforeDeadlineComp(comp, m)
+			matchContextAll = append(matchContextAll, matchCtxRow{Match: m, CanTip: canTip})
 			matchIDs = append(matchIDs, m.ID)
 		}
 		matchRows.Close()
@@ -320,7 +262,7 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 			tippableIface[i] = v
 		}
 
-		// Extra otázky — zjisti jestli jsou otevřené (deadline ještě nepřešel)
+		// Extra otázky
 		extraOpen := false
 		hasExtra := false
 		{
@@ -334,15 +276,12 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 			} else {
 				var firstMatch time.Time
 				err2 := db.Pool.QueryRow(ctx,
-					`SELECT MIN(m.match_date) FROM matches m
-					   JOIN rounds r ON r.id = m.round_id
-					  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, compID).Scan(&firstMatch)
+					`SELECT MIN(m.match_date) FROM matches m WHERE m.competition_id = $1 AND m.match_date IS NOT NULL`, compID).Scan(&firstMatch)
 				if err2 == nil && !firstMatch.IsZero() {
 					effectiveDeadline = &firstMatch
 				}
 			}
 
-			// Má vůbec soutěž nějaké extra otázky?
 			var extraCount int
 			_ = db.Pool.QueryRow(ctx,
 				`SELECT COUNT(*) FROM extra_questions WHERE competition_id=$1`, compID).Scan(&extraCount)
@@ -404,23 +343,24 @@ func SubmitTip(w http.ResponseWriter, r *http.Request) {
 
 	// Načti zápas
 	m := &models.Match{}
-	var roundID int
+	var compID int
 	err := db.Pool.QueryRow(ctx,
-		`SELECT id, round_id, match_date, is_finished FROM matches WHERE id = $1`, matchID).
-		Scan(&m.ID, &roundID, &m.MatchDate, &m.IsFinished)
+		`SELECT id, competition_id, match_date, is_finished FROM matches WHERE id = $1`, matchID).
+		Scan(&m.ID, &compID, &m.MatchDate, &m.IsFinished)
 	if err != nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	m.RoundID = roundID
+	m.CompetitionID = compID
 
-	// Načti kolo
-	rnd := &models.Round{}
-	err = db.Pool.QueryRow(ctx,
-		`SELECT id, competition_id, deadline FROM rounds WHERE id = $1`, roundID).
-		Scan(&rnd.ID, &rnd.CompetitionID, &rnd.Deadline)
-	if err != nil || !IsBeforeDeadline(rnd, m) {
-		http.Redirect(w, r, "/competition/"+strconv.Itoa(rnd.CompetitionID), http.StatusSeeOther)
+	// Načti soutěž
+	comp := &models.Competition{}
+	_ = db.Pool.QueryRow(ctx,
+		`SELECT id, deadline FROM competitions WHERE id = $1`, compID).
+		Scan(&comp.ID, &comp.Deadline)
+
+	if !IsBeforeDeadlineComp(comp, m) {
+		http.Redirect(w, r, "/competition/"+strconv.Itoa(compID), http.StatusSeeOther)
 		return
 	}
 
@@ -442,12 +382,11 @@ func SubmitTip(w http.ResponseWriter, r *http.Request) {
 			 VALUES ($1, $2, $3, $4, NOW()) RETURNING id`,
 			u.ID, matchID, homeScore, awayScore).Scan(&existingID)
 		if err != nil {
-			http.Redirect(w, r, "/competition/"+strconv.Itoa(rnd.CompetitionID), http.StatusSeeOther)
+			http.Redirect(w, r, "/competition/"+strconv.Itoa(compID), http.StatusSeeOther)
 			return
 		}
 	}
 
-	// Audit log
 	var desc string
 	if wasNew {
 		desc = "Tip: " + strconv.Itoa(homeScore) + ":" + strconv.Itoa(awayScore)
@@ -457,7 +396,7 @@ func SubmitTip(w http.ResponseWriter, r *http.Request) {
 	newVal := `{"home_score":` + strconv.Itoa(homeScore) + `,"away_score":` + strconv.Itoa(awayScore) + `}`
 	LogAction(&u.ID, u.Username, "tip_save", "tip", &existingID, desc, nil, &newVal)
 
-	http.Redirect(w, r, "/competition/"+strconv.Itoa(rnd.CompetitionID), http.StatusSeeOther)
+	http.Redirect(w, r, "/competition/"+strconv.Itoa(compID), http.StatusSeeOther)
 }
 
 // ─── POST /tips/submit-ajax ───────────────────────────────────────────────────
@@ -481,21 +420,22 @@ func SubmitTipAjax(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 	m := &models.Match{}
-	var roundID int
+	var compID int
 	err := db.Pool.QueryRow(ctx,
-		`SELECT id, round_id, match_date, is_finished FROM matches WHERE id = $1`, matchID).
-		Scan(&m.ID, &roundID, &m.MatchDate, &m.IsFinished)
+		`SELECT id, competition_id, match_date, is_finished FROM matches WHERE id = $1`, matchID).
+		Scan(&m.ID, &compID, &m.MatchDate, &m.IsFinished)
 	if err != nil {
 		jsonError(w, "match_not_found", http.StatusNotFound)
 		return
 	}
-	m.RoundID = roundID
+	m.CompetitionID = compID
 
-	rnd := &models.Round{}
-	_ = db.Pool.QueryRow(ctx, `SELECT id, competition_id, deadline FROM rounds WHERE id = $1`, roundID).
-		Scan(&rnd.ID, &rnd.CompetitionID, &rnd.Deadline)
+	comp := &models.Competition{}
+	_ = db.Pool.QueryRow(ctx,
+		`SELECT id, deadline FROM competitions WHERE id = $1`, compID).
+		Scan(&comp.ID, &comp.Deadline)
 
-	if !IsBeforeDeadline(rnd, m) {
+	if !IsBeforeDeadlineComp(comp, m) {
 		jsonError(w, "deadline_passed", http.StatusForbidden)
 		return
 	}

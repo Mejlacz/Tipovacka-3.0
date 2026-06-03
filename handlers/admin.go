@@ -258,6 +258,31 @@ func AdminCompetitionToggle(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/competitions", http.StatusSeeOther)
 }
 
+// ─── POST /admin/competitions/{id}/set-deadline ──────────────────────────────
+
+func AdminCompetitionSetDeadline(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	compID, _ := strconv.Atoi(r.PathValue("competition_id"))
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	deadlineStr := r.FormValue("deadline")
+	ctx := context.Background()
+	if deadlineStr != "" {
+		t, err := time.ParseInLocation("2006-01-02T15:04", deadlineStr, pragueLocation)
+		if err == nil {
+			_, _ = db.Pool.Exec(ctx, `UPDATE competitions SET deadline=$1 WHERE id=$2`, t, compID)
+		}
+	} else {
+		_, _ = db.Pool.Exec(ctx, `UPDATE competitions SET deadline=NULL WHERE id=$1`, compID)
+	}
+	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
+}
+
 // ─── POST /admin/competitions/{id}/delete ────────────────────────────────────
 
 func AdminCompetitionDelete(w http.ResponseWriter, r *http.Request) {

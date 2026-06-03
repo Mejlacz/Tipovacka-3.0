@@ -27,22 +27,27 @@ func AdminDeadlineAlerts(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().In(loc)
 	horizon := now.Add(3 * time.Hour)
 
+	// Deadline upozornění — použij competition.deadline nebo match_date
 	rows, err := db.Pool.Query(ctx, `
 		SELECT m.id,
 		       ht.name || ' – ' || at.name,
-		       TO_CHAR(r.deadline, 'DD.MM HH24:MI'),
+		       COALESCE(
+		           TO_CHAR(c.deadline, 'DD.MM HH24:MI'),
+		           TO_CHAR(m.match_date, 'DD.MM HH24:MI')
+		       ),
+		       COALESCE(c.deadline, m.match_date) AS effective_deadline,
 		       (SELECT COUNT(*) FROM users u
 		        WHERE COALESCE(u.is_approved,true)=true AND COALESCE(u.is_blocked,false)=false AND COALESCE(u.is_inactive,false)=false
 		          AND u.id NOT IN (SELECT user_id FROM tips WHERE match_id=m.id)) AS missing
 		  FROM matches m
-		  JOIN rounds r ON r.id=m.round_id
-		  JOIN competitions c ON c.id=r.competition_id
-		  JOIN teams ht ON ht.id=m.home_team_id
-		  JOIN teams at ON at.id=m.away_team_id
+		  JOIN competitions c ON c.id = m.competition_id
+		  JOIN teams ht ON ht.id = m.home_team_id
+		  JOIN teams at ON at.id = m.away_team_id
 		 WHERE c.is_active=true AND m.is_finished=false
-		   AND r.deadline IS NOT NULL
-		   AND r.deadline > $1 AND r.deadline < $2
-		 ORDER BY r.deadline ASC
+		   AND COALESCE(c.deadline, m.match_date) IS NOT NULL
+		   AND COALESCE(c.deadline, m.match_date) > $1
+		   AND COALESCE(c.deadline, m.match_date) < $2
+		 ORDER BY COALESCE(c.deadline, m.match_date) ASC
 	`, now, horizon)
 	if err != nil {
 		w.Write([]byte(`{"alerts":[]}`))
@@ -57,8 +62,9 @@ func AdminDeadlineAlerts(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var mid int
 		var label, dl string
+		var effectiveDL time.Time
 		var missing int
-		_ = rows.Scan(&mid, &label, &dl, &missing)
+		_ = rows.Scan(&mid, &label, &dl, &effectiveDL, &missing)
 		if missing > 0 {
 			alerts = append(alerts, alertOut{Match: label, Deadline: dl, MissingCount: missing})
 		}

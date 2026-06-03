@@ -1,11 +1,6 @@
-// handlers/admin_ocr.go — Tipovačka 2.0
+// handlers/admin_ocr.go — Tipovačka 3.0
 // Import výsledků vložením textu (paste z Flashscore nebo jiného zdroje).
-//
-// Endpointy:
-//   GET  /admin/ocr          — formulář (textarea + výběr kola)
-//   POST /admin/ocr/parse    — parsování, uložení do session, preview
-//   POST /admin/ocr/confirm  — uložení zápasů do DB
-//   POST /admin/ocr/cancel   — zrušení, clear session
+// Kola odstraněna — zápasy se importují přímo do soutěže.
 package handlers
 
 import (
@@ -21,7 +16,6 @@ import (
 	"tipovacka/middleware"
 )
 
-// scorePattern odpovídá řádkům ve tvaru "Tým A - Tým B  2:1" nebo "Tým A – Tým B 2 : 1"
 var scorePattern = regexp.MustCompile(
 	`([\pL\d .&'()/]+?)\s*[-–]\s*([\pL\d .&'()/]+?)\s+(\d+)\s*:\s*(\d+)`,
 )
@@ -34,7 +28,6 @@ type ocrMatch struct {
 	RawLine   string `json:"raw_line"`
 }
 
-// parseOCRText parsuje vložený text a vrátí nalezené zápasy.
 func parseOCRText(text string) []ocrMatch {
 	var results []ocrMatch
 	for _, line := range strings.Split(text, "\n") {
@@ -59,14 +52,14 @@ func parseOCRText(text string) []ocrMatch {
 	return results
 }
 
-// ── session helpers ───────────────────────────────────────────────────────────
+// session helpers — comp_id místo round_id
 
-func ocrSetSession(w http.ResponseWriter, r *http.Request, matches []ocrMatch, roundID int, sport string) {
+func ocrSetSession(w http.ResponseWriter, r *http.Request, matches []ocrMatch, compID int, sport string) {
 	sess := middleware.GetSession(r)
 	b, _ := json.Marshal(matches)
-	sess.Values["ocr_parsed"] = string(b)
-	sess.Values["ocr_round_id"] = roundID
-	sess.Values["ocr_sport"] = sport
+	sess.Values["ocr_parsed"]  = string(b)
+	sess.Values["ocr_comp_id"] = compID
+	sess.Values["ocr_sport"]   = sport
 	_ = sess.Save(r, w)
 }
 
@@ -76,32 +69,40 @@ func ocrGetSession(r *http.Request) ([]ocrMatch, int, string) {
 	if v, ok := sess.Values["ocr_parsed"].(string); ok {
 		_ = json.Unmarshal([]byte(v), &matches)
 	}
-	roundID := 0
-	if v, ok := sess.Values["ocr_round_id"].(int); ok {
-		roundID = v
+	compID := 0
+	if v, ok := sess.Values["ocr_comp_id"].(int); ok {
+		compID = v
+	}
+	// backward compat: old session may still have ocr_round_id
+	if compID == 0 {
+		if v, ok := sess.Values["ocr_round_id"].(int); ok && v != 0 {
+			ctx := context.Background()
+			_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, v).Scan(&compID)
+		}
 	}
 	sport := "football"
 	if v, ok := sess.Values["ocr_sport"].(string); ok && v != "" {
 		sport = v
 	}
-	return matches, roundID, sport
+	return matches, compID, sport
 }
 
 func ocrClearSession(w http.ResponseWriter, r *http.Request) {
 	sess := middleware.GetSession(r)
 	delete(sess.Values, "ocr_parsed")
-	delete(sess.Values, "ocr_round_id")
+	delete(sess.Values, "ocr_comp_id")
+	delete(sess.Values, "ocr_round_id") // backward compat
 	delete(sess.Values, "ocr_sport")
 	_ = sess.Save(r, w)
 }
 
 // ── GET /admin/ocr ────────────────────────────────────────────────────────────
 
-type ocrRoundItem struct {
-	ID          int
-	Name        string
-	CompName    string
-	CompSeason  string
+type ocrCompItem struct {
+	ID     int
+	Name   string
+	Season string
+	Sport  string
 }
 
 func AdminOCRForm(tmpl *template.Template) http.HandlerFunc {
@@ -112,31 +113,28 @@ func AdminOCRForm(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 
-		// Načti kola seřazená po soutěžích — pouze aktivní soutěže
 		rows, _ := db.Pool.Query(ctx,
-			`SELECT r.id, r.name, c.name, c.season
-			   FROM rounds r
-			   JOIN competitions c ON c.id = r.competition_id
-			  WHERE COALESCE(c.is_active, false) = true
-			  ORDER BY c.sort_order ASC NULLS LAST, c.id DESC, r.id DESC`)
-		var rounds []ocrRoundItem
+			`SELECT id, name, season, COALESCE(sport,'football')
+			   FROM competitions
+			  WHERE COALESCE(is_active, false) = true
+			  ORDER BY COALESCE(sort_order,9999) ASC, id DESC`)
+		var comps []ocrCompItem
 		for rows.Next() {
-			var ri ocrRoundItem
-			_ = rows.Scan(&ri.ID, &ri.Name, &ri.CompName, &ri.CompSeason)
-			rounds = append(rounds, ri)
+			var ci ocrCompItem
+			_ = rows.Scan(&ci.ID, &ci.Name, &ci.Season, &ci.Sport)
+			comps = append(comps, ci)
 		}
 		rows.Close()
 
 		RenderTemplate(w, r, tmpl, "admin/ocr_upload.html", TemplateData{
-			"User":   admin,
-			"Rounds": rounds,
-			"Error":  nil,
+			"User":  admin,
+			"Comps": comps,
+			"Error": nil,
 		})
 	}
 }
 
 // ── POST /admin/ocr/parse ─────────────────────────────────────────────────────
-// Form: round_id, text
 
 func AdminOCRParse(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -151,44 +149,40 @@ func AdminOCRParse(tmpl *template.Template) http.HandlerFunc {
 
 		ctx := context.Background()
 
-		// Načti kola pro formulář (pro případ chyby) — pouze aktivní soutěže
-		roundRows, _ := db.Pool.Query(ctx,
-			`SELECT r.id, r.name, c.name, c.season
-			   FROM rounds r
-			   JOIN competitions c ON c.id = r.competition_id
-			  WHERE COALESCE(c.is_active, false) = true
-			  ORDER BY c.sort_order ASC NULLS LAST, c.id DESC, r.id DESC`)
-		var rounds []ocrRoundItem
-		for roundRows.Next() {
-			var ri ocrRoundItem
-			_ = roundRows.Scan(&ri.ID, &ri.Name, &ri.CompName, &ri.CompSeason)
-			rounds = append(rounds, ri)
+		// Načti soutěže pro formulář (pro případ chyby)
+		compRows, _ := db.Pool.Query(ctx,
+			`SELECT id, name, season, COALESCE(sport,'football')
+			   FROM competitions
+			  WHERE COALESCE(is_active, false) = true
+			  ORDER BY COALESCE(sort_order,9999) ASC, id DESC`)
+		var comps []ocrCompItem
+		for compRows.Next() {
+			var ci ocrCompItem
+			_ = compRows.Scan(&ci.ID, &ci.Name, &ci.Season, &ci.Sport)
+			comps = append(comps, ci)
 		}
-		roundRows.Close()
+		compRows.Close()
 
 		showError := func(msg string) {
 			RenderTemplate(w, r, tmpl, "admin/ocr_upload.html", TemplateData{
-				"User":   admin,
-				"Rounds": rounds,
-				"Error":  msg,
+				"User":  admin,
+				"Comps": comps,
+				"Error": msg,
 			})
 		}
 
-		roundID, _ := strconv.Atoi(r.FormValue("round_id"))
+		compID, _ := strconv.Atoi(r.FormValue("competition_id"))
 
-		// Sport se načte automaticky ze soutěže kola
 		sport := "football"
-		if roundID > 0 {
+		if compID > 0 {
 			_ = db.Pool.QueryRow(ctx,
-				`SELECT COALESCE(c.sport, 'football')
-				   FROM rounds r JOIN competitions c ON c.id = r.competition_id
-				  WHERE r.id = $1`, roundID).Scan(&sport)
+				`SELECT COALESCE(sport, 'football') FROM competitions WHERE id = $1`, compID).Scan(&sport)
 		}
 
 		text := strings.TrimSpace(r.FormValue("text"))
 
-		if roundID == 0 {
-			showError("Vyber kolo.")
+		if compID == 0 {
+			showError("Vyber soutěž.")
 			return
 		}
 		if text == "" {
@@ -202,12 +196,12 @@ func AdminOCRParse(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		ocrSetSession(w, r, parsed, roundID, sport)
+		ocrSetSession(w, r, parsed, compID, sport)
 
 		RenderTemplate(w, r, tmpl, "admin/ocr_preview.html", TemplateData{
-			"User":    admin,
-			"Parsed":  parsed,
-			"RoundID": roundID,
+			"User":   admin,
+			"Parsed": parsed,
+			"CompID": compID,
 		})
 	}
 }
@@ -220,21 +214,21 @@ func AdminOCRConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsed, roundID, sport := ocrGetSession(r)
+	parsed, compID, sport := ocrGetSession(r)
 	ocrClearSession(w, r)
 
-	if len(parsed) == 0 || roundID == 0 {
+	if len(parsed) == 0 || compID == 0 {
 		http.Redirect(w, r, "/admin/ocr", http.StatusSeeOther)
 		return
 	}
 
 	ctx := context.Background()
 
-	// Ověř kolo
-	var compID int
+	// Ověř soutěž
+	var compName string
 	if err := db.Pool.QueryRow(ctx,
-		`SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID); err != nil {
-		middleware.SetFlash(w, r, "error", "Kolo nenalezeno.")
+		`SELECT name FROM competitions WHERE id=$1`, compID).Scan(&compName); err != nil {
+		middleware.SetFlash(w, r, "error", "Soutěž nenalezena.")
 		http.Redirect(w, r, "/admin/ocr", http.StatusSeeOther)
 		return
 	}
@@ -263,11 +257,10 @@ func AdminOCRConfirm(w http.ResponseWriter, r *http.Request) {
 		// Zkontroluj duplicitu
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			roundID, homeID, awayID).Scan(&existingID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			compID, homeID, awayID).Scan(&existingID)
 
 		if existingID > 0 {
-			// Aktualizuj skóre
 			_, _ = db.Pool.Exec(ctx,
 				`UPDATE matches SET home_score=$1, away_score=$2, is_finished=true WHERE id=$3`,
 				m.HomeScore, m.AwayScore, existingID)
@@ -279,9 +272,9 @@ func AdminOCRConfirm(w http.ResponseWriter, r *http.Request) {
 		// Vlož nový zápas
 		var newID int
 		err := db.Pool.QueryRow(ctx,
-			`INSERT INTO matches (round_id, home_team_id, away_team_id, home_score, away_score, is_finished)
+			`INSERT INTO matches (competition_id, home_team_id, away_team_id, home_score, away_score, is_finished)
 			 VALUES ($1,$2,$3,$4,$5,true) RETURNING id`,
-			roundID, homeID, awayID, m.HomeScore, m.AwayScore).Scan(&newID)
+			compID, homeID, awayID, m.HomeScore, m.AwayScore).Scan(&newID)
 		if err != nil {
 			skipped++
 			continue
@@ -298,7 +291,7 @@ func AdminOCRConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 	msg += "."
 	middleware.SetFlash(w, r, "ok", msg)
-	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
 }
 
 // ── POST /admin/ocr/cancel ────────────────────────────────────────────────────
@@ -313,7 +306,6 @@ func AdminOCRCancel(w http.ResponseWriter, r *http.Request) {
 }
 
 // ── upsertTeamByName ─────────────────────────────────────────────────────────
-// Najde nebo vytvoří tým podle jména + sport.
 
 func upsertTeamByName(ctx context.Context, name, sport string) (int, bool) {
 	if name == "" {
@@ -333,4 +325,3 @@ func upsertTeamByName(ctx context.Context, name, sport string) (int, bool) {
 	}
 	return newID, true
 }
-

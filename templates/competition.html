@@ -1,7 +1,7 @@
 <div class="page-header">
     <h1>{{.Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
     {{if and .User .User.IsAdmin}}
-    <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-primary btn-sm">{{tr .Lang "tips_add_match"}}</a>
+    <a href="/admin/competitions/{{.Comp.ID}}/matches" class="btn btn-primary btn-sm">{{tr .Lang "tips_add_match"}}</a>
     {{end}}
 </div>
 
@@ -32,17 +32,7 @@
 </div>
 
 <div class="match-list">
-{{$currentRound := ""}}
-{{$currentRoundID := 0}}
 {{range .MatchContext}}
-    {{if ne .RoundName $currentRound}}
-        {{if $currentRound}}</div><div class="round-summary-wrap" data-round-id="{{$currentRoundID}}"></div>{{end}}
-        {{$currentRound = .RoundName}}
-        {{$currentRoundID = .Match.RoundID}}
-        <div class="round-section-header" data-round-id="{{$currentRoundID}}">{{.RoundName}}</div>
-        <div class="round-section">
-    {{end}}
-
     {{$htName := coalesce .Match.HomeTeam.DisplayName .Match.HomeTeam.Name}}
     {{$atName := coalesce .Match.AwayTeam.DisplayName .Match.AwayTeam.Name}}
     <div class="match-card{{if not .CanTip}} match-locked{{end}}">
@@ -99,8 +89,6 @@
     </div>
 
 {{end}}
-    </div>
-    <div class="round-summary-wrap" data-round-id="{{$currentRoundID}}"></div>
 </div>
 
 <script>
@@ -143,49 +131,6 @@
     }
 }());
 
-/* ── Round Summary — "Kolo shrnutí" ─────────────────────────────────── */
-(function () {
-    var wraps = document.querySelectorAll('.round-summary-wrap[data-round-id]');
-    if (!wraps.length) return;
-    wraps.forEach(function (el) {
-        var roundId = el.dataset.roundId;
-        if (!roundId || roundId === '0') return;
-        fetch('/api/round/' + roundId + '/summary')
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d.finished || !d.top_scorers || !d.top_scorers.length) return;
-                el.innerHTML = buildRoundSummary(d);
-            }).catch(function () {});
-    });
-
-    var medals = ['🥇', '🥈', '🥉', '4.', '5.'];
-    function buildRoundSummary(d) {
-        var html = '<div class="round-summary">';
-        html += '<div class="rs-title">🏁 Výsledky kola</div>';
-        html += '<div class="rs-meta">';
-        html += '<span>' + d.match_count + ' zápasů</span>';
-        html += '<span>' + d.participants + ' hráčů</span>';
-        html += '<span>průměr ' + d.avg_pts + ' b</span>';
-        if (d.tip_count > 0) {
-            var exactPct = Math.round(d.exact_count * 100 / d.tip_count);
-            html += '<span>🎯 přesných ' + exactPct + '%</span>';
-        }
-        html += '</div>';
-        html += '<div class="rs-scorers">';
-        d.top_scorers.forEach(function (s, i) {
-            var isFirst = (i === 0);
-            html += '<div class="rs-scorer' + (isFirst ? ' rs-scorer-first' : '') + '">';
-            html += '<span class="rs-medal">' + (medals[i] || (i + 1) + '.') + '</span>';
-            html += '<span class="rs-name">' + s.username + '</span>';
-            html += '<span class="rs-pts">' + s.points + ' b</span>';
-            if (s.exact > 0) html += '<span class="rs-exact">🎯' + s.exact + '</span>';
-            html += '</div>';
-        });
-        html += '</div>';
-        html += '</div>';
-        return html;
-    }
-}());
 
 var LANG_STARTING = 'Právě začíná!';
 (function () {

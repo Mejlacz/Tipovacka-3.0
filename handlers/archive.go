@@ -1,5 +1,5 @@
-// handlers/archive.go — Tipovačka 2.0
-// Archiv soutěží.
+// handlers/archive.go — Tipovačka 3.0
+// Archiv soutěží — kola odstraněna, zápasy přímo pod soutěží.
 package handlers
 
 import (
@@ -84,36 +84,24 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 
 		if !comp.IsActive {
 			// Neaktivní — matice žebříčku
-			roundRows, _ := db.Pool.Query(ctx,
-				`SELECT id FROM rounds WHERE competition_id=$1 ORDER BY id`, compID)
-			var roundIDs []int
-			for roundRows.Next() {
-				var rid int
-				_ = roundRows.Scan(&rid)
-				roundIDs = append(roundIDs, rid)
-			}
-			roundRows.Close()
-
 			var matches []*models.Match
-			if len(roundIDs) > 0 {
-				matchRows, _ := db.Pool.Query(ctx,
-					`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
-					        m.home_score, m.away_score, m.is_finished, m.match_date,
-					        ht.name, at.name
-					   FROM matches m
-					   JOIN teams ht ON ht.id = m.home_team_id
-					   JOIN teams at ON at.id = m.away_team_id
-					  WHERE m.round_id = ANY($1)
-					  ORDER BY m.match_date`, roundIDs)
-				for matchRows.Next() {
-					m := &models.Match{}
-					_ = matchRows.Scan(&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
-						&m.HomeScore, &m.AwayScore, &m.IsFinished, &m.MatchDate,
-						&m.HomeTeamName, &m.AwayTeamName)
-					matches = append(matches, m)
-				}
-				matchRows.Close()
+			matchRows, _ := db.Pool.Query(ctx,
+				`SELECT m.id, m.competition_id, m.home_team_id, m.away_team_id,
+				        m.home_score, m.away_score, m.is_finished, m.match_date,
+				        ht.name, at.name
+				   FROM matches m
+				   JOIN teams ht ON ht.id = m.home_team_id
+				   JOIN teams at ON at.id = m.away_team_id
+				  WHERE m.competition_id = $1
+				  ORDER BY m.match_date`, compID)
+			for matchRows.Next() {
+				m := &models.Match{}
+				_ = matchRows.Scan(&m.ID, &m.CompetitionID, &m.HomeTeamID, &m.AwayTeamID,
+					&m.HomeScore, &m.AwayScore, &m.IsFinished, &m.MatchDate,
+					&m.HomeTeamName, &m.AwayTeamName)
+				matches = append(matches, m)
 			}
+			matchRows.Close()
 
 			matchIDs := make([]int, len(matches))
 			for i, m := range matches {
@@ -137,7 +125,6 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 				tipRows.Close()
 			}
 
-			// Try cached standings first
 			type UserRow struct {
 				User       *models.User
 				Total      int
@@ -168,7 +155,6 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 			cachedRows.Close()
 
 			if hasCached {
-				// Load users for cached rows
 				userIDs := make([]int, len(cached))
 				for i, cr := range cached {
 					userIDs[i] = cr.UserID
@@ -201,7 +187,6 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 					})
 				}
 			} else {
-				// Fallback calculation
 				userIDs := make([]int, 0, len(tipsMatrix))
 				for uid := range tipsMatrix {
 					userIDs = append(userIDs, uid)
@@ -219,7 +204,6 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 					urows.Close()
 				}
 
-				// Extra points per user
 				extraPtsByUser := map[int]int{}
 				extraRows, _ := db.Pool.Query(ctx,
 					`SELECT ea.user_id, COALESCE(SUM(ea.points),0)
@@ -266,7 +250,6 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 				}
 			}
 
-			// Sort and assign places
 			for i := 0; i < len(userRows)-1; i++ {
 				for j := i + 1; j < len(userRows); j++ {
 					ai := userRows[i]
@@ -297,65 +280,35 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 			}
 
 			RenderTemplate(w, r, tmpl, "archive_competition_leaderboard.html", TemplateData{
-				"User":        user,
-				"Comp":        comp,
-				"UserRows":    userRows,
-				"Matches":     matches,
-				"TipsMatrix":  tipsMatrix,
-				"HasExtra":    hasExtra,
+				"User":       user,
+				"Comp":       comp,
+				"UserRows":   userRows,
+				"Matches":    matches,
+				"TipsMatrix": tipsMatrix,
+				"HasExtra":   hasExtra,
 			})
 			return
 		}
 
-		// Active competition — show current user's tips per round
-		roundRows, _ := db.Pool.Query(ctx,
-			`SELECT id, competition_id, name, deadline, is_active FROM rounds
-			  WHERE competition_id=$1 ORDER BY id`, compID)
-		var rounds []*models.Round
-		for roundRows.Next() {
-			rnd := &models.Round{}
-			_ = roundRows.Scan(&rnd.ID, &rnd.CompetitionID, &rnd.Name, &rnd.Deadline, &rnd.IsActive)
-			rounds = append(rounds, rnd)
-		}
-		roundRows.Close()
-
-		roundIDs := make([]int, len(rounds))
-		for i, rnd := range rounds {
-			roundIDs[i] = rnd.ID
-		}
-
-		type MatchRow struct {
-			Match  *models.Match
-			Tip    *models.Tip
-			Points *int
-		}
-		type RoundSection struct {
-			Round *models.Round
-			Rows  []MatchRow
-			Total int
-		}
-
+		// Aktivní soutěž — zobraz tipy uživatele jako flat list
 		var matchList []*models.Match
-		if len(roundIDs) > 0 {
-			matchRows, _ := db.Pool.Query(ctx,
-				`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
-				        m.home_score, m.away_score, m.is_finished, m.match_date,
-				        ht.name, at.name
-				   FROM matches m
-				   JOIN teams ht ON ht.id = m.home_team_id
-				   JOIN teams at ON at.id = m.away_team_id
-				  WHERE m.round_id = ANY($1) ORDER BY m.match_date`, roundIDs)
-			for matchRows.Next() {
-				m := &models.Match{}
-				_ = matchRows.Scan(&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
-					&m.HomeScore, &m.AwayScore, &m.IsFinished, &m.MatchDate,
-					&m.HomeTeamName, &m.AwayTeamName)
-				matchList = append(matchList, m)
-			}
-			matchRows.Close()
+		matchRows2, _ := db.Pool.Query(ctx,
+			`SELECT m.id, m.competition_id, m.home_team_id, m.away_team_id,
+			        m.home_score, m.away_score, m.is_finished, m.match_date,
+			        ht.name, at.name
+			   FROM matches m
+			   JOIN teams ht ON ht.id = m.home_team_id
+			   JOIN teams at ON at.id = m.away_team_id
+			  WHERE m.competition_id = $1 ORDER BY m.match_date`, compID)
+		for matchRows2.Next() {
+			m := &models.Match{}
+			_ = matchRows2.Scan(&m.ID, &m.CompetitionID, &m.HomeTeamID, &m.AwayTeamID,
+				&m.HomeScore, &m.AwayScore, &m.IsFinished, &m.MatchDate,
+				&m.HomeTeamName, &m.AwayTeamName)
+			matchList = append(matchList, m)
 		}
+		matchRows2.Close()
 
-		// Load user tips
 		matchIDSlice := make([]int, len(matchList))
 		for i, m := range matchList {
 			matchIDSlice[i] = m.ID
@@ -373,46 +326,35 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 			tipRows.Close()
 		}
 
-		var roundSections []RoundSection
+		type MatchRow struct {
+			Match  *models.Match
+			Tip    *models.Tip
+			Points *int
+		}
+		var rows []MatchRow
 		overallTotal := 0
-		for _, rnd := range rounds {
-			var rows []MatchRow
-			sectionTotal := 0
-			for _, m := range matchList {
-				if m.RoundID != rnd.ID {
-					continue
-				}
-				t := userTips[m.ID]
-				var pts *int
-				if t != nil {
-					pts = t.Points
-				}
-				if pts != nil {
-					sectionTotal += *pts
-				}
-				rows = append(rows, MatchRow{Match: m, Tip: t, Points: pts})
+		for _, m := range matchList {
+			t := userTips[m.ID]
+			var pts *int
+			if t != nil {
+				pts = t.Points
 			}
-			if len(rows) == 0 {
-				continue
+			if pts != nil {
+				overallTotal += *pts
 			}
-			overallTotal += sectionTotal
-			roundSections = append(roundSections, RoundSection{
-				Round: rnd,
-				Rows:  rows,
-				Total: sectionTotal,
-			})
+			rows = append(rows, MatchRow{Match: m, Tip: t, Points: pts})
 		}
 
 		RenderTemplate(w, r, tmpl, "archive_competition.html", TemplateData{
-			"User":          user,
-			"Comp":          comp,
-			"RoundSections": roundSections,
-			"OverallTotal":  overallTotal,
+			"User":         user,
+			"Comp":         comp,
+			"Rows":         rows,
+			"OverallTotal": overallTotal,
 		})
 	}
 }
 
-// GET /archive/round/{round_id}  — redirect to competition
+// GET /archive/round/{round_id} — redirect to competition
 func ArchiveRoundRedirect(w http.ResponseWriter, r *http.Request) {
 	roundID, _ := strconv.Atoi(r.PathValue("round_id"))
 	ctx := context.Background()

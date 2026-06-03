@@ -286,7 +286,7 @@ func ashPreview(leagueID, season string, skipFinished bool) ([]previewMatchItem,
 
 // ── ashImport — importuje zápasy z TheSportsDB do DB ─────────────────────────
 
-func ashImport(ctx context.Context, compID, roundID int, leagueID, season string, skipFinished bool) (created, teamsNew, skipped int, err error) {
+func ashImport(ctx context.Context, compID int, leagueID, season string, skipFinished bool) (created, teamsNew, skipped int, err error) {
 	events, ferr := ashLoadEvents(leagueID, season)
 	if ferr != nil {
 		return 0, 0, 0, ferr
@@ -340,8 +340,8 @@ func ashImport(ctx context.Context, compID, roundID int, leagueID, season string
 		// Duplicita
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			roundID, homeID, awayID).Scan(&existingID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			compID, homeID, awayID).Scan(&existingID)
 
 		if existingID > 0 {
 			if matchDate != nil {
@@ -353,9 +353,9 @@ func ashImport(ctx context.Context, compID, roundID int, leagueID, season string
 
 		var newMatchID int
 		ferr := db.Pool.QueryRow(ctx,
-			`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, is_finished)
+			`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, is_finished)
 			 VALUES ($1,$2,$3,$4,false) RETURNING id`,
-			roundID, homeID, awayID, matchDate).Scan(&newMatchID)
+			compID, homeID, awayID, matchDate).Scan(&newMatchID)
 		if ferr != nil {
 			skipped++
 			continue
@@ -367,19 +367,19 @@ func ashImport(ctx context.Context, compID, roundID int, leagueID, season string
 
 // ── ashUpdateResults — doplní výsledky z TheSportsDB ─────────────────────────
 
-func ashUpdateResults(ctx context.Context, roundID, compID int, leagueID, season string) (updated, noScore, notFound int, err error) {
+func ashUpdateResults(ctx context.Context, compID int, leagueID, season string) (updated, noScore, notFound int, err error) {
 	events, ferr := ashLoadEvents(leagueID, season)
 	if ferr != nil {
 		return 0, 0, 0, ferr
 	}
 
-	// Načti existující zápasy v kole
+	// Načti existující zápasy v soutěži
 	rows, rerr := db.Pool.Query(ctx,
 		`SELECT m.id, ht.name, at.name
 		 FROM matches m
 		 JOIN teams ht ON ht.id = m.home_team_id
 		 JOIN teams at ON at.id = m.away_team_id
-		 WHERE m.round_id = $1`, roundID)
+		 WHERE m.competition_id = $1`, compID)
 	if rerr != nil {
 		return 0, 0, 0, rerr
 	}

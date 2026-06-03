@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,6 +47,10 @@ func migrateSchema() {
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_deadline TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_reveal_at TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS deadline TIMESTAMPTZ`,
+		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS competition_id BIGINT`,
+		// Naplň competition_id z rounds (pro stávající data)
+		`UPDATE matches m SET competition_id = r.competition_id FROM rounds r WHERE r.id = m.round_id AND m.competition_id IS NULL`,
 		`ALTER TABLE extra_answers ADD COLUMN IF NOT EXISTS original_answer TEXT`,
 		`CREATE TABLE IF NOT EXISTS app_config (key VARCHAR(100) PRIMARY KEY, value TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS feedback (
@@ -221,6 +226,7 @@ func main() {
 	r.Get("/admin/competitions/{competition_id}/edit", handlers.AdminCompetitionEditForm(tmpl))
 	r.Post("/admin/competitions/{competition_id}/edit", handlers.AdminCompetitionEditSubmit)
 	r.Post("/admin/competitions/{competition_id}/toggle", handlers.AdminCompetitionToggle)
+	r.Post("/admin/competitions/{competition_id}/set-deadline", handlers.AdminCompetitionSetDeadline)
 	r.Post("/admin/competitions/{competition_id}/delete", handlers.AdminCompetitionDelete)
 	r.Post("/admin/competitions/{competition_id}/sort-order", handlers.AdminCompetitionSortOrder)
 
@@ -247,7 +253,7 @@ func main() {
 	// Admin manual page
 	r.Get("/admin/manual", handlers.AdminManual(tmpl))
 
-	// Admin rounds
+	// Admin rounds (přesměrování na competition matches — kola jsou odstraněna)
 	r.Get("/admin/competitions/{competition_id}/rounds", handlers.AdminRoundsList(tmpl))
 	r.Post("/admin/competitions/{competition_id}/rounds/new", handlers.AdminRoundCreate)
 	r.Post("/admin/rounds/{round_id}/edit", handlers.AdminRoundEdit)
@@ -255,8 +261,21 @@ func main() {
 	r.Post("/admin/rounds/{round_id}/notify-new", handlers.AdminRoundNotifyNew)
 
 	// Admin matches
-	r.Get("/admin/rounds/{round_id}/matches", handlers.AdminMatchesList(tmpl))
-	r.Post("/admin/rounds/{round_id}/matches/new", handlers.AdminMatchCreate)
+	r.Get("/admin/competitions/{competition_id}/matches", handlers.AdminMatchesList(tmpl))
+	r.Post("/admin/competitions/{competition_id}/matches/new", handlers.AdminMatchCreate)
+	// Backward compat: staré round-based URL přesměruje na competition matches
+	r.Get("/admin/rounds/{round_id}/matches", func(w http.ResponseWriter, r *http.Request) {
+		roundID := chi.URLParam(r, "round_id")
+		var compID int
+		_ = db.Pool.QueryRow(r.Context(), `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
+		http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusMovedPermanently)
+	})
+	r.Post("/admin/rounds/{round_id}/matches/new", func(w http.ResponseWriter, r *http.Request) {
+		roundID := chi.URLParam(r, "round_id")
+		var compID int
+		_ = db.Pool.QueryRow(r.Context(), `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
+		http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
+	})
 	r.Post("/admin/matches/{match_id}/edit", handlers.AdminMatchEdit)
 	r.Post("/admin/matches/{match_id}/set-result", handlers.AdminMatchSetResult)
 	r.Post("/admin/matches/{match_id}/clear-result", handlers.AdminMatchClearResult)
@@ -269,11 +288,12 @@ func main() {
 	r.Post("/admin/competitions/{competition_id}/users/{user_id}/remove-tips", handlers.AdminRemoveUserTips)
 	r.Get("/admin/unscored", handlers.AdminUnscored(tmpl))
 	r.Get("/admin/unscored-count", handlers.AdminUnscoredCount)
-	r.Get("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsForm(tmpl))
-	r.Post("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsSubmit)
 	// Global bulk results view (all active competitions)
 	r.Get("/admin/results", handlers.AdminBulkResultsForm(tmpl))
 	r.Post("/admin/results", handlers.AdminBulkResultsSubmit)
+	// Backward compat: staré round-based bulk-results
+	r.Get("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsForm(tmpl))
+	r.Post("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsSubmit)
 	r.Post("/admin/competitions/{competition_id}/add-match", handlers.AdminQuickAddMatchAjax)
 
 	// Admin teams
@@ -303,7 +323,7 @@ func main() {
 
 	// Admin rozcestník — přidat zápasy
 	r.Get("/admin/add-matches", handlers.AdminAddMatchesHub(tmpl))
-	r.Post("/admin/rounds/quick-new", handlers.AdminRoundQuickNew)
+	r.Post("/admin/rounds/quick-new", handlers.AdminRoundQuickNew) // redirect stub
 
 	// Admin hromadný import budoucích zápasů
 	r.Get("/admin/matches/import", handlers.AdminMatchImportForm(tmpl))

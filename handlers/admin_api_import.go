@@ -405,8 +405,6 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
-	roundID, _ := strconv.Atoi(r.FormValue("round_id"))
-	newRoundName := strings.TrimSpace(r.FormValue("new_round_name"))
 	fdCode := strings.TrimSpace(r.FormValue("fd_code"))
 	matchdayStr := strings.TrimSpace(r.FormValue("matchday"))
 	sport := r.FormValue("sport")
@@ -435,42 +433,15 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Vytvoř nebo ověř kolo
-	if roundID == 0 {
-		if newRoundName == "" {
-			if matchdayStr != "" {
-				newRoundName = "Kolo " + matchdayStr
-			} else {
-				newRoundName = "Import z API"
-			}
-		}
-		if err := db.Pool.QueryRow(ctx,
-			`INSERT INTO rounds (competition_id, name, is_active) VALUES ($1,$2,true) RETURNING id`,
-			compID, newRoundName).Scan(&roundID); err != nil {
-			middleware.SetFlash(w, r, "error", "Nepodařilo se vytvořit kolo: "+err.Error())
-			http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
-			return
-		}
-	} else {
-		// Ověř že kolo patří do soutěže
-		var ownerComp int
-		if err := db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&ownerComp); err != nil || ownerComp != compID {
-			middleware.SetFlash(w, r, "error", "Kolo nepatří do vybrané soutěže.")
-			http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
-			return
-		}
-	}
-
 	// ── Pokud frontend poslal vybrané zápasy jako JSON, importuj přímo z nich ──
 	if selectedJSON := strings.TrimSpace(r.FormValue("selected_matches")); selectedJSON != "" {
 		var items []selMatchItem
 		if jsonErr := json.Unmarshal([]byte(selectedJSON), &items); jsonErr == nil && len(items) > 0 {
-			// Parsuj přiřazení týmů pokud admin prošel resolve dialog
 			var teamMappings map[string]teamResolution
 			if tm := strings.TrimSpace(r.FormValue("team_mappings")); tm != "" {
 				_ = json.Unmarshal([]byte(tm), &teamMappings)
 			}
-			created, teamsNew, skipped, importErr := importFromSelectedMatches(ctx, items, compID, roundID, sport, teamMappings)
+			created, teamsNew, skipped, importErr := importFromSelectedMatches(ctx, items, compID, sport, teamMappings)
 			if importErr != nil {
 				middleware.SetFlash(w, r, "error", "Chyba importu: "+importErr.Error())
 				http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
@@ -478,7 +449,7 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 			}
 			msg := fmt.Sprintf("Import dokončen: <b>%d</b> nových zápasů, <b>%d</b> nových týmů, %d přeskočeno.", created, teamsNew, skipped)
 			middleware.SetFlash(w, r, "ok", msg)
-			http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/rounds", compID), http.StatusSeeOther)
+			http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/matches", compID), http.StatusSeeOther)
 			return
 		}
 	}
@@ -486,7 +457,7 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 	// ── Hockey: TheSportsDB ───────────────────────────────────────────────────
 	if sport == "hockey" {
 		season := ashSeasonFromString(matchdayStr)
-		created, teamsNew, skipped, err := ashImport(ctx, compID, roundID, fdCode, season, skipFinished)
+		created, teamsNew, skipped, err := ashImport(ctx, compID, fdCode, season, skipFinished)
 		if err != nil {
 			middleware.SetFlash(w, r, "error", "Chyba API: "+err.Error())
 			http.Redirect(w, r, "/admin/io", http.StatusSeeOther)
@@ -494,7 +465,7 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 		}
 		msg := fmt.Sprintf("Import dokončen: <b>%d</b> nových zápasů, <b>%d</b> nových týmů, %d přeskočeno.", created, teamsNew, skipped)
 		middleware.SetFlash(w, r, "ok", msg)
-		http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/rounds", compID), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/matches", compID), http.StatusSeeOther)
 		return
 	}
 
@@ -576,14 +547,13 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Zkontroluj duplicitu (stejný round + same teams)
+		// Zkontroluj duplicitu
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			roundID, homeID, awayID).Scan(&existingID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			compID, homeID, awayID).Scan(&existingID)
 
 		if existingID > 0 {
-			// Aktualizuj datum a skóre pokud existuje
 			if isFinished {
 				_, _ = db.Pool.Exec(ctx,
 					`UPDATE matches SET match_date=$1, home_score=$2, away_score=$3, is_finished=$4 WHERE id=$5`,
@@ -599,9 +569,9 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 		// Vlož nový zápas
 		var newMatchID int
 		err := db.Pool.QueryRow(ctx,
-			`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, home_score, away_score, is_finished)
+			`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, home_score, away_score, is_finished)
 			 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-			roundID, homeID, awayID, matchDate, homeScore, awayScore, isFinished).Scan(&newMatchID)
+			compID, homeID, awayID, matchDate, homeScore, awayScore, isFinished).Scan(&newMatchID)
 		if err != nil {
 			skipped++
 			continue
@@ -612,13 +582,12 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 		created++
 	}
 
-	// Přepočítej standings
 	RecalculateStandings(compID)
 
 	msg := fmt.Sprintf("Import dokončen: <b>%d</b> nových zápasů, <b>%d</b> nových týmů, %d přeskočeno.",
 		created, teamsNew, skipped)
 	middleware.SetFlash(w, r, "ok", msg)
-	http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/rounds", compID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/admin/competitions/%d/matches", compID), http.StatusSeeOther)
 }
 
 // ── teamResolution — instrukce pro přiřazení/vytvoření týmu ─────────────────
@@ -662,7 +631,7 @@ type selMatchItem struct {
 	ScoreA  *int   `json:"score_a"`
 }
 
-func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID, roundID int, sport string, mappings map[string]teamResolution) (created, teamsNew, skipped int, err error) {
+func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID int, sport string, mappings map[string]teamResolution) (created, teamsNew, skipped int, err error) {
 	for _, m := range items {
 		if m.Home == "" || m.Away == "" {
 			skipped++
@@ -705,8 +674,8 @@ func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID
 		// Zkontroluj duplicitu
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			roundID, homeID, awayID).Scan(&existingID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			compID, homeID, awayID).Scan(&existingID)
 		if existingID > 0 {
 			skipped++
 			continue
@@ -714,9 +683,9 @@ func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID
 
 		var newMatchID int
 		if dbErr := db.Pool.QueryRow(ctx,
-			`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, home_score, away_score, is_finished)
+			`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, home_score, away_score, is_finished)
 			 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-			roundID, homeID, awayID, matchDate, m.ScoreH, m.ScoreA, isFinished).Scan(&newMatchID); dbErr != nil {
+			compID, homeID, awayID, matchDate, m.ScoreH, m.ScoreA, isFinished).Scan(&newMatchID); dbErr != nil {
 			skipped++
 			continue
 		}
@@ -754,7 +723,6 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 	}
 
 	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
-	roundID, _ := strconv.Atoi(r.FormValue("round_id"))
 	fdCode := strings.TrimSpace(r.FormValue("fd_code"))
 	matchdayStr := strings.TrimSpace(r.FormValue("matchday"))
 	sport := r.FormValue("sport")
@@ -766,29 +734,22 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 		jsonErr("Chybí kód soutěže (fd_code).")
 		return
 	}
-	if compID == 0 || roundID == 0 {
-		jsonErr("Vyber soutěž a konkrétní kolo (ne ➕ nové).")
+	if compID == 0 {
+		jsonErr("Vyber soutěž.")
 		return
 	}
 
 	ctx := context.Background()
 
-	// Ověř že kolo patří do soutěže
-	var ownerComp int
-	if err := db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&ownerComp); err != nil || ownerComp != compID {
-		jsonErr("Kolo nepatří do vybrané soutěže.")
-		return
-	}
-
 	// ── Hockey: TheSportsDB ───────────────────────────────────────────────────
 	if sport == "hockey" {
 		season := ashSeasonFromString(matchdayStr)
-		upd, noScr, notFnd, err := ashUpdateResults(ctx, roundID, compID, fdCode, season)
+		upd, noScr, notFnd, err := ashUpdateResults(ctx, compID, fdCode, season)
 		if err != nil {
 			jsonErr("Chyba API: " + err.Error())
 			return
 		}
-		msg := fmt.Sprintf("Hotovo: %d aktualizováno, %d bez skóre, %d nenalezeno v kole.", upd, noScr, notFnd)
+		msg := fmt.Sprintf("Hotovo: %d aktualizováno, %d bez skóre, %d nenalezeno.", upd, noScr, notFnd)
 		b, _ := json.Marshal(map[string]interface{}{"ok": true, "message": msg})
 		w.Write(b)
 		return
@@ -838,8 +799,8 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 
 		var matchID int
 		err := db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			roundID, homeID, awayID).Scan(&matchID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			compID, homeID, awayID).Scan(&matchID)
 		if err != nil {
 			notFound++
 			continue
@@ -859,11 +820,10 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 
 	RecalculateStandings(compID)
 
-	// Audit log
 	adminID := admin.ID
-	logDesc := fmt.Sprintf("Doplnit výsledky API: %s matchday=%s → %d aktualizováno, %d bez skóre, %d nenalezeno (kolo id=%d)",
-		fdCode, matchdayStr, updated, noScore, notFound, roundID)
-	LogAction(&adminID, admin.Username, "api_update_results", "round", &roundID, logDesc, nil, nil)
+	logDesc := fmt.Sprintf("Doplnit výsledky API: %s matchday=%s → %d aktualizováno, %d bez skóre, %d nenalezeno",
+		fdCode, matchdayStr, updated, noScore, notFound)
+	LogAction(&adminID, admin.Username, "api_update_results", "competition", &compID, logDesc, nil, nil)
 
 	msg := fmt.Sprintf("Výsledky doplněny: %d zápasů aktualizováno", updated)
 	if noScore > 0 {
@@ -906,13 +866,10 @@ func AutoFetchResults(ctx context.Context, compID int, fdCode, sport string) (up
 			notFound++
 			continue
 		}
-		// Najdi zápas v libovolném kole dané soutěže
+		// Najdi zápas v soutěži
 		var matchID int
 		err := db.Pool.QueryRow(ctx,
-			`SELECT m.id FROM matches m
-			   JOIN rounds r ON r.id = m.round_id
-			  WHERE r.competition_id=$1 AND m.home_team_id=$2 AND m.away_team_id=$3
-			  LIMIT 1`,
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3 LIMIT 1`,
 			compID, homeID, awayID).Scan(&matchID)
 		if err != nil {
 			notFound++
