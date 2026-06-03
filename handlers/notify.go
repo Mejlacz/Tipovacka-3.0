@@ -41,8 +41,7 @@ func sendMatchNotificationForID(matchID int) {
 	err := db.Pool.QueryRow(ctx, `
 		SELECT ht.name, at.name, c.name, c.id, m.match_date
 		FROM matches m
-		JOIN rounds r       ON r.id  = m.round_id
-		JOIN competitions c ON c.id  = r.competition_id
+		JOIN competitions c ON c.id  = m.competition_id
 		JOIN teams ht       ON ht.id = m.home_team_id
 		JOIN teams at       ON at.id = m.away_team_id
 		WHERE m.id = $1 AND m.is_finished = false
@@ -60,8 +59,7 @@ func sendMatchNotificationForID(matchID int) {
 		FROM users u
 		JOIN tips t   ON t.user_id  = u.id
 		JOIN matches m2 ON m2.id    = t.match_id
-		JOIN rounds r2  ON r2.id    = m2.round_id
-		WHERE r2.competition_id = $1
+		WHERE m2.competition_id = $1
 		  AND u.email IS NOT NULL AND u.email != ''
 		  AND COALESCE(u.is_blocked,  false) = false
 		  AND COALESCE(u.is_inactive, false) = false

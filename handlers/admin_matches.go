@@ -677,8 +677,6 @@ func AdminQuickAddMatchAjax(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		return
 	}
-	roundIDStr := r.FormValue("round_id")
-	newRoundName := strings.TrimSpace(r.FormValue("new_round_name"))
 	homeTeamID, _ := strconv.Atoi(r.FormValue("home_team_id"))
 	awayTeamID, _ := strconv.Atoi(r.FormValue("away_team_id"))
 	matchDateStr := r.FormValue("match_date")
@@ -702,10 +700,6 @@ func AdminQuickAddMatchAjax(w http.ResponseWriter, r *http.Request) {
 	newVal := `{"competition_id":` + strconv.Itoa(compID) + `,"home":` + strconv.Itoa(homeTeamID) + `,"away":` + strconv.Itoa(awayTeamID) + `}`
 	LogAction(&admin.ID, admin.Username, "match_add_quick", "match", &newMatchID,
 		"Rychlé přidání zápasu", nil, &newVal)
-
-	// suppress unused variables from old code
-	_ = roundIDStr
-	_ = newRoundName
 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"ok":true}`))

@@ -278,20 +278,6 @@
                     </select>
                 </div>
 
-                {{/* Kolo */}}
-                <div class="api-form-group" style="margin-bottom:.5rem">
-                    <label class="api-label">Kolo</label>
-                    <select name="round_id" id="api-round" style="width:100%">
-                        <option value="0">➕ Vytvořit nové kolo</option>
-                    </select>
-                </div>
-
-                {{/* Název nového kola */}}
-                <div id="api-new-round-row" class="api-form-group" style="display:none;margin-bottom:.5rem">
-                    <label class="api-label">Název nového kola</label>
-                    <input type="text" name="new_round_name" id="api-round-name" placeholder="např. Skupina A - kolo 3" style="width:100%" />
-                </div>
-
                 {{/* Režim + přeskočit */}}
                 <div class="api-mode-row">
                     <label class="api-radio-lbl">
@@ -527,15 +513,10 @@ showTab(valid.indexOf(hash) >= 0 ? hash : 'export');
 function qs(sel){ return document.querySelector(sel); }
 
 var compSel  = qs('#api-comp');
-var roundSel = qs('#api-round');
-var newRow   = qs('#api-new-round-row');
 
 var _hockeySource = 'tsdb';
 
-function syncNewRow(){
-    if(!roundSel || !newRow) return;
-    newRow.style.display = roundSel.value === '0' ? 'flex' : 'none';
-}
+function syncNewRow(){ /* kola odstraněna — no-op */ }
 
 // ── Mode switching ─────────────────────────────────────────────────────────────
 
@@ -546,13 +527,6 @@ window.onModeChange = function(mode) {
     updateActionBtn();
     var skipRow = qs('#api-skip-row');
     if(skipRow) skipRow.style.display = mode === 'import' ? '' : 'none';
-    var statusEl = qs('#api-preview-status');
-    if(mode === 'results' && roundSel && roundSel.value === '0'){
-        if(statusEl) statusEl.textContent = '⚠ Vyberte existující kolo pro doplnění výsledků.';
-    } else {
-        if(statusEl && statusEl.textContent.indexOf('⚠ Vyberte existující kolo') === 0)
-            statusEl.textContent = '';
-    }
 };
 
 function updateActionBtn(){
@@ -788,24 +762,7 @@ window.teamResolveConfirm = function(){
     submitImportForm(_resolveSelected.length, _resolveStatusEl);
 };
 
-function loadRounds(compID){
-    if(!roundSel) return;
-    roundSel.innerHTML = '<option value="0">➕ Vytvořit nové kolo</option>';
-    syncNewRow();
-    if(!compID) return;
-    fetch('/admin/api/rounds?competition_id=' + compID)
-        .then(function(r){ return r.json(); })
-        .then(function(data){
-            if(!data.ok || !data.rounds) return;
-            data.rounds.forEach(function(rd){
-                var opt = document.createElement('option');
-                opt.value = rd.id;
-                opt.textContent = rd.name;
-                roundSel.appendChild(opt);
-            });
-        })
-        .catch(function(){});
-}
+function loadRounds(compID){ /* kola odstraněna — no-op */ }
 
 // ── Sport switching ────────────────────────────────────────────────────────────
 
@@ -1182,22 +1139,21 @@ window.apiPreview = function(){
 
 // ── apiUpdateResults ──────────────────────────────────────────────────────────
 window.apiUpdateResults = function(){
-    var roundID  = (qs('#api-round') || {}).value || '0';
     var compID   = (qs('#api-comp')  || {}).value || '';
     var fdCode   = getFdCode();
     var matchday = getMatchday();
     var sport    = _currentSport;
     var statusEl = qs('#api-preview-status');
 
-    if(roundID === '0' || !roundID){
-        if(statusEl) statusEl.textContent = '⚠ Vyberte existující kolo (ne "Vytvořit nové").';
+    if(!compID){
+        if(statusEl) statusEl.textContent = '⚠ Vyberte soutěž.';
         return;
     }
     if(!fdCode){
         if(statusEl) statusEl.textContent = '⚠ Zadejte nebo vyberte ligu / soutěž.';
         return;
     }
-    if(!confirm('Doplnit výsledky z API pro vybrané kolo? Existující skóre budou přepsána, budou přepočítány tipy a žebříček.')){
+    if(!confirm('Doplnit výsledky z API pro vybranou soutěž? Existující skóre budou přepsána, budou přepočítány tipy a žebříček.')){
         return;
     }
     if(statusEl) statusEl.textContent = '⏳ Doplňuji výsledky…';
@@ -1206,7 +1162,6 @@ window.apiUpdateResults = function(){
     var form = new FormData();
     form.append('_csrf',          csrfToken);
     form.append('competition_id', compID);
-    form.append('round_id',       roundID);
     form.append('fd_code',        fdCode);
     form.append('matchday',       matchday);
     form.append('sport',          sport);
@@ -1230,14 +1185,6 @@ function esc(s){
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-if(compSel){
-    compSel.addEventListener('change', function(){ loadRounds(this.value); });
-    if(compSel.value) loadRounds(compSel.value);
-}
-if(roundSel){
-    roundSel.addEventListener('change', syncNewRow);
-}
-syncNewRow();
 // Inicializuj football jako výchozí sport
 setApiSport('football');
 

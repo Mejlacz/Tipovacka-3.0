@@ -46,15 +46,13 @@ func AdminHealthDashboard(tmpl *template.Template) http.HandlerFunc {
 			Home     string
 			Away     string
 			Date     string
-			RoundName string
-			CompName  string
+			CompName string
 		}
 		var upcoming []UpcomingMatch
 		urows, _ := db.Pool.Query(ctx, `
-			SELECT m.id, ht.name, at.name, m.match_date, ro.name, c.name
+			SELECT m.id, ht.name, at.name, m.match_date, c.name
 			FROM matches m
-			JOIN rounds ro ON ro.id = m.round_id
-			JOIN competitions c ON c.id = ro.competition_id
+			JOIN competitions c ON c.id = m.competition_id
 			JOIN teams ht ON ht.id = m.home_team_id
 			JOIN teams at ON at.id = m.away_team_id
 			WHERE m.is_finished = false AND m.match_date IS NOT NULL
@@ -66,7 +64,7 @@ func AdminHealthDashboard(tmpl *template.Template) http.HandlerFunc {
 			for urows.Next() {
 				var u UpcomingMatch
 				var dt *time.Time
-				_ = urows.Scan(&u.ID, &u.Home, &u.Away, &dt, &u.RoundName, &u.CompName)
+				_ = urows.Scan(&u.ID, &u.Home, &u.Away, &dt, &u.CompName)
 				if dt != nil {
 					u.Date = dt.Format("02.01.2006 15:04")
 				}
@@ -79,8 +77,7 @@ func AdminHealthDashboard(tmpl *template.Template) http.HandlerFunc {
 		var unscoredCount int
 		db.Pool.QueryRow(ctx, `
 			SELECT COUNT(*) FROM matches m
-			JOIN rounds ro ON ro.id = m.round_id
-			JOIN competitions c ON c.id = ro.competition_id
+			JOIN competitions c ON c.id = m.competition_id
 			WHERE m.is_finished = false AND c.is_active = true
 			  AND m.home_score IS NULL AND m.match_date < NOW()
 		`).Scan(&unscoredCount)
@@ -113,11 +110,10 @@ func AdminHealthDashboard(tmpl *template.Template) http.HandlerFunc {
 
 		// ── Active competitions ────────────────────────────────────────────────
 		type ActiveComp struct {
-			ID        int
-			Name      string
-			Rounds    int
-			Matches   int
-			Unscored  int
+			ID       int
+			Name     string
+			Matches  int
+			Unscored int
 		}
 		var activeComps []ActiveComp
 		acRows, _ := db.Pool.Query(ctx, `SELECT id, name FROM competitions WHERE is_active ORDER BY id DESC`)
@@ -125,9 +121,8 @@ func AdminHealthDashboard(tmpl *template.Template) http.HandlerFunc {
 			for acRows.Next() {
 				var ac ActiveComp
 				_ = acRows.Scan(&ac.ID, &ac.Name)
-				db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM rounds WHERE competition_id=$1`, ac.ID).Scan(&ac.Rounds)
-				db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM matches m JOIN rounds ro ON ro.id=m.round_id WHERE ro.competition_id=$1`, ac.ID).Scan(&ac.Matches)
-				db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM matches m JOIN rounds ro ON ro.id=m.round_id WHERE ro.competition_id=$1 AND m.is_finished=false AND m.home_score IS NULL`, ac.ID).Scan(&ac.Unscored)
+				db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM matches WHERE competition_id=$1`, ac.ID).Scan(&ac.Matches)
+				db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM matches WHERE competition_id=$1 AND is_finished=false AND home_score IS NULL`, ac.ID).Scan(&ac.Unscored)
 				activeComps = append(activeComps, ac)
 			}
 			acRows.Close()

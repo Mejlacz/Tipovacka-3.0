@@ -13,7 +13,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 {{end}}
             </select>
         </form>
-        {{if and .User.IsAdmin .SelectedCompetitionID .CompRounds}}
+        {{if and .User.IsAdmin .SelectedCompetitionID}}
         <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('add-match-modal').style.display='flex'"
                 style="font-size:0.82rem">➕ Zápas</button>
         {{end}}
@@ -33,24 +33,11 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
 {{end}}
 
 {{/* ── Add Match Modal (admin only) ── */}}
-{{if and .User.IsAdmin .SelectedCompetitionID .CompRounds}}
+{{if and .User.IsAdmin .SelectedCompetitionID}}
 <div id="add-match-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
     <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:12px;padding:1.5rem;width:min(420px,95vw);max-height:90vh;overflow-y:auto">
         <h3 style="margin:0 0 1rem">➕ Přidat zápas</h3>
         <form method="post" id="add-match-form">
-            <div class="form-group" style="margin-bottom:.75rem">
-                <label style="font-size:.82rem;color:var(--muted-d)">Kolo</label>
-                <select name="round_id" id="am-round" required style="width:100%">
-                    <option value="new">➕ Nové kolo</option>
-                    {{range .CompRounds}}
-                    <option value="{{.ID}}">{{.Name}}</option>
-                    {{end}}
-                </select>
-            </div>
-            <div class="form-group" id="am-new-round-row" style="margin-bottom:.75rem">
-                <label style="font-size:.82rem;color:var(--muted-d)">Název nového kola</label>
-                <input type="text" name="new_round_name" id="am-new-round-name" value="{{.NextRoundName}}" style="width:100%" />
-            </div>
             <div class="form-group" style="margin-bottom:.75rem">
                 <label style="font-size:.82rem;color:var(--muted-d)">Domácí</label>
                 <select name="home_team_id" required style="width:100%">
@@ -78,13 +65,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
 (function() {
     var modal = document.getElementById('add-match-modal');
     var form  = document.getElementById('add-match-form');
-    var roundSel = document.getElementById('am-round');
-    var newRoundRow = document.getElementById('am-new-round-row');
-    function toggleNewRound() {
-        newRoundRow.style.display = roundSel.value === 'new' ? '' : 'none';
-    }
-    roundSel.addEventListener('change', toggleNewRound);
-    toggleNewRound();
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
     form.addEventListener('submit', function(e) {
         e.preventDefault();

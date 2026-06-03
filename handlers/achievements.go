@@ -93,36 +93,26 @@ func checkCompAchievement(id string, s userAchStats) bool {
 
 // computeAllCompAchievements returns {userID: []earnedAchievements} for a competition.
 func computeAllCompAchievements(ctx context.Context, compID int, compIsActive bool) map[int][]Achievement {
-	// 1. Load rounds
-	rRows, _ := db.Pool.Query(ctx, `SELECT id FROM rounds WHERE competition_id=$1`, compID)
-	var roundIDs []int
-	for rRows.Next() {
-		var rid int
-		_ = rRows.Scan(&rid)
-		roundIDs = append(roundIDs, rid)
-	}
-	rRows.Close()
-	if len(roundIDs) == 0 {
-		return nil
-	}
-
-	// 2. Load matches (ordered by match_date for streak computation)
+	// 1. Load matches (ordered by match_date for streak computation)
 	type matchInfo struct {
-		ID        int
-		RoundID   int
-		HomeScore *int
-		AwayScore *int
-		Date      *time.Time
+		ID         int
+		DayKey     string // YYYY-MM-DD, for grouping (replaces round)
+		HomeScore  *int
+		AwayScore  *int
+		Date       *time.Time
 		IsFinished bool
 	}
 	mRows, _ := db.Pool.Query(ctx,
-		`SELECT id, round_id, home_score, away_score, match_date, is_finished
-		   FROM matches WHERE round_id = ANY($1)
-		  ORDER BY match_date NULLS LAST, id`, roundIDs)
+		`SELECT id, home_score, away_score, match_date, is_finished
+		   FROM matches WHERE competition_id=$1
+		  ORDER BY match_date NULLS LAST, id`, compID)
 	var matches []matchInfo
 	for mRows.Next() {
 		var m matchInfo
-		_ = mRows.Scan(&m.ID, &m.RoundID, &m.HomeScore, &m.AwayScore, &m.Date, &m.IsFinished)
+		_ = mRows.Scan(&m.ID, &m.HomeScore, &m.AwayScore, &m.Date, &m.IsFinished)
+		if m.Date != nil {
+			m.DayKey = m.Date.Format("2006-01-02")
+		}
 		matches = append(matches, m)
 	}
 	mRows.Close()
@@ -131,10 +121,10 @@ func computeAllCompAchievements(ctx context.Context, compID int, compIsActive bo
 	}
 
 	finishedMatchIDs := map[int]bool{}
-	matchToRound := map[int]int{}
+	matchToDay := map[int]string{} // replaces matchToRound
 	matchOrder := map[int]int{}
 	for i, m := range matches {
-		matchToRound[m.ID] = m.RoundID
+		matchToDay[m.ID] = m.DayKey
 		matchOrder[m.ID] = i
 		if m.IsFinished {
 			finishedMatchIDs[m.ID] = true
@@ -177,35 +167,41 @@ func computeAllCompAchievements(ctx context.Context, compID int, compIsActive bo
 		return nil
 	}
 
-	// 4. Round winners
-	roundWinners := map[int]map[int]bool{} // round_id → set of winning user_ids
-	for _, rid := range roundIDs {
-		roundTotals := map[int]int{}
+	// 4. Day winners (nahrazuje Round winners — skupinujeme po dnech)
+	dayKeys := map[string]bool{}
+	for _, m := range matches {
+		if m.DayKey != "" {
+			dayKeys[m.DayKey] = true
+		}
+	}
+	dayWinners := map[string]map[int]bool{} // day → set of winning user_ids
+	for day := range dayKeys {
+		dayTotals := map[int]int{}
 		for uid, tips := range userTips {
 			pts := 0
 			for _, t := range tips {
-				if matchToRound[t.MatchID] == rid && t.Points != nil {
+				if matchToDay[t.MatchID] == day && t.Points != nil {
 					pts += *t.Points
 				}
 			}
 			if pts > 0 {
-				roundTotals[uid] = pts
+				dayTotals[uid] = pts
 			}
 		}
-		if len(roundTotals) >= 2 {
+		if len(dayTotals) >= 2 {
 			maxPts := 0
-			for _, pts := range roundTotals {
+			for _, pts := range dayTotals {
 				if pts > maxPts {
 					maxPts = pts
 				}
 			}
 			winners := map[int]bool{}
-			for uid, pts := range roundTotals {
+			for uid, pts := range dayTotals {
 				if pts == maxPts {
 					winners[uid] = true
 				}
 			}
-			roundWinners[rid] = winners
+			dayWinners[day] = winners
 		}
 	}
 
@@ -259,14 +255,14 @@ func computeAllCompAchievements(ctx context.Context, compID int, compIsActive bo
 		}
 		fullParticipation := len(finishedMatchIDs) > 0 && len(tippedFinished) == len(finishedMatchIDs)
 
-		// Tips per round (for perfect round check)
-		roundTips := map[int][]tipInfo{}
+		// Tips per day (for perfect day check — replaces per-round check)
+		dayTipsMap := map[string][]tipInfo{}
 		for _, t := range tips {
-			rid := matchToRound[t.MatchID]
-			roundTips[rid] = append(roundTips[rid], t)
+			dayKey := matchToDay[t.MatchID]
+			dayTipsMap[dayKey] = append(dayTipsMap[dayKey], t)
 		}
 		hasPerfect := false
-		for _, rts := range roundTips {
+		for _, rts := range dayTipsMap {
 			if len(rts) < 3 {
 				continue
 			}
@@ -301,10 +297,10 @@ func computeAllCompAchievements(ctx context.Context, compID int, compIsActive bo
 			}
 		}
 
-		// Round winner
+		// Day winner (nahrazuje Round winner)
 		isRoundWinner := false
 		roundsWon := 0
-		for _, winners := range roundWinners {
+		for _, winners := range dayWinners {
 			if winners[uid] {
 				isRoundWinner = true
 				roundsWon++

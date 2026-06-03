@@ -49,35 +49,11 @@
 </div>
 
 <p style="color:var(--muted-d);font-size:.88rem;margin:.25rem 0 0">
-    Zvol způsob přidání nových zápasů nebo kola do aktivní soutěže.
+    Zvol způsob přidání nových zápasů do aktivní soutěže.
 </p>
 
 <div class="hub-divider">Hromadný import zápasů</div>
 <div class="hub-grid">
-
-    {{/* ── Inline formulář: Přidat kolo ── */}}
-    <div class="hub-card" style="cursor:default">
-        <div class="hub-card-icon">🗓️</div>
-        <p class="hub-card-title">Přidat kolo</p>
-        <p class="hub-card-desc">Vytvoří nové kolo ve vybrané soutěži a přejde rovnou na přidání zápasů.</p>
-        <form method="post" action="/admin/rounds/quick-new" style="display:flex;flex-direction:column;gap:.5rem;margin-top:.3rem">
-            <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
-            <select name="competition_id" required style="width:100%;font-size:.83rem;padding:.35rem .5rem;background:var(--bg3,var(--bg2));border:1px solid var(--border-d);border-radius:6px;color:var(--text-d)">
-                <option value="">— Vyber soutěž —</option>
-                {{range .Competitions}}
-                <option value="{{.ID}}">{{.Name}}{{if .Season}} ({{.Season}}){{end}}</option>
-                {{end}}
-            </select>
-            <input type="text" name="name" required placeholder="Název kola (např. 28. kolo)"
-                style="font-size:.83rem;padding:.35rem .5rem;background:var(--bg3,var(--bg2));border:1px solid var(--border-d);border-radius:6px;color:var(--text-d);width:100%;box-sizing:border-box" />
-            <div style="display:flex;flex-direction:column;gap:.15rem">
-                <label style="font-size:.75rem;color:var(--muted-d)">Deadline tipování (nepovinné)</label>
-                <input type="datetime-local" name="deadline"
-                    style="font-size:.83rem;padding:.35rem .5rem;background:var(--bg3,var(--bg2));border:1px solid var(--border-d);border-radius:6px;color:var(--text-d);width:100%;box-sizing:border-box" />
-            </div>
-            <button type="submit" class="btn btn-primary btn-sm" style="margin-top:.2rem">🗓️ Vytvořit kolo →</button>
-        </form>
-    </div>
 
     <a class="hub-card" href="/admin/matches/import">
         <div class="hub-card-icon">📋</div>
@@ -159,8 +135,7 @@
         <div class="hub-card-icon">🆕</div>
         <p class="hub-card-title">Nová soutěž</p>
         <p class="hub-card-desc">
-            Založ novou soutěž (ligu, turnaj), nastav kód pro API
-            a přidej první kolo.
+            Založ novou soutěž (ligu, turnaj) a nastav kód pro API.
         </p>
         <div class="hub-card-tags">
             <span class="hub-tag">nová soutěž</span>
@@ -171,11 +146,10 @@
         <div class="hub-card-icon">🏆</div>
         <p class="hub-card-title">Správa soutěží</p>
         <p class="hub-card-desc">
-            Přehled všech soutěží, editace, kola a nastavení API kódů.
+            Přehled všech soutěží, editace a nastavení API kódů.
         </p>
         <div class="hub-card-tags">
             <span class="hub-tag">editace</span>
-            <span class="hub-tag">kola</span>
         </div>
     </a>
 

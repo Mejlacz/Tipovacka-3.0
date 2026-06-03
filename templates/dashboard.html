@@ -75,12 +75,11 @@
         <div class="comp-card-meta">
             <span>{{.SportLabel}}</span>
             <span>📅 {{.Comp.Season}}</span>
-            <span>📋 {{.RoundsCount}} kol</span>
-            {{if .LastRound}}<span style="color:var(--text-d);font-weight:500">🏁 {{.LastRound.Name}}</span>{{end}}
+            <span>⚽ {{.MatchesCount}} zápasů</span>
         </div>
         <div class="comp-card-actions">
             <a href="/admin/competitions/{{.Comp.ID}}/edit" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">Upravit</a>
-            <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">Kola</a>
+            <a href="/admin/competitions/{{.Comp.ID}}/matches" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">⚽ Zápasy</a>
             <a href="/admin/competitions/{{.Comp.ID}}/teams" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">👥 Týmy</a>
             <a href="/admin/extra/{{.Comp.ID}}/answers" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">🎯 Extra</a>
             <form method="post" action="/admin/competitions/{{.Comp.ID}}/toggle">

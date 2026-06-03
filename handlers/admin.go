@@ -55,29 +55,18 @@ func AdminDashboard(tmpl *template.Template) http.HandlerFunc {
 		compRows.Close()
 
 		type compData struct {
-			Comp        *models.Competition
-			SportLabel  string
-			LastRound   *models.Round
-			RoundsCount int
+			Comp         *models.Competition
+			SportLabel   string
+			MatchesCount int
 		}
 		var compDataList []compData
 		for _, comp := range comps {
-			var lastRound *models.Round
-			rnd := &models.Round{}
-			err := db.Pool.QueryRow(ctx,
-				`SELECT id, competition_id, name, deadline, is_active FROM rounds
-				  WHERE competition_id = $1 ORDER BY id DESC LIMIT 1`, comp.ID).
-				Scan(&rnd.ID, &rnd.CompetitionID, &rnd.Name, &rnd.Deadline, &rnd.IsActive)
-			if err == nil {
-				lastRound = rnd
-			}
-			var count int
-			_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM rounds WHERE competition_id = $1`, comp.ID).Scan(&count)
+			var matchCount int
+			_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM matches WHERE competition_id = $1`, comp.ID).Scan(&matchCount)
 			compDataList = append(compDataList, compData{
-				Comp:        comp,
-				SportLabel:  getSportLabel(comp.Sport),
-				LastRound:   lastRound,
-				RoundsCount: count,
+				Comp:         comp,
+				SportLabel:   getSportLabel(comp.Sport),
+				MatchesCount: matchCount,
 			})
 		}
 
@@ -103,13 +92,11 @@ func AdminCompetitionsList(tmpl *template.Template) http.HandlerFunc {
 		ctx := context.Background()
 		rows, _ := db.Pool.Query(ctx,
 			`SELECT c.id, c.name, c.season, c.is_active, c.is_hidden, c.sport, c.sort_order,
-			        COUNT(DISTINCT r.id) AS rounds_count,
 			        COUNT(DISTINCT m.id) AS matches_count,
 			        COUNT(DISTINCT t.id) AS tips_count,
 			        COUNT(DISTINCT ct.team_id) AS teams_count
 			   FROM competitions c
-			   LEFT JOIN rounds r ON r.competition_id = c.id
-			   LEFT JOIN matches m ON m.round_id = r.id
+			   LEFT JOIN matches m ON m.competition_id = c.id
 			   LEFT JOIN tips t ON t.match_id = m.id
 			   LEFT JOIN competition_teams ct ON ct.competition_id = c.id
 			  GROUP BY c.id
@@ -118,7 +105,6 @@ func AdminCompetitionsList(tmpl *template.Template) http.HandlerFunc {
 		type cData struct {
 			Comp         *models.Competition
 			SportLabel   string
-			RoundsCount  int
 			MatchesCount int
 			TipsCount    int
 			TeamsCount   int
@@ -126,12 +112,12 @@ func AdminCompetitionsList(tmpl *template.Template) http.HandlerFunc {
 		var compData []cData
 		for rows.Next() {
 			c := &models.Competition{}
-			var rc, mc, tc, tmc int
+			var mc, tc, tmc int
 			_ = rows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.IsHidden, &c.Sport, &c.SortOrder,
-				&rc, &mc, &tc, &tmc)
+				&mc, &tc, &tmc)
 			compData = append(compData, cData{
 				Comp: c, SportLabel: getSportLabel(c.Sport),
-				RoundsCount: rc, MatchesCount: mc, TipsCount: tc, TeamsCount: tmc,
+				MatchesCount: mc, TipsCount: tc, TeamsCount: tmc,
 			})
 		}
 		rows.Close()
@@ -305,9 +291,8 @@ func AdminCompetitionDelete(w http.ResponseWriter, r *http.Request) {
 		// Smaž v pořadí podle FK závislostí
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM extra_answers WHERE question_id IN (SELECT id FROM extra_questions WHERE competition_id=$1)`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM extra_questions WHERE competition_id=$1`, compID)
-		_, _ = db.Pool.Exec(ctx, `DELETE FROM tips WHERE match_id IN (SELECT m.id FROM matches m JOIN rounds r ON r.id=m.round_id WHERE r.competition_id=$1)`, compID)
-		_, _ = db.Pool.Exec(ctx, `DELETE FROM matches WHERE round_id IN (SELECT id FROM rounds WHERE competition_id=$1)`, compID)
-		_, _ = db.Pool.Exec(ctx, `DELETE FROM rounds WHERE competition_id=$1`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM tips WHERE match_id IN (SELECT id FROM matches WHERE competition_id=$1)`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM matches WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM notification_settings WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET competition_id=NULL WHERE competition_id=$1`, compID)

@@ -157,10 +157,9 @@ func AdminEmailForm(tmpl *template.Template) http.HandlerFunc {
 				idxByID[u.ID] = i
 			}
 			cRows, _ := db.Pool.Query(ctx,
-				`SELECT DISTINCT t.user_id, r.competition_id
+				`SELECT DISTINCT t.user_id, m.competition_id
 				   FROM tips t
 				   JOIN matches m ON m.id = t.match_id
-				   JOIN rounds r ON r.id = m.round_id
 				   WHERE t.user_id = ANY(
 				       SELECT id FROM users WHERE email IS NOT NULL AND email != ''
 				   )`)

@@ -354,15 +354,7 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
-// GET /archive/round/{round_id} — redirect to competition
+// GET /archive/round/{round_id} — zpětná kompatibilita, redirect na archiv
 func ArchiveRoundRedirect(w http.ResponseWriter, r *http.Request) {
-	roundID, _ := strconv.Atoi(r.PathValue("round_id"))
-	ctx := context.Background()
-	var compID int
-	err := db.Pool.QueryRow(ctx, `SELECT competition_id FROM rounds WHERE id=$1`, roundID).Scan(&compID)
-	if err != nil {
-		http.Redirect(w, r, "/archive", http.StatusSeeOther)
-		return
-	}
-	http.Redirect(w, r, "/archive/competition/"+strconv.Itoa(compID), http.StatusMovedPermanently)
+	http.Redirect(w, r, "/archive", http.StatusMovedPermanently)
 }

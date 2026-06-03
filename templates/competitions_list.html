@@ -45,7 +45,6 @@ main.container { max-width:100% !important; width:100% !important }
             <th>SPORT</th>
             <th>STAV</th>
             <th style="text-align:center" title="Pořadí v dropdownech">POŘADÍ</th>
-            <th style="text-align:center">KOL</th>
             <th style="text-align:center">ZÁPASŮ</th>
             <th style="text-align:center">TÝMŮ</th>
             <th style="text-align:center">TIPŮ</th>
@@ -75,14 +74,13 @@ main.container { max-width:100% !important; width:100% !important }
                    placeholder="—" min="0" max="9999"
                    style="width:52px;text-align:center;padding:.2rem .3rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:5px;color:inherit;font-size:.82rem" />
         </td>
-        <td class="comp-stat">{{.RoundsCount}}</td>
         <td class="comp-stat">{{.MatchesCount}}</td>
         <td class="comp-stat">{{.TeamsCount}}</td>
         <td class="comp-stat">{{.TipsCount}}</td>
         <td>
             <div class="cact">
                 <a href="/admin/competitions/{{.Comp.ID}}/edit" class="cbtn cbtn-gray" title="Upravit">✏️</a>
-                <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="cbtn cbtn-gray" title="Kola">📋 Kola</a>
+                <a href="/admin/competitions/{{.Comp.ID}}/matches" class="cbtn cbtn-gray" title="Zápasy">⚽ Zápasy</a>
                 <a href="/admin/competitions/{{.Comp.ID}}/teams" class="cbtn cbtn-gray" title="Týmy">👥</a>
                 <a href="/admin/extra/{{.Comp.ID}}/answers" class="cbtn cbtn-gray" title="Extra otázky">🎯</a>
                 <a href="/admin/tips/{{.Comp.ID}}/import" class="cbtn cbtn-gray" title="Import tipů">⬆️</a>

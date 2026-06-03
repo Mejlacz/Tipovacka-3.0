@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"html/template"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -149,48 +148,33 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 
 		// Zápasy pro vybranou soutěž
 		var matches []*models.Match
-		var compRounds []*models.Round
 		var compTeams []*models.Team
-		nextRoundName := "Kolo 1"
 
 		if compID > 0 {
 			matchRows, _ := db.Pool.Query(ctx,
-				`SELECT m.id, m.round_id, m.home_team_id, m.away_team_id,
+				`SELECT m.id, m.competition_id, m.home_team_id, m.away_team_id,
 				        m.home_score, m.away_score, m.match_date, m.is_finished,
 				        COALESCE(m.notify_sent, false),
 				        ht.id, ht.name, ht.display_name, ht.logo_url,
-				        at.id, at.name, at.display_name, at.logo_url,
-				        r.id, r.name, r.deadline, r.competition_id
+				        at.id, at.name, at.display_name, at.logo_url
 				   FROM matches m
-				   JOIN rounds r ON r.id = m.round_id
 				   JOIN teams ht ON ht.id = m.home_team_id
 				   JOIN teams at ON at.id = m.away_team_id
-				  WHERE r.competition_id = $1
+				  WHERE m.competition_id = $1
 				  ORDER BY m.match_date DESC NULLS LAST`, compID)
 			for matchRows.Next() {
-				m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}, Round: &models.Round{}}
+				m := &models.Match{HomeTeam: &models.Team{}, AwayTeam: &models.Team{}}
 				_ = matchRows.Scan(
-					&m.ID, &m.RoundID, &m.HomeTeamID, &m.AwayTeamID,
+					&m.ID, &m.CompetitionID, &m.HomeTeamID, &m.AwayTeamID,
 					&m.HomeScore, &m.AwayScore, &m.MatchDate, &m.IsFinished,
 					&m.NotifySent,
 					&m.HomeTeam.ID, &m.HomeTeam.Name, &m.HomeTeam.DisplayName, &m.HomeTeam.LogoURL,
-					&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName, &m.AwayTeam.LogoURL,
-					&m.Round.ID, &m.Round.Name, &m.Round.Deadline, &m.Round.CompetitionID)
+					&m.AwayTeam.ID, &m.AwayTeam.Name, &m.AwayTeam.DisplayName, &m.AwayTeam.LogoURL)
 				matches = append(matches, m)
 			}
 			matchRows.Close()
 
 			if u.IsAdmin {
-				rndRows, _ := db.Pool.Query(ctx,
-					`SELECT id, competition_id, name, deadline, is_active FROM rounds
-					  WHERE competition_id = $1 AND is_active = true ORDER BY id DESC`, compID)
-				for rndRows.Next() {
-					rnd := &models.Round{}
-					_ = rndRows.Scan(&rnd.ID, &rnd.CompetitionID, &rnd.Name, &rnd.Deadline, &rnd.IsActive)
-					compRounds = append(compRounds, rnd)
-				}
-				rndRows.Close()
-
 				teamRows, _ := db.Pool.Query(ctx,
 					`SELECT t.id, t.name, t.sport, t.alias, t.display_name, t.logo_url, t.category, t.competition_id
 					   FROM teams t
@@ -203,19 +187,6 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 					compTeams = append(compTeams, t)
 				}
 				teamRows.Close()
-			}
-
-			// Navrhni název pro nové kolo
-			if len(compRounds) > 0 {
-				lastName := compRounds[0].Name
-				re := regexp.MustCompile(`\d+`)
-				loc := re.FindStringIndex(lastName)
-				if loc != nil {
-					num, _ := strconv.Atoi(lastName[loc[0]:loc[1]])
-					nextRoundName = lastName[:loc[0]] + strconv.Itoa(num+1) + lastName[loc[1]:]
-				} else {
-					nextRoundName = "Kolo " + strconv.Itoa(len(compRounds)+1)
-				}
 			}
 		}
 
@@ -435,26 +406,27 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 		if len(finishedForTrend) > 0 {
-			byRound := map[int][]*models.Match{}
+			// Grupujeme podle data zápasu (den) — nahrazuje dřívější grupování po kolech
+			byDate := map[string][]*models.Match{}
 			for _, m := range finishedForTrend {
-				byRound[m.RoundID] = append(byRound[m.RoundID], m)
+				if m.MatchDate != nil {
+					dayKey := m.MatchDate.Format("2006-01-02")
+					byDate[dayKey] = append(byDate[dayKey], m)
+				}
 			}
-			// Trend má smysl jen pokud jsou dokončené zápasy ve více kolech —
-			// jinak jsou všechny tipy v "posledním kole" a prevTotal=0 pro všechny,
-			// což by zobrazovalo zavádějící čísla (↓11, ↓13…).
-			if len(byRound) >= 2 {
-				latestRoundID := -1
+			if len(byDate) >= 2 {
+				latestDay := ""
 				var latestDate time.Time
-				for rid, ms := range byRound {
+				for day, ms := range byDate {
 					for _, m := range ms {
 						if m.MatchDate != nil && m.MatchDate.After(latestDate) {
 							latestDate = *m.MatchDate
-							latestRoundID = rid
+							latestDay = day
 						}
 					}
 				}
 				latestIDs := map[int]bool{}
-				for _, m := range byRound[latestRoundID] {
+				for _, m := range byDate[latestDay] {
 					latestIDs[m.ID] = true
 				}
 
@@ -556,9 +528,7 @@ func Leaderboard(tmpl *template.Template) http.HandlerFunc {
 			"ExtraPtsMatrix":        extraPtsMatrix,
 			"ExtraRevealed":         extraRevealed,
 			"Flash":                 flash,
-			"CompRounds":            compRounds,
 			"CompTeams":             compTeams,
-			"NextRoundName":         nextRoundName,
 		})
 	}
 }
@@ -603,8 +573,7 @@ func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
 			`SELECT m.id,
 			        COALESCE(TO_CHAR(m.match_date, 'DD.MM.'), '#' || m.id::text)
 			   FROM matches m
-			   JOIN rounds r ON r.id = m.round_id
-			  WHERE r.competition_id = $1 AND m.is_finished = true
+			  WHERE m.competition_id = $1 AND m.is_finished = true
 			  ORDER BY m.match_date ASC NULLS LAST, m.id ASC`, compID)
 		for mrows.Next() {
 			var mi matchInfo
@@ -757,8 +726,7 @@ func MyRankAPI(tmpl *template.Template) http.HandlerFunc {
 			        COALESCE(SUM(CASE WHEN t.points=3 THEN 1 ELSE 0 END),0)::int as exact
 			   FROM tips t
 			   JOIN matches m ON m.id=t.match_id
-			   JOIN rounds r ON r.id=m.round_id
-			  WHERE r.competition_id=$1 AND m.is_finished=true AND t.points IS NOT NULL
+			  WHERE m.competition_id=$1 AND m.is_finished=true AND t.points IS NOT NULL
 			  GROUP BY t.user_id`, compID)
 		var allRows []row
 		myPts, myExact := 0, 0
@@ -812,13 +780,13 @@ func LeaderboardLastUpdate(tmpl *template.Template) http.HandlerFunc {
 		var ts int64
 		_ = db.Pool.QueryRow(ctx,
 			`SELECT COALESCE(EXTRACT(EPOCH FROM MAX(m.updated_at))::bigint, 0)
-			   FROM matches m JOIN rounds r ON r.id=m.round_id
-			  WHERE r.competition_id=$1 AND m.is_finished=true`, compID).Scan(&ts)
+			   FROM matches m
+			  WHERE m.competition_id=$1 AND m.is_finished=true`, compID).Scan(&ts)
 		if ts == 0 {
 			// fallback: count finished matches
 			_ = db.Pool.QueryRow(ctx,
-				`SELECT COUNT(*) FROM matches m JOIN rounds r ON r.id=m.round_id
-				  WHERE r.competition_id=$1 AND m.is_finished=true`, compID).Scan(&ts)
+				`SELECT COUNT(*) FROM matches
+				  WHERE competition_id=$1 AND is_finished=true`, compID).Scan(&ts)
 		}
 		w.Write([]byte(`{"ts":` + strconv.FormatInt(ts, 10) + `}`))
 	}
