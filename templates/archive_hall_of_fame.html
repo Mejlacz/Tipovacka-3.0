@@ -34,7 +34,12 @@
 .hof-comp-tag  { font-size:.72rem; padding:.1rem .45rem; border-radius:99px;
                  background:var(--bg3); border:1px solid var(--border-d); color:var(--muted-d) }
 .hof-empty { color:var(--muted-d); font-style:italic; padding:.75rem 0 }
-.hof-active-comps { font-size:.8rem; color:var(--muted-d); margin-bottom:.75rem }
+.hof-summary { display:flex; flex-wrap:wrap; gap:.6rem; margin-bottom:1rem; align-items:center }
+.hof-badge { display:inline-flex; align-items:center; gap:.3rem; padding:.3rem .75rem;
+             border-radius:20px; font-size:.82rem; font-weight:600;
+             background:var(--bg2); border:1px solid var(--border-d); color:var(--text-d) }
+.hof-badge-num { font-size:1rem; font-weight:800; color:var(--accent,#6366f1) }
+.hof-badge-muted { color:var(--muted-d) }
 </style>
 
 <div class="hof-filters">
@@ -50,7 +55,7 @@
     </div>
 </div>
 
-<div class="hof-active-comps" id="active-comps-info"></div>
+<div class="hof-summary" id="hof-summary"></div>
 
 <div id="hof-body">
     <p class="hof-empty">{{tr .Lang "hof_no_data"}}</p>
@@ -97,14 +102,19 @@ function render() {
     var vc = visibleComps();
     var vcIDs = new Set(vc.map(function(c){ return c.id; }));
 
-    // Info o soutěžích
-    var info = document.getElementById('active-comps-info');
-    if (vc.length === _comps.length) {
-        info.textContent = 'Zahrnuje všechny soutěže (' + vc.length + ')';
-    } else {
-        info.textContent = 'Zahrnuje ' + vc.length + ' z ' + _comps.length + ' soutěží: ' +
-            vc.map(function(c){ return c.name; }).join(', ');
-    }
+    // Summary badges
+    var football = vc.filter(function(c){ return compSport(c) !== 'hockey'; }).length;
+    var hockey   = vc.filter(function(c){ return compSport(c) === 'hockey'; }).length;
+    var summary  = document.getElementById('hof-summary');
+    var allShown = vc.length === _comps.length;
+    summary.innerHTML =
+        '<span class="hof-badge">'
+        + '<span class="hof-badge-num">' + vc.length + '</span>'
+        + '<span class="hof-badge-muted">soutěž' + (vc.length >= 5 ? 'í' : vc.length >= 2 ? 'e' : '') + '</span>'
+        + (allShown ? '' : '<span class="hof-badge-muted">z ' + _comps.length + '</span>')
+        + '</span>'
+        + (football ? '<span class="hof-badge">⚽ <span class="hof-badge-num">' + football + '</span><span class="hof-badge-muted">fotbal</span></span>' : '')
+        + (hockey   ? '<span class="hof-badge">🏒 <span class="hof-badge-num">' + hockey   + '</span><span class="hof-badge-muted">hokej</span></span>' : '');
 
     // Filtruj placements
     var pts = (_placements || []).filter(function(p){ return vcIDs.has(p.comp_id); });
