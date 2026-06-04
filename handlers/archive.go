@@ -377,10 +377,41 @@ func ArchiveHallOfFame(tmpl *template.Template) http.HandlerFunc {
 			Podiums  int
 		}
 
-		// Rank users per competition by grand_total DESC, exact_count DESC
-		// then count how many times each user finished 1st/2nd/3rd
+		// Rank users per competition — pro soutěže s competition_standings použij cache,
+		// pro starší soutěže BEZ standings vypočítej z raw tipů.
 		rows, err := db.Pool.Query(ctx, `
-			WITH ranked AS (
+			WITH cached_comp_ids AS (
+				SELECT DISTINCT competition_id FROM competition_standings
+			),
+			comp_scores AS (
+				-- 1. Soutěže s cachovými standings
+				SELECT competition_id, user_id, grand_total, exact_count
+				FROM competition_standings
+
+				UNION ALL
+
+				-- 2. Starší soutěže bez standings — počítej z tipů + extra
+				SELECT
+					m.competition_id,
+					t.user_id,
+					COALESCE(SUM(t.points), 0)
+					  + COALESCE((
+					      SELECT SUM(ea.points)
+					      FROM extra_answers ea
+					      JOIN extra_questions eq ON eq.id = ea.question_id
+					      WHERE eq.competition_id = m.competition_id
+					        AND ea.user_id = t.user_id
+					        AND ea.points IS NOT NULL
+					    ), 0) AS grand_total,
+					SUM(CASE WHEN t.points = 3 THEN 1 ELSE 0 END) AS exact_count
+				FROM tips t
+				JOIN matches m ON m.id = t.match_id
+				WHERE m.competition_id NOT IN (SELECT competition_id FROM cached_comp_ids)
+				  AND m.is_finished = true
+				  AND t.points IS NOT NULL
+				GROUP BY m.competition_id, t.user_id
+			),
+			ranked AS (
 				SELECT
 					cs.user_id,
 					cs.competition_id,
@@ -388,9 +419,10 @@ func ArchiveHallOfFame(tmpl *template.Template) http.HandlerFunc {
 						PARTITION BY cs.competition_id
 						ORDER BY cs.grand_total DESC, cs.exact_count DESC
 					) AS place
-				FROM competition_standings cs
+				FROM comp_scores cs
 				JOIN competitions c ON c.id = cs.competition_id
 				WHERE COALESCE(c.is_hidden, false) = false
+				  AND c.is_active = false
 			)
 			SELECT
 				u.id,
