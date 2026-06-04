@@ -4,17 +4,31 @@
 </div>
 
 <style>
-.hof-filters { display:flex; flex-wrap:wrap; gap:.75rem; align-items:flex-start; margin-bottom:1.25rem }
+.hof-filters { display:flex; flex-direction:column; gap:.75rem; margin-bottom:1.25rem; max-width:760px }
 .hof-sport-btns { display:flex; gap:.35rem; flex-wrap:wrap }
 .hof-sport-btn { padding:.3rem .8rem; border-radius:20px; border:1px solid var(--border-d);
                  background:var(--bg2); color:var(--muted-d); cursor:pointer; font-size:.83rem;
                  font-weight:600; transition:all .12s }
 .hof-sport-btn.active { background:var(--accent,#6366f1); color:#fff; border-color:var(--accent,#6366f1) }
-.hof-comp-wrap { flex:1; min-width:220px; max-width:400px }
-.hof-comp-wrap label { display:block; font-size:.78rem; color:var(--muted-d); margin-bottom:.25rem }
-.hof-comp-select { width:100%; padding:.35rem .5rem; background:var(--bg2);
-                   border:1px solid var(--border-d); border-radius:6px; color:inherit; font-size:.82rem }
-.hof-comp-hint { font-size:.75rem; color:var(--muted-d); margin-top:.2rem }
+
+/* Custom comp dropdown */
+.hof-comp-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap }
+.hof-comp-row label { font-size:.82rem; color:var(--muted-d); white-space:nowrap }
+.hof-comp-toggle { display:flex; align-items:center; gap:.4rem; padding:.3rem .75rem;
+                   border-radius:6px; border:1px solid var(--border-d); background:var(--bg2);
+                   cursor:pointer; font-size:.82rem; color:var(--text-d); user-select:none }
+.hof-comp-toggle:hover { background:var(--bg3) }
+.hof-comp-panel { display:none; background:var(--bg2); border:1px solid var(--border-d);
+                  border-radius:8px; padding:.6rem .75rem; margin-top:.3rem;
+                  display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+                  gap:.25rem .75rem; max-height:260px; overflow-y:auto }
+.hof-comp-item { display:flex; align-items:center; gap:.4rem; padding:.2rem .3rem;
+                 border-radius:4px; cursor:pointer; font-size:.82rem }
+.hof-comp-item:hover { background:var(--bg3) }
+.hof-comp-item input { accent-color:var(--accent,#6366f1); flex-shrink:0 }
+.hof-sel-all-btn { font-size:.78rem; color:var(--muted-d); cursor:pointer; padding:.1rem .4rem;
+                   border-radius:4px; border:1px solid var(--border-d); background:transparent }
+.hof-sel-all-btn:hover { background:var(--bg3) }
 
 .hof-table { width:100%; border-collapse:collapse; font-size:.9rem; max-width:760px }
 .hof-table th { padding:.5rem .75rem; text-align:left; background:var(--bg2); color:var(--muted-d);
@@ -43,16 +57,19 @@
 </style>
 
 <div class="hof-filters">
-    <div class="hof-sport-btns" id="sport-btns">
-        <button class="hof-sport-btn active" data-sport="">🌍 Vše</button>
-        <button class="hof-sport-btn" data-sport="football">⚽ Fotbal</button>
-        <button class="hof-sport-btn" data-sport="hockey">🏒 Hokej</button>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.75rem">
+        <div class="hof-sport-btns" id="sport-btns">
+            <button class="hof-sport-btn active" data-sport="">🌍 Vše</button>
+            <button class="hof-sport-btn" data-sport="football">⚽ Fotbal</button>
+            <button class="hof-sport-btn" data-sport="hockey">🏒 Hokej</button>
+        </div>
+        <div class="hof-comp-row">
+            <label>Soutěže:</label>
+            <button class="hof-sel-all-btn" id="sel-all-btn" onclick="selAllComps()">Vše</button>
+            <button class="hof-sel-all-btn" id="sel-none-btn" onclick="selNoneComps()">Žádná</button>
+        </div>
     </div>
-    <div class="hof-comp-wrap">
-        <label>Konkrétní soutěže (nic = vše viditelné)</label>
-        <select class="hof-comp-select" id="comp-filter" multiple size="4"></select>
-        <div class="hof-comp-hint">Ctrl+klik = přidat/odebrat, klik na označenou = odznačit vše</div>
-    </div>
+    <div class="hof-comp-panel" id="comp-panel"></div>
 </div>
 
 <div class="hof-summary" id="hof-summary"></div>
@@ -80,23 +97,59 @@ function compSport(c) {
 function visibleComps() {
     return _comps.filter(function(c) {
         if (_sportFilter && compSport(c) !== _sportFilter) return false;
+        // _compFilter prázdný = vše ze sport filtru; jinak jen vybrané
+        var sportVisible = !_sportFilter || compSport(c) === _sportFilter;
+        if (!sportVisible) return false;
         if (_compFilter.size > 0 && !_compFilter.has(c.id)) return false;
         return true;
     });
 }
 
 function buildCompSelect() {
-    var sel = document.getElementById('comp-filter');
-    sel.innerHTML = '';
+    var panel = document.getElementById('comp-panel');
+    panel.innerHTML = '';
     _comps.forEach(function(c) {
         if (_sportFilter && compSport(c) !== _sportFilter) return;
-        var opt = document.createElement('option');
-        opt.value = c.id;
-        opt.textContent = (compSport(c) === 'hockey' ? '🏒' : '⚽') + ' ' + c.name + ' ' + c.season;
-        if (_compFilter.has(c.id)) opt.selected = true;
-        sel.appendChild(opt);
+        var label = document.createElement('label');
+        label.className = 'hof-comp-item';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = c.id;
+        cb.checked = _compFilter.size === 0 || _compFilter.has(c.id);
+        cb.addEventListener('change', function() {
+            syncCheckboxesToFilter();
+            render();
+        });
+        var icon = compSport(c) === 'hockey' ? '🏒' : '⚽';
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(icon + ' ' + c.name + ' ' + c.season));
+        panel.appendChild(label);
     });
 }
+
+function syncCheckboxesToFilter() {
+    var panel = document.getElementById('comp-panel');
+    var boxes = panel.querySelectorAll('input[type=checkbox]');
+    var allChecked = Array.from(boxes).every(function(cb){ return cb.checked; });
+    if (allChecked) {
+        _compFilter.clear(); // vše = žádný filtr
+    } else {
+        _compFilter.clear();
+        boxes.forEach(function(cb){ if (cb.checked) _compFilter.add(parseInt(cb.value)); });
+    }
+}
+
+window.selAllComps = function() {
+    _compFilter.clear();
+    document.getElementById('comp-panel').querySelectorAll('input').forEach(function(cb){ cb.checked = true; });
+    render();
+};
+window.selNoneComps = function() {
+    document.getElementById('comp-panel').querySelectorAll('input').forEach(function(cb){ cb.checked = false; });
+    _compFilter.clear();
+    // žádná vybraná = prázdná tabulka — ale necháme vše
+    render();
+};
 
 function render() {
     var vc = visibleComps();
@@ -196,16 +249,6 @@ document.querySelectorAll('.hof-sport-btn').forEach(function(btn) {
         buildCompSelect();
         render();
     });
-});
-
-// Competition multi-select
-document.getElementById('comp-filter').addEventListener('change', function() {
-    var sel = this;
-    _compFilter.clear();
-    // Klik na již vybranou = odznačit vše
-    var selected = Array.from(sel.selectedOptions).map(function(o){ return parseInt(o.value); });
-    selected.forEach(function(id){ _compFilter.add(id); });
-    render();
 });
 
 buildCompSelect();
