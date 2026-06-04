@@ -4,7 +4,19 @@
 </div>
 
 <style>
-.hof-table { width:100%; border-collapse:collapse; font-size:.9rem; max-width:700px }
+.hof-filters { display:flex; flex-wrap:wrap; gap:.75rem; align-items:flex-start; margin-bottom:1.25rem }
+.hof-sport-btns { display:flex; gap:.35rem; flex-wrap:wrap }
+.hof-sport-btn { padding:.3rem .8rem; border-radius:20px; border:1px solid var(--border-d);
+                 background:var(--bg2); color:var(--muted-d); cursor:pointer; font-size:.83rem;
+                 font-weight:600; transition:all .12s }
+.hof-sport-btn.active { background:var(--accent,#6366f1); color:#fff; border-color:var(--accent,#6366f1) }
+.hof-comp-wrap { flex:1; min-width:220px; max-width:400px }
+.hof-comp-wrap label { display:block; font-size:.78rem; color:var(--muted-d); margin-bottom:.25rem }
+.hof-comp-select { width:100%; padding:.35rem .5rem; background:var(--bg2);
+                   border:1px solid var(--border-d); border-radius:6px; color:inherit; font-size:.82rem }
+.hof-comp-hint { font-size:.75rem; color:var(--muted-d); margin-top:.2rem }
+
+.hof-table { width:100%; border-collapse:collapse; font-size:.9rem; max-width:760px }
 .hof-table th { padding:.5rem .75rem; text-align:left; background:var(--bg2); color:var(--muted-d);
                 font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
                 border-bottom:2px solid var(--border-d) }
@@ -12,39 +24,181 @@
 .hof-table tbody tr:hover td { background:var(--bg3) }
 .hof-rank { font-size:.8rem; color:var(--muted-d); font-weight:700; width:2rem; text-align:center }
 .hof-name { font-weight:600 }
-.hof-medal { text-align:center; font-size:1rem; width:5.5rem }
+.hof-medal { text-align:center; width:5.5rem }
 .hof-medal span { display:inline-block; min-width:1.6rem; font-weight:700 }
 .hof-podiums { text-align:center; color:var(--muted-d); font-size:.85rem; width:4rem }
 .medal-gold   { color:#f59e0b }
 .medal-silver { color:#94a3b8 }
 .medal-bronze { color:#b45309 }
+.hof-comp-tags { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.25rem }
+.hof-comp-tag  { font-size:.72rem; padding:.1rem .45rem; border-radius:99px;
+                 background:var(--bg3); border:1px solid var(--border-d); color:var(--muted-d) }
+.hof-empty { color:var(--muted-d); font-style:italic; padding:.75rem 0 }
+.hof-active-comps { font-size:.8rem; color:var(--muted-d); margin-bottom:.75rem }
 </style>
 
-{{if not .HofRows}}
-<p class="empty">{{tr .Lang "hof_no_data"}}</p>
-{{else}}
-<table class="hof-table">
-    <thead>
-        <tr>
-            <th class="hof-rank">#</th>
-            <th>{{tr .Lang "hof_tipper"}}</th>
-            <th class="hof-medal">{{tr .Lang "hof_gold"}}</th>
-            <th class="hof-medal">{{tr .Lang "hof_silver"}}</th>
-            <th class="hof-medal">{{tr .Lang "hof_bronze"}}</th>
-            <th class="hof-podiums">{{tr .Lang "hof_podiums"}}</th>
-        </tr>
-    </thead>
-    <tbody>
-    {{range $i, $row := .HofRows}}
-    <tr>
-        <td class="hof-rank">{{add $i 1}}</td>
-        <td class="hof-name">{{$row.Username}}</td>
-        <td class="hof-medal"><span class="medal-gold">{{if $row.Gold}}{{$row.Gold}}×{{else}}—{{end}}</span></td>
-        <td class="hof-medal"><span class="medal-silver">{{if $row.Silver}}{{$row.Silver}}×{{else}}—{{end}}</span></td>
-        <td class="hof-medal"><span class="medal-bronze">{{if $row.Bronze}}{{$row.Bronze}}×{{else}}—{{end}}</span></td>
-        <td class="hof-podiums">{{$row.Podiums}}</td>
-    </tr>
-    {{end}}
-    </tbody>
-</table>
-{{end}}
+<div class="hof-filters">
+    <div class="hof-sport-btns" id="sport-btns">
+        <button class="hof-sport-btn active" data-sport="">🌍 Vše</button>
+        <button class="hof-sport-btn" data-sport="football">⚽ Fotbal</button>
+        <button class="hof-sport-btn" data-sport="hockey">🏒 Hokej</button>
+    </div>
+    <div class="hof-comp-wrap">
+        <label>Konkrétní soutěže (nic = vše viditelné)</label>
+        <select class="hof-comp-select" id="comp-filter" multiple size="4"></select>
+        <div class="hof-comp-hint">Ctrl+klik = přidat/odebrat, klik na označenou = odznačit vše</div>
+    </div>
+</div>
+
+<div class="hof-active-comps" id="active-comps-info"></div>
+
+<div id="hof-body">
+    <p class="hof-empty">{{tr .Lang "hof_no_data"}}</p>
+</div>
+
+<script>
+(function() {
+var _comps      = {{.CompsJSON}};
+var _placements = {{.PlacementsJSON}};
+
+var _sportFilter = '';
+var _compFilter  = new Set(); // prázdné = vše
+
+// Detekce sportu podle sport pole nebo názvu (fallback)
+function compSport(c) {
+    if (c.sport && c.sport !== '') return c.sport;
+    var n = c.name.toLowerCase();
+    if (n.indexOf('hokej') >= 0 || n.indexOf('nhl') >= 0 || n.indexOf('oh v hokeji') >= 0) return 'hockey';
+    return 'football';
+}
+
+function visibleComps() {
+    return _comps.filter(function(c) {
+        if (_sportFilter && compSport(c) !== _sportFilter) return false;
+        if (_compFilter.size > 0 && !_compFilter.has(c.id)) return false;
+        return true;
+    });
+}
+
+function buildCompSelect() {
+    var sel = document.getElementById('comp-filter');
+    sel.innerHTML = '';
+    _comps.forEach(function(c) {
+        if (_sportFilter && compSport(c) !== _sportFilter) return;
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = (compSport(c) === 'hockey' ? '🏒' : '⚽') + ' ' + c.name + ' ' + c.season;
+        if (_compFilter.has(c.id)) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function render() {
+    var vc = visibleComps();
+    var vcIDs = new Set(vc.map(function(c){ return c.id; }));
+
+    // Info o soutěžích
+    var info = document.getElementById('active-comps-info');
+    if (vc.length === _comps.length) {
+        info.textContent = 'Zahrnuje všechny soutěže (' + vc.length + ')';
+    } else {
+        info.textContent = 'Zahrnuje ' + vc.length + ' z ' + _comps.length + ' soutěží: ' +
+            vc.map(function(c){ return c.name; }).join(', ');
+    }
+
+    // Filtruj placements
+    var pts = (_placements || []).filter(function(p){ return vcIDs.has(p.comp_id); });
+
+    // Agreguj medaile
+    var byUser = {};
+    pts.forEach(function(p) {
+        if (!byUser[p.user_id]) byUser[p.user_id] = {username: p.username, gold:0, silver:0, bronze:0, comps:{}};
+        if (p.place === 1) byUser[p.user_id].gold++;
+        if (p.place === 2) byUser[p.user_id].silver++;
+        if (p.place === 3) byUser[p.user_id].bronze++;
+        // Uložit které soutěže a místo
+        byUser[p.user_id].comps[p.comp_id] = p.place;
+    });
+
+    var rows = Object.values(byUser);
+    rows.sort(function(a, b) {
+        if (b.gold !== a.gold) return b.gold - a.gold;
+        if (b.silver !== a.silver) return b.silver - a.silver;
+        if (b.bronze !== a.bronze) return b.bronze - a.bronze;
+        return a.username.localeCompare(b.username, 'cs');
+    });
+
+    var compByID = {};
+    vc.forEach(function(c){ compByID[c.id] = c; });
+
+    var body = document.getElementById('hof-body');
+    if (rows.length === 0) {
+        body.innerHTML = '<p class="hof-empty">{{tr .Lang "hof_no_data"}}</p>';
+        return;
+    }
+
+    var html = '<table class="hof-table"><thead><tr>'
+        + '<th class="hof-rank">#</th>'
+        + '<th>{{tr .Lang "hof_tipper"}}</th>'
+        + '<th class="hof-medal">{{tr .Lang "hof_gold"}}</th>'
+        + '<th class="hof-medal">{{tr .Lang "hof_silver"}}</th>'
+        + '<th class="hof-medal">{{tr .Lang "hof_bronze"}}</th>'
+        + '<th class="hof-podiums">{{tr .Lang "hof_podiums"}}</th>'
+        + '</tr></thead><tbody>';
+
+    var medalEmoji = {1:'🥇', 2:'🥈', 3:'🥉'};
+
+    rows.forEach(function(row, i) {
+        var podiums = row.gold + row.silver + row.bronze;
+        // Přehled soutěží pod jménem
+        var compTags = Object.entries(row.comps).map(function(kv) {
+            var cid = parseInt(kv[0]), place = kv[1];
+            var c = compByID[cid];
+            if (!c) return '';
+            return '<span class="hof-comp-tag">' + medalEmoji[place] + ' ' + esc(c.name) + ' ' + esc(c.season) + '</span>';
+        }).join('');
+
+        html += '<tr>'
+            + '<td class="hof-rank">' + (i+1) + '</td>'
+            + '<td class="hof-name">' + esc(row.username)
+            +   (compTags ? '<div class="hof-comp-tags">' + compTags + '</div>' : '')
+            + '</td>'
+            + '<td class="hof-medal"><span class="medal-gold">'   + (row.gold   ? row.gold   + '×' : '—') + '</span></td>'
+            + '<td class="hof-medal"><span class="medal-silver">' + (row.silver ? row.silver + '×' : '—') + '</span></td>'
+            + '<td class="hof-medal"><span class="medal-bronze">' + (row.bronze ? row.bronze + '×' : '—') + '</span></td>'
+            + '<td class="hof-podiums">' + podiums + '</td>'
+            + '</tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+}
+
+function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Sport tlačítka
+document.querySelectorAll('.hof-sport-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        _sportFilter = btn.dataset.sport;
+        document.querySelectorAll('.hof-sport-btn').forEach(function(b){ b.classList.toggle('active', b === btn); });
+        _compFilter.clear();
+        buildCompSelect();
+        render();
+    });
+});
+
+// Competition multi-select
+document.getElementById('comp-filter').addEventListener('change', function() {
+    var sel = this;
+    _compFilter.clear();
+    // Klik na již vybranou = odznačit vše
+    var selected = Array.from(sel.selectedOptions).map(function(o){ return parseInt(o.value); });
+    selected.forEach(function(id){ _compFilter.add(id); });
+    render();
+});
+
+buildCompSelect();
+render();
+}());
+</script>

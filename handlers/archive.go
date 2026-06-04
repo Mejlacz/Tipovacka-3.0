@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -368,29 +369,43 @@ func ArchiveHallOfFame(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 
-		type HofRow struct {
-			UserID   int
-			Username string
-			Gold     int
-			Silver   int
-			Bronze   int
-			Podiums  int
+		// 1. Soutěže — jen archivované (neaktivní, neskryté)
+		type CompInfo struct {
+			ID     int    `json:"id"`
+			Name   string `json:"name"`
+			Season string `json:"season"`
+			Sport  string `json:"sport"`
+		}
+		compRows, _ := db.Pool.Query(ctx,
+			`SELECT id, name, season, COALESCE(sport,'') FROM competitions
+			  WHERE is_active=false AND COALESCE(is_hidden,false)=false
+			  ORDER BY id DESC`)
+		var comps []CompInfo
+		for compRows.Next() {
+			var c CompInfo
+			_ = compRows.Scan(&c.ID, &c.Name, &c.Season, &c.Sport)
+			comps = append(comps, c)
+		}
+		compRows.Close()
+
+		// 2. Per-soutěž umístění (1–3) pro každého uživatele
+		type Placement struct {
+			CompID   int    `json:"comp_id"`
+			UserID   int    `json:"user_id"`
+			Username string `json:"username"`
+			Place    int    `json:"place"`
 		}
 
-		// Rank users per competition — pro soutěže s competition_standings použij cache,
-		// pro starší soutěže BEZ standings vypočítej z raw tipů.
-		rows, err := db.Pool.Query(ctx, `
+		placementRows, err := db.Pool.Query(ctx, `
 			WITH cached_comp_ids AS (
 				SELECT DISTINCT competition_id FROM competition_standings
 			),
 			comp_scores AS (
-				-- 1. Soutěže s cachovými standings
 				SELECT competition_id, user_id, grand_total, exact_count
 				FROM competition_standings
 
 				UNION ALL
 
-				-- 2. Starší soutěže bez standings — počítej z tipů + extra
 				SELECT
 					m.competition_id,
 					t.user_id,
@@ -413,8 +428,8 @@ func ArchiveHallOfFame(tmpl *template.Template) http.HandlerFunc {
 			),
 			ranked AS (
 				SELECT
-					cs.user_id,
 					cs.competition_id,
+					cs.user_id,
 					RANK() OVER (
 						PARTITION BY cs.competition_id
 						ORDER BY cs.grand_total DESC, cs.exact_count DESC
@@ -424,37 +439,33 @@ func ArchiveHallOfFame(tmpl *template.Template) http.HandlerFunc {
 				WHERE COALESCE(c.is_hidden, false) = false
 				  AND c.is_active = false
 			)
-			SELECT
-				u.id,
-				u.username,
-				COUNT(CASE WHEN r.place = 1 THEN 1 END) AS gold,
-				COUNT(CASE WHEN r.place = 2 THEN 1 END) AS silver,
-				COUNT(CASE WHEN r.place = 3 THEN 1 END) AS bronze
+			SELECT r.competition_id, u.id, u.username, r.place
 			FROM ranked r
 			JOIN users u ON u.id = r.user_id
 			WHERE r.place <= 3
 			  AND COALESCE(u.is_hidden, false) = false
-			GROUP BY u.id, u.username
-			HAVING COUNT(CASE WHEN r.place <= 3 THEN 1 END) > 0
-			ORDER BY gold DESC, silver DESC, bronze DESC, u.username
+			ORDER BY r.competition_id, r.place
 		`)
 		if err != nil {
 			http.Error(w, "DB error", http.StatusInternalServerError)
 			return
 		}
-		defer rows.Close()
+		defer placementRows.Close()
 
-		var hofRows []HofRow
-		for rows.Next() {
-			var hr HofRow
-			_ = rows.Scan(&hr.UserID, &hr.Username, &hr.Gold, &hr.Silver, &hr.Bronze)
-			hr.Podiums = hr.Gold + hr.Silver + hr.Bronze
-			hofRows = append(hofRows, hr)
+		var placements []Placement
+		for placementRows.Next() {
+			var p Placement
+			_ = placementRows.Scan(&p.CompID, &p.UserID, &p.Username, &p.Place)
+			placements = append(placements, p)
 		}
 
+		compsJSON, _ := json.Marshal(comps)
+		placementsJSON, _ := json.Marshal(placements)
+
 		RenderTemplate(w, r, tmpl, "archive_hall_of_fame.html", TemplateData{
-			"User":    user,
-			"HofRows": hofRows,
+			"User":          user,
+			"CompsJSON":     template.JS(compsJSON),
+			"PlacementsJSON": template.JS(placementsJSON),
 		})
 	}
 }
