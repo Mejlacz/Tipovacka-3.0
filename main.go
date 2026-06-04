@@ -174,6 +174,7 @@ func main() {
 
 	// ── Archive ───────────────────────────────────────────────────────────────
 	r.Get("/archive", handlers.ArchiveIndex(tmpl))
+	r.Get("/archive/hall-of-fame", handlers.ArchiveHallOfFame(tmpl))
 	r.Get("/archive/competition/{competition_id}", handlers.ArchiveCompetition(tmpl))
 	r.Get("/archive/round/{round_id}", handlers.ArchiveRoundRedirect)
 

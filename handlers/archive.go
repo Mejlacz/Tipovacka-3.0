@@ -358,3 +358,71 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 func ArchiveRoundRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/archive", http.StatusMovedPermanently)
 }
+
+// GET /archive/hall-of-fame — historická tabulka prvních tří míst
+func ArchiveHallOfFame(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := RequireApproved(w, r)
+		if user == nil {
+			return
+		}
+		ctx := context.Background()
+
+		type HofRow struct {
+			UserID   int
+			Username string
+			Gold     int
+			Silver   int
+			Bronze   int
+			Podiums  int
+		}
+
+		// Rank users per competition by grand_total DESC, exact_count DESC
+		// then count how many times each user finished 1st/2nd/3rd
+		rows, err := db.Pool.Query(ctx, `
+			WITH ranked AS (
+				SELECT
+					cs.user_id,
+					cs.competition_id,
+					RANK() OVER (
+						PARTITION BY cs.competition_id
+						ORDER BY cs.grand_total DESC, cs.exact_count DESC
+					) AS place
+				FROM competition_standings cs
+				JOIN competitions c ON c.id = cs.competition_id
+				WHERE COALESCE(c.is_hidden, false) = false
+			)
+			SELECT
+				u.id,
+				u.username,
+				COUNT(CASE WHEN r.place = 1 THEN 1 END) AS gold,
+				COUNT(CASE WHEN r.place = 2 THEN 1 END) AS silver,
+				COUNT(CASE WHEN r.place = 3 THEN 1 END) AS bronze
+			FROM ranked r
+			JOIN users u ON u.id = r.user_id
+			WHERE r.place <= 3
+			  AND COALESCE(u.is_hidden, false) = false
+			GROUP BY u.id, u.username
+			HAVING COUNT(CASE WHEN r.place <= 3 THEN 1 END) > 0
+			ORDER BY gold DESC, silver DESC, bronze DESC, u.username
+		`)
+		if err != nil {
+			http.Error(w, "DB error", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var hofRows []HofRow
+		for rows.Next() {
+			var hr HofRow
+			_ = rows.Scan(&hr.UserID, &hr.Username, &hr.Gold, &hr.Silver, &hr.Bronze)
+			hr.Podiums = hr.Gold + hr.Silver + hr.Bronze
+			hofRows = append(hofRows, hr)
+		}
+
+		RenderTemplate(w, r, tmpl, "archive_hall_of_fame.html", TemplateData{
+			"User":    user,
+			"HofRows": hofRows,
+		})
+	}
+}

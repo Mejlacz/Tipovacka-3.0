@@ -1,0 +1,50 @@
+<div class="page-header">
+    <h1>{{tr .Lang "hof_title"}}</h1>
+    <a href="/archive" class="btn btn-secondary btn-sm">{{tr .Lang "archive_back"}}</a>
+</div>
+
+<style>
+.hof-table { width:100%; border-collapse:collapse; font-size:.9rem; max-width:700px }
+.hof-table th { padding:.5rem .75rem; text-align:left; background:var(--bg2); color:var(--muted-d);
+                font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+                border-bottom:2px solid var(--border-d) }
+.hof-table td { padding:.45rem .75rem; border-bottom:1px solid var(--border-d); vertical-align:middle }
+.hof-table tbody tr:hover td { background:var(--bg3) }
+.hof-rank { font-size:.8rem; color:var(--muted-d); font-weight:700; width:2rem; text-align:center }
+.hof-name { font-weight:600 }
+.hof-medal { text-align:center; font-size:1rem; width:5.5rem }
+.hof-medal span { display:inline-block; min-width:1.6rem; font-weight:700 }
+.hof-podiums { text-align:center; color:var(--muted-d); font-size:.85rem; width:4rem }
+.medal-gold   { color:#f59e0b }
+.medal-silver { color:#94a3b8 }
+.medal-bronze { color:#b45309 }
+</style>
+
+{{if not .HofRows}}
+<p class="empty">{{tr .Lang "hof_no_data"}}</p>
+{{else}}
+<table class="hof-table">
+    <thead>
+        <tr>
+            <th class="hof-rank">#</th>
+            <th>{{tr .Lang "hof_tipper"}}</th>
+            <th class="hof-medal">{{tr .Lang "hof_gold"}}</th>
+            <th class="hof-medal">{{tr .Lang "hof_silver"}}</th>
+            <th class="hof-medal">{{tr .Lang "hof_bronze"}}</th>
+            <th class="hof-podiums">{{tr .Lang "hof_podiums"}}</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range $i, $row := .HofRows}}
+    <tr>
+        <td class="hof-rank">{{add $i 1}}</td>
+        <td class="hof-name">{{$row.Username}}</td>
+        <td class="hof-medal"><span class="medal-gold">{{if $row.Gold}}{{$row.Gold}}×{{else}}—{{end}}</span></td>
+        <td class="hof-medal"><span class="medal-silver">{{if $row.Silver}}{{$row.Silver}}×{{else}}—{{end}}</span></td>
+        <td class="hof-medal"><span class="medal-bronze">{{if $row.Bronze}}{{$row.Bronze}}×{{else}}—{{end}}</span></td>
+        <td class="hof-podiums">{{$row.Podiums}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+{{end}}
