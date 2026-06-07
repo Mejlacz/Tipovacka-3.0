@@ -381,8 +381,8 @@ window.teamsBulkDelete = function(){
 
     fetch('/admin/teams/bulk-delete', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: '_csrf=' + encodeURIComponent(document.querySelector('input[name="_csrf"]') ? document.querySelector('input[name="_csrf"]').value : '') + '&ids=' + encodeURIComponent(JSON.stringify(ids))
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(ids)
     }).then(function(r){ return r.json(); })
     .then(function(data){
         if(data.ok){

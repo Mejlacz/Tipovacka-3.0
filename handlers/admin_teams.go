@@ -935,7 +935,7 @@ func AdminRosterToggle(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /admin/teams/bulk-delete (AJAX)
-// Tělo: form field "ids" = JSON pole intů
+// Tělo: JSON pole intů (team IDs)
 // Smaže týmy bez zápasů, přeskočí ty se zápasy.
 func AdminTeamBulkDelete(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -944,17 +944,11 @@ func AdminTeamBulkDelete(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
 		return
 	}
-	if err := r.ParseForm(); err != nil {
-		w.Write([]byte(`{"ok":false,"error":"bad form"}`))
-		return
-	}
 	var ids []int
-	if raw := strings.TrimSpace(r.FormValue("ids")); raw != "" {
-		if err := json.Unmarshal([]byte(raw), &ids); err != nil {
-			b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": "bad JSON: " + err.Error()})
-			w.Write(b)
-			return
-		}
+	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
+		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": "bad JSON: " + err.Error()})
+		w.Write(b)
+		return
 	}
 	ctx := context.Background()
 	deleted, skipped := 0, 0
