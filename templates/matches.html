@@ -23,7 +23,7 @@
         <option value="">Hosté</option>
         {{range .Teams}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
     </select>
-    <input type="datetime-local" name="match_date" />
+    <input type="datetime-local" name="match_date" lang="cs" />
     <button type="submit" class="btn btn-primary btn-sm">+ Přidat</button>
 </form>
 {{if not .Teams}}<p style="color:#f87171;font-size:.82rem">⚠️ Žádné týmy nejsou přiřazeny k této soutěži — zápas nelze přidat. Přiřaď týmy přes <a href="/admin/competitions/{{.Round.CompetitionID}}/teams">správu týmů soutěže</a>.</p>{{end}}
@@ -105,7 +105,7 @@
                 <select name="away_team_id" style="flex:1;min-width:120px">
                     {{range $.Teams}}<option value="{{.ID}}" {{if eq .ID $awayID}}selected{{end}}>{{.Name}}</option>{{end}}
                 </select>
-                <input type="datetime-local" name="match_date"
+                <input type="datetime-local" name="match_date" lang="cs"
                        value="{{if .MatchDate}}{{.MatchDate.Format "2006-01-02T15:04"}}{{end}}" />
                 <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">Uložit</button>
                 <button type="button" class="btn btn-sm btn-secondary" style="font-size:.78rem"
