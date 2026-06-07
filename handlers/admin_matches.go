@@ -1,4 +1,4 @@
-// handlers/admin_matches.go — Tipovačka 2.0
+// handlers/admin_matches.go — Tipovačka 3.0
 // Správa zápasů + výsledky + přepočet bodů.
 package handlers
 
@@ -109,6 +109,18 @@ func AdminMatchCreate(w http.ResponseWriter, r *http.Request) {
 	homeTeamID, _ := strconv.Atoi(r.FormValue("home_team_id"))
 	awayTeamID, _ := strconv.Atoi(r.FormValue("away_team_id"))
 	matchDateStr := r.FormValue("match_date")
+
+	if roundID == 0 {
+		middleware.SetFlash(w, r, "error", "Chyba: round_id je 0 — URL parametr nebyl načten.")
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		return
+	}
+	if homeTeamID == 0 || awayTeamID == 0 {
+		middleware.SetFlash(w, r, "error", "Chyba: nevybrán tým (domácí="+strconv.Itoa(homeTeamID)+", hosté="+strconv.Itoa(awayTeamID)+"). Jsou týmy přiřazeny k soutěži?")
+		http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+		return
+	}
+
 	var matchDate *time.Time
 	if matchDateStr != "" {
 		t, err := time.ParseInLocation("2006-01-02T15:04", matchDateStr, pragueLocation)
@@ -120,9 +132,9 @@ func AdminMatchCreate(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, is_finished)
 		 VALUES ($1,$2,$3,$4,false)`,
 		roundID, homeTeamID, awayTeamID, matchDate); err != nil {
-		middleware.SetFlash(w, r, "error", "Chyba při ukládání zápasu: "+err.Error())
+		middleware.SetFlash(w, r, "error", "DB chyba (kolo="+strconv.Itoa(roundID)+", domácí="+strconv.Itoa(homeTeamID)+", hosté="+strconv.Itoa(awayTeamID)+"): "+err.Error())
 	} else {
-		middleware.SetFlash(w, r, "ok", "Zápas přidán.")
+		middleware.SetFlash(w, r, "ok", "Zápas přidán (kolo "+strconv.Itoa(roundID)+").")
 	}
 	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
 }

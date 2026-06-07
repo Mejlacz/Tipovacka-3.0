@@ -26,6 +26,7 @@
     <input type="datetime-local" name="match_date" />
     <button type="submit" class="btn btn-primary btn-sm">+ Přidat</button>
 </form>
+{{if not .Teams}}<p style="color:#f87171;font-size:.82rem">⚠️ Žádné týmy nejsou přiřazeny k této soutěži — zápas nelze přidat. Přiřaď týmy přes <a href="/admin/competitions/{{.Round.CompetitionID}}/teams">správu týmů soutěže</a>.</p>{{end}}
 
 {{if .Matches}}
 
