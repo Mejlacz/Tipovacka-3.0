@@ -7,7 +7,7 @@
     <a href="/achievements?competition_id=all"
        style="padding:0.35rem 0.85rem;border-radius:20px;font-size:0.85rem;text-decoration:none;white-space:nowrap;
               {{if .SelectedAll}}background:var(--accent);color:#fff;border:1px solid var(--accent);font-weight:700;{{else}}background:var(--bg2);color:var(--text-d);border:1px solid var(--border-d);font-weight:400;{{end}}">
-        🌍 Všechny soutěže
+        {{tr .Lang "ach_all_comps"}}
     </a>
     {{range .Competitions}}
     <a href="/achievements?competition_id={{.ID}}"
@@ -20,21 +20,20 @@
 {{end}}
 
 {{if and (not .SelectedAll) (not .SelectedComp)}}
-    <p class="empty">Žádná soutěž nenalezena.</p>
+    <p class="empty">{{tr .Lang "ach_no_comp"}}</p>
 {{else if not .Rows}}
-    <p class="empty">V téhle soutěži zatím nikdo netipoval.</p>
+    <p class="empty">{{tr .Lang "ach_no_tips"}}</p>
 {{else}}
 
 {{if .SelectedAll}}
 <p style="margin-bottom:1rem;font-size:0.88rem;color:var(--muted-d)">
-    Celkový přehled achievementů přes všechny soutěže.
-    Čísla v buňkách = kolikrát byl achievement získán v různých soutěžích.
+    {{tr .Lang "ach_all_desc"}}
 </p>
 {{end}}
 
 <details style="margin-bottom:1.25rem">
     <summary style="cursor:pointer;font-size:0.88rem;color:var(--muted-d);user-select:none;padding:0.2rem 0">
-        📖 Zobrazit legendu ({{len .AllAchievements}} achievementů)
+        {{tr .Lang "ach_legend"}} ({{len .AllAchievements}})
     </summary>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:0.5rem;margin-top:0.75rem">
         {{range .AllAchievements}}
@@ -61,10 +60,10 @@
     <thead>
         <tr>
             <th class="col-place" style="text-align:center">#</th>
-            <th class="col-user">Hráč</th>
-            <th class="col-pts" style="text-align:center;color:var(--accent)" title="Počet získaných achievementů">
+            <th class="col-user">{{tr .Lang "ach_player"}}</th>
+            <th class="col-pts" style="text-align:center;color:var(--accent)" title="{{tr .Lang "ach_total"}}">
                 <div style="font-size:1rem">🏅</div>
-                <div style="font-size:0.6rem;color:var(--muted-d);font-weight:500;white-space:nowrap">Celkem</div>
+                <div style="font-size:0.6rem;color:var(--muted-d);font-weight:500;white-space:nowrap">{{tr .Lang "ach_total"}}</div>
             </th>
             {{range .AllAchievements}}
             <th class="col-match">
@@ -113,7 +112,7 @@
 
 {{if and (not $.SelectedAll) $.SelectedComp (not $.SelectedComp.IsActive)}}
 <p style="margin-top:0.85rem;font-size:0.82rem;color:var(--muted-d);text-align:center">
-    🔒 Uzavřená soutěž — achievementy jsou finální.
+    {{tr .Lang "ach_closed"}}
 </p>
 {{end}}
 

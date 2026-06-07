@@ -1,5 +1,5 @@
 <div class="page-header">
-    <h1>ℹ️ Jak funguje Tipovačka</h1>
+    <h1>{{if eq .Lang "en"}}ℹ️ How Tipovačka works{{else}}ℹ️ Jak funguje Tipovačka{{end}}</h1>
 </div>
 
 <div style="max-width:700px;line-height:1.75">
@@ -55,6 +55,109 @@
     color: var(--text-d);
 }
 </style>
+
+{{if eq .Lang "en"}}
+
+<div class="info-section">
+    <h2>🎯 Tipping matches</h2>
+    <p>On the <a href="/">Tip</a> page you can see all open matches. Enter the predicted score (home : away) and click ➤.</p>
+    <ul>
+        <li>A tip can be edited any time <strong>until the match starts</strong> — after that it is locked.</li>
+        <li>The <strong>💾 Save all</strong> button submits all filled-in tips at once.</li>
+        <li>Keyboard: <kbd>Enter</kbd> jumps to the second field, a second <kbd>Enter</kbd> saves the tip.</li>
+    </ul>
+    <div class="info-tip">💡 Exact result = 3 points · Correct winner/draw = 1 point · Wrong = 0 points</div>
+</div>
+
+<div class="info-section">
+    <h2>⭐ Extra questions</h2>
+    <p>Besides matches there are <a href="/extra">Extra questions</a> — e.g. who will score the most goals or who will qualify. Answer before their deadline, after which they are locked.</p>
+    <ul>
+        <li>The <strong>🎯 Extra questions</strong> button appears on the home page or next to a competition — when the deadline is still active.</li>
+        <li>Extra question results are hidden until the admin reveals them.</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>🏆 Leaderboard</h2>
+    <p>On the <a href="/leaderboard">Leaderboard</a> you can see the rankings of all tipsters in the current competition.</p>
+    <ul>
+        <li>Click on a player's name → see their stats and an H2H comparison option.</li>
+        <li>Arrows ↑↓ next to a rank show movement compared to the previous round.</li>
+        <li>🔥 = streak of exact tips in a row.</li>
+        <li>Tips before the match starts are hidden (you only see ✓ — the tip exists, but the score is unknown).</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>📊 Stats</h2>
+    <p>On the <a href="/stats">Stats</a> page you'll find a detailed overview of your performance — accuracy, points progression by round, comparison with others.</p>
+    <ul>
+        <li><strong>H2H comparison</strong> — compare yourself with a specific player match by match.</li>
+        <li><strong>Extended stats</strong> — charts, per-round performance, streaks.</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>🏅 Achievements</h2>
+    <p>On the <a href="/achievements">Achievements</a> page you collect badges for various performances in each competition separately.</p>
+    <ul>
+        <li>🎯 Scorer, 🔮 Oracle, 💎 Perfectionist, 🥇 Champion and more…</li>
+        <li>The <strong>🌍 All competitions</strong> view shows the total count across all competitions.</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>📁 Archive</h2>
+    <p>In the <a href="/archive">Archive</a> you'll find closed competitions — results, leaderboard and all tips.</p>
+</div>
+
+<div class="info-section">
+    <h2>💬 Chat</h2>
+    <p>Want to chat with other tipsters? Open the <a href="/chat">Chat</a> — messages are visible to all logged-in users in real time.</p>
+    <ul>
+        <li><kbd>Enter</kbd> sends a message · <kbd>Shift+Enter</kbd> adds a new line.</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>🎨 Appearance — themes and background</h2>
+    <p>Tipovačka has <strong>8 colour themes</strong>. Switch them by clicking 🎨 in the top right corner — your choice is saved in the browser and applies only to you.</p>
+    <ul>
+        <li>🌑 <strong>Dark</strong> — default dark</li>
+        <li>🌌 <strong>Midnight</strong> — deep purple</li>
+        <li>🌊 <strong>Ocean</strong> — dark ocean, teal accent</li>
+        <li>🌲 <strong>Forest</strong> — dark forest, green</li>
+        <li>🌅 <strong>Sunset</strong> — warm amber</li>
+        <li>⚡ <strong>Neon</strong> — cyberpunk neon</li>
+        <li>🏛️ <strong>Classic</strong> — retro red</li>
+        <li>☀️ <strong>Light</strong> — clean light</li>
+    </ul>
+    <p>Want even more customisation? On the <a href="/profile/appearance">Appearance</a> page (or via Profile → Appearance) you can set:</p>
+    <ul>
+        <li><strong>Custom colours</strong> — accent colour, background, text, leaderboard cells, point colours…</li>
+        <li><strong>Page background</strong> — upload your own image as the background of the whole app</li>
+        <li><strong>Custom CSS</strong> — for advanced users, full styling freedom</li>
+    </ul>
+    <div class="info-tip">💡 Appearance settings are personal — other users cannot see your colours.</div>
+</div>
+
+<div class="info-section">
+    <h2>👤 Profile</h2>
+    <p>On the <a href="/profile">Profile</a> page you can change your display name, email or password.</p>
+</div>
+
+<div class="info-section">
+    <h2>📋 Rules</h2>
+    <p>The full competition rules are on the <a href="/pravidla">Rules</a> page.</p>
+</div>
+
+<div class="info-section">
+    <h2>✉️ Contact us</h2>
+    <p>Found a bug or have a suggestion? Write on the <a href="/feedback">Contact us</a> page — you can attach a screenshot too. The message goes directly to the admins.</p>
+</div>
+
+{{else}}
 
 <div class="info-section">
     <h2>🎯 Tipování zápasů</h2>
@@ -154,5 +257,7 @@
     <h2>✉️ Napište nám</h2>
     <p>Narazili jste na chybu nebo máte nápad na vylepšení? Napište na stránce <a href="/feedback">Napište nám</a> — můžete přiložit i screenshot. Zpráva půjde přímo adminům.</p>
 </div>
+
+{{end}}
 
 </div>

@@ -45,8 +45,8 @@
             {{if $u.IsApproved}}<a href="/stats">{{tr $.Lang "nav_stats"}}</a>{{end}}
             {{if $u.IsApproved}}<a href="/archive">{{tr $.Lang "nav_archive"}}</a>{{end}}
             <a href="/pravidla">{{tr $.Lang "nav_rules"}}</a>
-            {{if $u.IsApproved}}<a href="/info">ℹ️ Info</a>{{end}}
-            {{if $u.IsApproved}}<a href="/feedback">💬 Napište nám</a>{{end}}
+            {{if $u.IsApproved}}<a href="/info">{{tr $.Lang "nav_info"}}</a>{{end}}
+            {{if $u.IsApproved}}<a href="/feedback">{{tr $.Lang "nav_feedback"}}</a>{{end}}
             {{if $u.IsAdmin}}
             <div class="nav-dropdown">
                 <span class="nav-dropdown-toggle">{{tr $.Lang "nav_admin"}}</span>
@@ -114,23 +114,23 @@
 <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Hlavní navigace">
     <a href="/" class="mbn-item" data-path="/">
         <span class="mbn-icon">🏠</span>
-        <span class="mbn-label">Zápasy</span>
+        <span class="mbn-label">{{tr .Lang "mbn_matches"}}</span>
     </a>
     <a href="/leaderboard" class="mbn-item" data-path="/leaderboard">
         <span class="mbn-icon">🏆</span>
-        <span class="mbn-label">Žebříček</span>
+        <span class="mbn-label">{{tr .Lang "nav_leaderboard"}}</span>
     </a>
     <a href="/stats" class="mbn-item" data-path="/stats">
         <span class="mbn-icon">📊</span>
-        <span class="mbn-label">Statistiky</span>
+        <span class="mbn-label">{{tr .Lang "mbn_stats"}}</span>
     </a>
     <a href="/extra" class="mbn-item" data-path="/extra">
         <span class="mbn-icon">⭐</span>
-        <span class="mbn-label">Extra</span>
+        <span class="mbn-label">{{tr .Lang "mbn_extra"}}</span>
     </a>
     <a href="/profile" class="mbn-item" data-path="/profile">
         <span class="mbn-icon">👤</span>
-        <span class="mbn-label">Profil</span>
+        <span class="mbn-label">{{tr .Lang "mbn_profile"}}</span>
     </a>
 </nav>
 {{end}}
@@ -139,8 +139,8 @@
 <div class="theme-picker-overlay" id="theme-picker-overlay">
 <div class="theme-picker-box">
     <div class="theme-picker-head">
-        <span class="theme-picker-title">🎨 Vybrat téma</span>
-        <button class="theme-picker-close" id="theme-picker-close" aria-label="Zavřít">✕</button>
+        <span class="theme-picker-title">{{tr .Lang "theme_picker_title"}}</span>
+        <button class="theme-picker-close" id="theme-picker-close" aria-label="{{tr .Lang "theme_close"}}">✕</button>
     </div>
     <div class="theme-grid" id="theme-grid">
         <!-- generováno JavaScriptem -->
@@ -213,7 +213,7 @@ if ('serviceWorker' in navigator) {
         {
             id: 'dark',
             name: '🌑 Dark',
-            desc: 'Výchozí tmavé téma',
+            desc: '{{tr .Lang "theme_dark_desc"}}',
             nav:  '#0d2137',
             body: '#131f2e',
             accent: '#10b981',
@@ -222,7 +222,7 @@ if ('serviceWorker' in navigator) {
         {
             id: 'classic',
             name: '🏛️ Classic',
-            desc: 'Retro červený styl',
+            desc: '{{tr .Lang "theme_classic_desc"}}',
             nav:  '#cc0000',
             body: '#d8d8d8',
             accent: '#cc0000',
@@ -231,7 +231,7 @@ if ('serviceWorker' in navigator) {
         {
             id: 'midnight',
             name: '🌌 Midnight',
-            desc: 'Hluboká fialová záře',
+            desc: '{{tr .Lang "theme_midnight_desc"}}',
             nav:  '#17113a',
             body: '#0e0921',
             accent: '#a855f7',
@@ -240,7 +240,7 @@ if ('serviceWorker' in navigator) {
         {
             id: 'ocean',
             name: '🌊 Ocean',
-            desc: 'Tmavý oceán, teal akcent',
+            desc: '{{tr .Lang "theme_ocean_desc"}}',
             nav:  '#071c2e',
             body: '#041019',
             accent: '#0ea5e9',
@@ -249,7 +249,7 @@ if ('serviceWorker' in navigator) {
         {
             id: 'forest',
             name: '🌲 Forest',
-            desc: 'Temný les, zaoblené tvary',
+            desc: '{{tr .Lang "theme_forest_desc"}}',
             nav:  '#0d2b14',
             body: '#061a0c',
             accent: '#22c55e',
@@ -258,7 +258,7 @@ if ('serviceWorker' in navigator) {
         {
             id: 'sunset',
             name: '🌅 Sunset',
-            desc: 'Teplá jantarová záře',
+            desc: '{{tr .Lang "theme_sunset_desc"}}',
             nav:  '#281a0e',
             body: '#18100a',
             accent: '#f59e0b',
@@ -267,7 +267,7 @@ if ('serviceWorker' in navigator) {
         {
             id: 'neon',
             name: '⚡ Neon',
-            desc: 'Kyberpunk, neonová záře',
+            desc: '{{tr .Lang "theme_neon_desc"}}',
             nav:  '#08091e',
             body: '#04050f',
             accent: '#00ffcc',
@@ -276,7 +276,7 @@ if ('serviceWorker' in navigator) {
         {
             id: 'light',
             name: '☀️ Light',
-            desc: 'Čistý denní vzhled',
+            desc: '{{tr .Lang "theme_light_desc"}}',
             nav:  '#2563eb',
             body: '#f1f5f9',
             accent: '#3b82f6',
@@ -489,13 +489,13 @@ if ('serviceWorker' in navigator) {
         banner.className = 'pwa-install-banner';
         if (type === 'ios') {
             banner.innerHTML =
-                '<span>📲 <strong>Přidat na plochu:</strong> stiskni Sdílet (⬆️) → <em>Přidat na plochu</em></span>' +
-                '<button class="pwa-install-close" aria-label="Zavřít">✕</button>';
+                '{{if eq .Lang "en"}}<span>📲 <strong>Add to home screen:</strong> tap Share (⬆️) → <em>Add to Home Screen</em></span>{{else}}<span>📲 <strong>Přidat na plochu:</strong> stiskni Sdílet (⬆️) → <em>Přidat na plochu</em></span>{{end}}' +
+                '<button class="pwa-install-close" aria-label="{{tr .Lang "theme_close"}}">✕</button>';
         } else {
             banner.innerHTML =
-                '<span>📲 Nainstalovat Tipovačku jako aplikaci</span>' +
-                '<button id="pwa-install-btn" class="btn btn-primary btn-sm" style="white-space:nowrap;font-size:.8rem;padding:.3rem .7rem">Instalovat</button>' +
-                '<button class="pwa-install-close" aria-label="Zavřít">✕</button>';
+                '{{if eq .Lang "en"}}<span>📲 Install Tipovačka as an app</span>{{else}}<span>📲 Nainstalovat Tipovačku jako aplikaci</span>{{end}}' +
+                '<button id="pwa-install-btn" class="btn btn-primary btn-sm" style="white-space:nowrap;font-size:.8rem;padding:.3rem .7rem">{{if eq .Lang "en"}}Install{{else}}Instalovat{{end}}</button>' +
+                '<button class="pwa-install-close" aria-label="{{tr .Lang "theme_close"}}">✕</button>';
         }
         document.body.appendChild(banner);
 

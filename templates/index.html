@@ -5,12 +5,12 @@
 <div style="margin-bottom:1.5rem">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;flex-wrap:wrap;gap:.4rem">
         <h2 style="font-size:.88rem;font-weight:700;color:var(--muted-d);margin:0;text-transform:uppercase;letter-spacing:.05em">
-            ⚡ Otevřená tipování
+            {{tr .Lang "index_open_tips"}}
         </h2>
         <div style="display:flex;align-items:center;gap:.5rem">
             <span id="qt-flash" style="font-size:.8rem;display:none"></span>
             <button id="qt-save-all" style="padding:.3rem .75rem;font-size:.82rem;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:7px;cursor:pointer;white-space:nowrap">
-                💾 Uložit vše
+                💾 {{tr .Lang "tips_save_all"}}
             </button>
         </div>
     </div>
@@ -66,7 +66,7 @@
        style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.4rem;margin-bottom:0.6rem;
               padding:0.35rem 0.85rem;border-radius:8px;font-size:0.85rem;font-weight:600;
               text-decoration:none;background:var(--accent);color:#fff">
-        🎯 Tipovat Extra otázky – {{.Name}}
+        {{tr $.Lang "index_extra_tip"}} – {{.Name}}
     </a>
     {{end}}
 {{end}}
@@ -181,11 +181,11 @@
                 return sc.length >= 2 && sc[0].value !== '' && sc[1].value !== '';
             });
             if (!forms.length) {
-                showFlash('Žádné tipy k uložení', 'warn');
+                showFlash('{{tr .Lang "tips_nothing_to_save"}}', 'warn');
                 return;
             }
             saveAllBtn.disabled = true;
-            saveAllBtn.textContent = '⏳ Ukládám…';
+            saveAllBtn.textContent = '⏳ {{tr .Lang "tips_saving"}}…';
             var saved = 0, failed = 0, pending = forms.length;
             forms.forEach(function(form) {
                 submitFormAjax(form, function(ok) {
@@ -193,11 +193,11 @@
                     pending--;
                     if (pending === 0) {
                         saveAllBtn.disabled = false;
-                        saveAllBtn.textContent = '💾 Uložit vše';
+                        saveAllBtn.textContent = '💾 {{tr .Lang "tips_save_all"}}';
                         if (failed === 0) {
-                            showFlash('✅ Uloženo ' + saved + ' tipů', 'ok');
+                            showFlash('✅ {{tr .Lang "tips_saved"}} ' + saved + ' {{tr .Lang "tips_saved_tips"}}', 'ok');
                         } else {
-                            showFlash('✅ ' + saved + ' ok, ❌ ' + failed + ' chyb', 'err');
+                            showFlash('✅ ' + saved + ' ok, ❌ ' + failed + ' {{tr .Lang "tips_save_error"}}', 'err');
                         }
                     }
                 });

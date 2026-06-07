@@ -169,13 +169,13 @@ body.has-bottom-nav .chat-wrap { height: calc(100dvh - 52px - 56px); }
 
 <div class="chat-wrap">
     <div class="chat-online" id="chat-online">
-        <span class="online-dot"></span><span id="chat-online-text">Připojuji se…</span>
+        <span class="online-dot"></span><span id="chat-online-text">{{tr .Lang "chat_connecting"}}</span>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
-    <button id="chat-scroll-btn">⬇ nové zprávy</button>
+    <button id="chat-scroll-btn">{{tr .Lang "chat_new_msgs"}}</button>
     <div class="chat-input-bar">
-        <textarea id="chat-input" rows="1" placeholder="Napište zprávu… (Enter odešle, Shift+Enter nový řádek)" maxlength="1000"></textarea>
-        <button id="chat-send" title="Odeslat">➤</button>
+        <textarea id="chat-input" rows="1" placeholder="{{tr .Lang "chat_placeholder"}}" maxlength="1000"></textarea>
+        <button id="chat-send" title="{{if eq .Lang "en"}}Send{{else}}Odeslat{{end}}">➤</button>
     </div>
 </div>
 
@@ -207,7 +207,7 @@ body.has-bottom-nav .chat-wrap { height: calc(100dvh - 52px - 56px); }
         };
 
         ws.onclose = function() {
-            onlineEl.textContent = 'Odpojeno — reconnecting…';
+            onlineEl.textContent = '{{tr .Lang "chat_disconnected"}}';
             setTimeout(connect, reconnectDelay);
             reconnectDelay = Math.min(reconnectDelay * 2, 30000);
         };
@@ -254,11 +254,11 @@ body.has-bottom-nav .chat-wrap { height: calc(100dvh - 52px - 56px); }
         var todayPrague = new Date(today.toLocaleString('en-US', {timeZone: 'Europe/Prague'}));
         if (day == String(todayPrague.getDate()).padStart(2,'0') &&
             mon == String(todayPrague.getMonth()+1).padStart(2,'0') &&
-            yr == todayPrague.getFullYear()) return 'Dnes';
+            yr == todayPrague.getFullYear()) return '{{tr .Lang "chat_today"}}';
         var yesterday = new Date(todayPrague); yesterday.setDate(yesterday.getDate()-1);
         if (day == String(yesterday.getDate()).padStart(2,'0') &&
             mon == String(yesterday.getMonth()+1).padStart(2,'0') &&
-            yr == yesterday.getFullYear()) return 'Včera';
+            yr == yesterday.getFullYear()) return '{{tr .Lang "chat_yesterday"}}';
         return day + '.' + mon + '.' + yr;
     }
 
@@ -307,7 +307,7 @@ body.has-bottom-nav .chat-wrap { height: calc(100dvh - 52px - 56px); }
         } else if (animate && !isOwn) {
             unreadCount++;
             scrollBtn.style.display = 'block';
-            scrollBtn.textContent = '⬇ ' + unreadCount + ' nových';
+            scrollBtn.textContent = '⬇ ' + unreadCount + ' {{if eq .Lang "en"}}new{{else}}nových{{end}}';
         }
     }
 
