@@ -950,15 +950,19 @@ func AdminTeamBulkDelete(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"ok":false,"error":"missing ids"}`))
 		return
 	}
-	var ids []int
-	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+	var idStrs []string
+	if err := json.Unmarshal([]byte(raw), &idStrs); err != nil {
 		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": "bad JSON: " + err.Error()})
 		w.Write(b)
 		return
 	}
 	ctx := context.Background()
 	deleted, skipped := 0, 0
-	for _, id := range ids {
+	for _, idStr := range idStrs {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			continue
+		}
 		var mc int
 		_ = db.Pool.QueryRow(ctx,
 			`SELECT COUNT(*) FROM matches WHERE home_team_id=$1 OR away_team_id=$1`, id).Scan(&mc)
@@ -967,8 +971,10 @@ func AdminTeamBulkDelete(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, id)
-		_, _ = db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, id)
-		deleted++
+		res, _ := db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, id)
+		if res.RowsAffected() > 0 {
+			deleted++
+		}
 	}
 	b, _ := json.Marshal(map[string]interface{}{"ok": true, "deleted": deleted, "skipped": skipped})
 	w.Write(b)

@@ -374,7 +374,7 @@ window.teamsBulkDelete = function(){
     if(!confirm('Smazat ' + cbs.length + ' týmů? Tato akce je nevratná.')) return;
 
     var ids = [];
-    cbs.forEach(function(cb){ ids.push(parseInt(cb.getAttribute('data-id'), 10)); });
+    cbs.forEach(function(cb){ ids.push(cb.getAttribute('data-id')); }); // string — velká int64 ID
 
     var cnt = document.getElementById('teams-bulk-count');
     function showMsg(text, isError) {
