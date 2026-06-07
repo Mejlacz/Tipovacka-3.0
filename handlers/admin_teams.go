@@ -935,17 +935,23 @@ func AdminRosterToggle(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /admin/teams/bulk-delete (AJAX)
-// Tělo: JSON pole intů (team IDs)
-// Smaže týmy bez zápasů, přeskočí ty se zápasy.
+// Tělo: URL-encoded, pole "ids" = JSON pole intů
 func AdminTeamBulkDelete(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	admin := RequireAdmin(w, r)
 	if admin == nil {
+		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
 		return
 	}
+	// r.Form already parsed by CSRF middleware
+	raw := r.FormValue("ids")
+	if raw == "" {
+		w.Write([]byte(`{"ok":false,"error":"missing ids"}`))
+		return
+	}
 	var ids []int
-	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
 		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": "bad JSON: " + err.Error()})
 		w.Write(b)
 		return

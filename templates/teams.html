@@ -381,9 +381,13 @@ window.teamsBulkDelete = function(){
 
     fetch('/admin/teams/bulk-delete', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(ids)
-    }).then(function(r){ return r.json(); })
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'ids=' + encodeURIComponent(JSON.stringify(ids))
+    }).then(function(r){
+        if(r.status === 403) throw new Error('CSRF chyba (403) — obnovte stránku');
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
     .then(function(data){
         if(data.ok){
             ids.forEach(function(id){
