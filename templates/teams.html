@@ -377,15 +377,18 @@ window.teamsBulkDelete = function(){
     cbs.forEach(function(cb){ ids.push(parseInt(cb.getAttribute('data-id'), 10)); });
 
     var cnt = document.getElementById('teams-bulk-count');
-    if(cnt) cnt.textContent = 'Mazání…';
+    function showMsg(text, isError) {
+        if(cnt){ cnt.textContent = text; cnt.style.color = isError ? '#f87171' : '#34d399'; }
+    }
+
+    showMsg('Mazání ' + ids.length + ' týmů…', false);
 
     fetch('/admin/teams/bulk-delete', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: 'ids=' + encodeURIComponent(JSON.stringify(ids))
     }).then(function(r){
-        if(r.status === 403) throw new Error('CSRF chyba (403) — obnovte stránku');
-        if(!r.ok) throw new Error('HTTP ' + r.status);
+        if(!r.ok) return r.text().then(function(txt){ throw new Error('HTTP ' + r.status + ': ' + txt.substring(0, 300)); });
         return r.json();
     })
     .then(function(data){
@@ -396,16 +399,17 @@ window.teamsBulkDelete = function(){
                 if(row) row.remove();
                 if(editRow) editRow.remove();
             });
-            teamsClearSelection();
-            var msg = 'Smazáno ' + data.deleted + ' týmů.';
+            var msg = '✓ Smazáno ' + data.deleted + ' týmů';
             if(data.skipped > 0) msg += ' (' + data.skipped + ' přeskočeno — mají zápasy)';
-            alert(msg);
+            showMsg(msg, false);
             filterTeams();
         } else {
-            alert('Chyba: ' + (data.error || 'neznámá'));
+            showMsg('Chyba: ' + (data.error || 'neznámá odpověď serveru'), true);
         }
     })
-    .catch(function(e){ alert('Chyba: ' + e.message); });
+    .catch(function(e){
+        showMsg('Chyba: ' + e.message, true);
+    });
 };
 
 })();
