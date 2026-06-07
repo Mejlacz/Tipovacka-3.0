@@ -72,15 +72,23 @@
 </style>
 
 {{if .Teams}}
+<div id="teams-bulk-bar" style="display:none;margin-bottom:.6rem;gap:.5rem;align-items:center;flex-wrap:wrap">
+    <span id="teams-bulk-count" style="font-size:.85rem;color:var(--muted-d)"></span>
+    <button class="btn btn-sm btn-danger" onclick="teamsBulkDelete()">🗑 Smazat vybrané</button>
+    <button class="btn btn-sm btn-secondary" onclick="teamsClearSelection()">Zrušit výběr</button>
+</div>
 <div style="overflow-x:auto">
 <table id="teams-table" style="width:100%;border-collapse:collapse;font-size:.84rem">
     <thead>
         <tr style="background:var(--bg2);font-size:.75rem;color:var(--muted-d)">
+            <th style="padding:.4rem .4rem;width:2rem;text-align:center">
+                <input type="checkbox" id="teams-cb-all" title="Vybrat vše (jen bez zápasů)" onchange="teamsToggleAll(this.checked)" />
+            </th>
             <th style="padding:.4rem .6rem;text-align:left;width:26%">Název</th>
             <th style="padding:.4rem .6rem;text-align:left;width:14%">Zobrazovaný</th>
             <th style="padding:.4rem .6rem;text-align:left;width:7%">Sport</th>
             <th style="padding:.4rem .6rem;text-align:left;width:7%">Alias</th>
-            <th style="padding:.4rem .6rem;text-align:left;width:26%">Soutěže</th>
+            <th style="padding:.4rem .6rem;text-align:left;width:22%">Soutěže</th>
             <th style="padding:.4rem .6rem;text-align:center;width:6%">Zápasy</th>
             <th style="padding:.4rem .6rem;text-align:right;width:14%">Akce</th>
         </tr>
@@ -91,7 +99,13 @@
         data-name="{{.Name}} {{if .DisplayName}}{{.DisplayName}}{{end}} {{if .Alias}}{{.Alias}}{{end}}"
         data-sport="{{.Sport}}"
         data-orphan="{{if .IsOrphan}}1{{else}}0{{end}}"
-        data-id="{{.ID}}">
+        data-id="{{.ID}}"
+        data-matches="{{.MatchCount}}">
+        <td style="padding:.35rem .4rem;text-align:center">
+            {{if eq .MatchCount 0}}
+            <input type="checkbox" class="team-cb" data-id="{{.ID}}" onchange="teamsUpdateBar()" />
+            {{end}}
+        </td>
         <td style="padding:.35rem .6rem;font-weight:600">
             {{.Name}}
             {{if .IsOrphan}}<span style="font-size:.68rem;color:#f59e0b;margin-left:.3rem">⚠ nezař.</span>{{end}}
@@ -127,7 +141,7 @@
         </td>
     </tr>
     <tr class="team-edit-row" id="edit-row-{{.ID}}">
-        <td colspan="7" style="padding:.55rem .7rem">
+        <td colspan="8" style="padding:.55rem .7rem">
             <form method="post" action="/admin/teams/{{.ID}}/edit"
                   style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
                 <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
@@ -322,6 +336,73 @@ document.getElementById('merge-form').addEventListener('submit', function(e){
 document.getElementById('merge-modal').addEventListener('click', function(e){
     if(e.target === this) closeMerge();
 });
+
+// ── Bulk delete ───────────────────────────────────────────────────────────────
+window.teamsUpdateBar = function(){
+    var cbs = document.querySelectorAll('.team-cb:checked');
+    var bar = document.getElementById('teams-bulk-bar');
+    var cnt = document.getElementById('teams-bulk-count');
+    if(!bar) return;
+    if(cbs.length > 0){
+        bar.style.display = 'flex';
+        if(cnt) cnt.textContent = cbs.length + ' vybráno';
+    } else {
+        bar.style.display = 'none';
+    }
+};
+
+window.teamsToggleAll = function(checked){
+    // Zaškrtni jen viditelné řádky (které nejsou filtrem skryté) bez zápasů
+    document.querySelectorAll('#teams-table tbody tr.team-row').forEach(function(row){
+        if(row.style.display === 'none') return;
+        var cb = row.querySelector('.team-cb');
+        if(cb) cb.checked = checked;
+    });
+    teamsUpdateBar();
+};
+
+window.teamsClearSelection = function(){
+    document.querySelectorAll('.team-cb').forEach(function(cb){ cb.checked = false; });
+    var cbAll = document.getElementById('teams-cb-all');
+    if(cbAll) cbAll.checked = false;
+    teamsUpdateBar();
+};
+
+window.teamsBulkDelete = function(){
+    var cbs = document.querySelectorAll('.team-cb:checked');
+    if(cbs.length === 0) return;
+    if(!confirm('Smazat ' + cbs.length + ' týmů? Tato akce je nevratná.')) return;
+
+    var ids = [];
+    cbs.forEach(function(cb){ ids.push(parseInt(cb.getAttribute('data-id'), 10)); });
+
+    var cnt = document.getElementById('teams-bulk-count');
+    if(cnt) cnt.textContent = 'Mazání…';
+
+    fetch('/admin/teams/bulk-delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: '_csrf=' + encodeURIComponent(document.querySelector('input[name="_csrf"]') ? document.querySelector('input[name="_csrf"]').value : '') + '&ids=' + encodeURIComponent(JSON.stringify(ids))
+    }).then(function(r){ return r.json(); })
+    .then(function(data){
+        if(data.ok){
+            ids.forEach(function(id){
+                var row = document.querySelector('tr.team-row[data-id="'+id+'"]');
+                var editRow = document.getElementById('edit-row-'+id);
+                if(row) row.remove();
+                if(editRow) editRow.remove();
+            });
+            teamsClearSelection();
+            var msg = 'Smazáno ' + data.deleted + ' týmů.';
+            if(data.skipped > 0) msg += ' (' + data.skipped + ' přeskočeno — mají zápasy)';
+            alert(msg);
+            filterTeams();
+        } else {
+            alert('Chyba: ' + (data.error || 'neznámá'));
+        }
+    })
+    .catch(function(e){ alert('Chyba: ' + e.message); });
+};
 
 })();
 </script>

@@ -281,6 +281,7 @@ func main() {
 	r.Post("/admin/teams/new", handlers.AdminTeamCreate)
 	r.Post("/admin/teams/{team_id}/edit", handlers.AdminTeamEdit)
 	r.Post("/admin/teams/{team_id}/delete", handlers.AdminTeamDelete)
+	r.Post("/admin/teams/bulk-delete", handlers.AdminTeamBulkDelete)
 	r.Post("/admin/teams/{team_id}/merge", handlers.AdminTeamMerge)
 	r.Post("/admin/teams/import-csv", handlers.AdminTeamsImportCSV)
 	r.Post("/admin/teams/import-xlsx", handlers.AdminTeamsImportXLSX)
