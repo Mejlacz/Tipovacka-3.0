@@ -116,11 +116,13 @@ func AdminMatchCreate(w http.ResponseWriter, r *http.Request) {
 			matchDate = &t
 		}
 	}
-	_, _ = db.Pool.Exec(context.Background(),
-		`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, is_finished)
-		 VALUES ($1,$2,$3,$4,false)`,
-		roundID, homeTeamID, awayTeamID, matchDate)
-	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+	if _, err := db.Pool.Exec(context.Background(),
+    `INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, is_finished)
+     VALUES ($1,$2,$3,$4,false)`,
+    roundID, homeTeamID, awayTeamID, matchDate); err != nil {
+    middleware.SetFlash(w, r, "error", "Chyba při ukládání zápasu: "+err.Error())
+} else {
+    middleware.SetFlash(w, r, "ok", "Zápas přidán.")
 }
 
 // POST /admin/matches/{id}/edit
