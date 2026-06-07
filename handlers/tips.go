@@ -33,9 +33,13 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		ctx := context.Background()
+		hiddenCond := "AND COALESCE(is_hidden,false)=false"
+		if u.IsAdmin {
+			hiddenCond = ""
+		}
 		rows, err := db.Pool.Query(ctx,
 			`SELECT id, name, season, is_active, sport, sort_order
-			   FROM competitions WHERE is_active = true ORDER BY COALESCE(sort_order,9999) ASC, id DESC`)
+			   FROM competitions WHERE is_active = true `+hiddenCond+` ORDER BY COALESCE(sort_order,9999) ASC, id DESC`)
 		if err != nil {
 			http.Error(w, "DB error", http.StatusInternalServerError)
 			return
@@ -209,10 +213,14 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 
 		ctx := context.Background()
 
-		// Načti soutěž
+		// Načti soutěž — admin vidí i skryté (pro testování)
 		comp := &models.Competition{}
+		hiddenFilter := "AND COALESCE(is_hidden,false)=false"
+		if u.IsAdmin {
+			hiddenFilter = ""
+		}
 		err = db.Pool.QueryRow(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE id = $1`, compID).
+			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE id = $1 `+hiddenFilter, compID).
 			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder)
 		if err != nil {
 			http.Redirect(w, r, "/", http.StatusSeeOther)

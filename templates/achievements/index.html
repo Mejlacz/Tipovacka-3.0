@@ -51,7 +51,7 @@
 </details>
 
 <style>
-.achievements-matrix th.col-user, .achievements-matrix td.col-user { width:3.5rem;max-width:3.5rem; }
+.achievements-matrix th.col-user, .achievements-matrix td.col-user { width:6rem;max-width:6rem; }
 .achievements-matrix thead tr:first-child th.col-match {
     height:auto;vertical-align:top;padding:0.4rem 0.2rem;min-width:4.5rem;width:4.5rem;
 }
@@ -84,8 +84,11 @@
         <td class="col-place" style="color:var(--muted-d);font-size:0.8rem">{{add $i 1}}.</td>
         <td class="col-user" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis"
             title="{{$row.User.Username}}">
-            <span style="font-weight:{{if $isMe}}700{{else}}500{{end}}">{{$row.User.Username}}</span>
-            {{if $isMe}}<span class="badge-you" style="margin-left:0.2rem">ty</span>{{end}}
+            {{if $isMe}}
+            <span style="display:inline-block;background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(16,185,129,.35);border-radius:20px;padding:.1rem .55rem;font-size:.78rem;font-weight:700;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis">{{$row.User.Username}}</span>
+            {{else}}
+            <span style="font-weight:500">{{$row.User.Username}}</span>
+            {{end}}
         </td>
         <td class="col-pts" style="text-align:center;font-weight:700;color:var(--accent)">{{$row.Count}}</td>
         {{range $.AllAchievements}}

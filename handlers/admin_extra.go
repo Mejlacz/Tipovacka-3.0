@@ -20,6 +20,275 @@ import (
 	"tipovacka/models"
 )
 
+// ── Levenshtein distance (case-insensitive, rune-aware) ──────────────────────
+
+func levenshtein(a, b string) int {
+	ra := []rune(strings.ToLower(a))
+	rb := []rune(strings.ToLower(b))
+	la, lb := len(ra), len(rb)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+	row := make([]int, lb+1)
+	for j := range row {
+		row[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		prev := row[0]
+		row[0] = i
+		for j := 1; j <= lb; j++ {
+			old := row[j]
+			if ra[i-1] == rb[j-1] {
+				row[j] = prev
+			} else {
+				m := prev
+				if row[j-1] < m {
+					m = row[j-1]
+				}
+				if row[j] < m {
+					m = row[j]
+				}
+				row[j] = 1 + m
+			}
+			prev = old
+		}
+	}
+	return row[lb]
+}
+
+// isFuzzyMatch returns true when answer is similar but not identical to any correct variant.
+func isFuzzyMatch(answer string, correctVariants []string) (bool, int) {
+	norm := strings.ToLower(strings.TrimSpace(answer))
+	bestDist := 999
+	for _, cv := range correctVariants {
+		cv = strings.ToLower(strings.TrimSpace(cv))
+		if norm == cv {
+			return false, 0 // exact — handled separately
+		}
+		d := levenshtein(norm, cv)
+		if d < bestDist {
+			bestDist = d
+		}
+	}
+	maxLen := len([]rune(norm))
+	for _, cv := range correctVariants {
+		if l := len([]rune(strings.TrimSpace(cv))); l > maxLen {
+			maxLen = l
+		}
+	}
+	threshold := 2
+	if maxLen > 8 {
+		threshold = maxLen / 4
+		if threshold < 2 {
+			threshold = 2
+		}
+		if threshold > 4 {
+			threshold = 4
+		}
+	}
+	return bestDist <= threshold, bestDist
+}
+
+// ── AnswerGroup — skupina odpovědí se stejným textem ─────────────────────────
+
+type AnswerGroup struct {
+	Text        string
+	NormText    string
+	Count       int
+	AnswerIDs   []int
+	UserNames   []string
+	CurPoints   *int // společná hodnota bodů; nil = různé nebo nenastaveno
+	AllEval     bool // všechny mají body
+	IsMatch     bool // přesná shoda se správnou odpovědí
+	IsSimilar   bool // fuzzy shoda
+	SimilarDist int
+	HasMerged   bool // skupina obsahuje sloučené odpovědi (má original_answer)
+}
+
+// QStats — statistika vyhodnocení jedné otázky
+type QStats struct {
+	Total     int
+	Evaluated int
+}
+
+// buildAnswerGroups sestrojí skupiny z plochého seznamu odpovědí.
+func buildAnswerGroups(answers []AnswerWithUser, correctAnswer *string) ([]*AnswerGroup, QStats) {
+	groupMap := map[string]*AnswerGroup{}
+	var order []string // pořadí prvního výskytu
+
+	for _, aw := range answers {
+		norm := strings.ToLower(strings.TrimSpace(aw.Answer.Answer))
+		if norm == "" {
+			continue
+		}
+		g, ok := groupMap[norm]
+		if !ok {
+			g = &AnswerGroup{Text: aw.Answer.Answer, NormText: norm}
+			groupMap[norm] = g
+			order = append(order, norm)
+		}
+		g.Count++
+		g.AnswerIDs = append(g.AnswerIDs, aw.Answer.ID)
+		g.UserNames = append(g.UserNames, aw.User.Username)
+		if aw.Answer.Points != nil {
+			if g.CurPoints == nil && g.Count == 1 {
+				v := *aw.Answer.Points
+				g.CurPoints = &v
+			} else if g.CurPoints != nil && *g.CurPoints != *aw.Answer.Points {
+				g.CurPoints = nil
+			}
+		} else if g.Count > 1 && g.CurPoints != nil {
+			g.CurPoints = nil
+		}
+	}
+
+	// Správná odpověď — varianty
+	var variants []string
+	if correctAnswer != nil && *correctAnswer != "" {
+		for _, v := range strings.Split(*correctAnswer, "|") {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				variants = append(variants, v)
+			}
+		}
+	}
+
+	// Příznaky match / similar; AllEval
+	stats := QStats{Total: len(answers)}
+	evalCount := 0
+	for _, aw := range answers {
+		if aw.Answer.Points != nil {
+			evalCount++
+		}
+	}
+	stats.Evaluated = evalCount
+
+	groups := make([]*AnswerGroup, 0, len(order))
+	for _, norm := range order {
+		g := groupMap[norm]
+		if len(variants) > 0 {
+			for _, v := range variants {
+				if strings.ToLower(strings.TrimSpace(v)) == norm {
+					g.IsMatch = true
+					break
+				}
+			}
+			if !g.IsMatch {
+				g.IsSimilar, g.SimilarDist = isFuzzyMatch(g.Text, variants)
+			}
+		}
+		allEval := true
+		for _, aw := range answers {
+			if strings.ToLower(strings.TrimSpace(aw.Answer.Answer)) == norm {
+				if aw.Answer.Points == nil {
+					allEval = false
+					break
+				}
+			}
+		}
+		g.AllEval = allEval
+		// HasMerged — skupina obsahuje sloučené odpovědi
+		for _, aw := range answers {
+			if strings.ToLower(strings.TrimSpace(aw.Answer.Answer)) == norm && aw.HasOriginal {
+				g.HasMerged = true
+				break
+			}
+		}
+		groups = append(groups, g)
+	}
+
+	// Sloučit všechny IsMatch skupiny do jednoho řádku
+	if len(variants) > 0 {
+		var merged *AnswerGroup
+		var rest []*AnswerGroup
+		for _, g := range groups {
+			if g.IsMatch {
+				if merged == nil {
+					// Kanonický text = první varianta správné odpovědi
+					canonical := variants[0]
+					merged = &AnswerGroup{
+						Text:     canonical,
+						NormText: strings.ToLower(strings.TrimSpace(canonical)),
+						IsMatch:  true,
+						AllEval:  true,
+					}
+				}
+				merged.Count += g.Count
+				merged.AnswerIDs = append(merged.AnswerIDs, g.AnswerIDs...)
+				merged.UserNames = append(merged.UserNames, g.UserNames...)
+				if !g.AllEval {
+					merged.AllEval = false
+				}
+				if g.CurPoints != nil {
+					merged.CurPoints = g.CurPoints // použij body z poslední správné skupiny
+				}
+			} else {
+				rest = append(rest, g)
+			}
+		}
+		if merged != nil {
+			// Seřadit zbytek: similar → count desc → abecedně
+			for i := 0; i < len(rest)-1; i++ {
+				for j := i + 1; j < len(rest); j++ {
+					a, b := rest[i], rest[j]
+					swap := false
+					switch {
+					case a.IsSimilar != b.IsSimilar:
+						swap = b.IsSimilar
+					case a.Count != b.Count:
+						swap = b.Count > a.Count
+					default:
+						swap = b.NormText < a.NormText
+					}
+					if swap {
+						rest[i], rest[j] = rest[j], rest[i]
+					}
+				}
+			}
+			groups = append([]*AnswerGroup{merged}, rest...)
+		} else {
+			// Žádná správná odpověď — seřadit podle count desc
+			for i := 0; i < len(groups)-1; i++ {
+				for j := i + 1; j < len(groups); j++ {
+					a, b := groups[i], groups[j]
+					swap := false
+					switch {
+					case a.IsSimilar != b.IsSimilar:
+						swap = b.IsSimilar
+					case a.Count != b.Count:
+						swap = b.Count > a.Count
+					default:
+						swap = b.NormText < a.NormText
+					}
+					if swap {
+						groups[i], groups[j] = groups[j], groups[i]
+					}
+				}
+			}
+		}
+	} else {
+		// Bez správné odpovědi — seřadit count desc
+		for i := 0; i < len(groups)-1; i++ {
+			for j := i + 1; j < len(groups); j++ {
+				if groups[j].Count > groups[i].Count {
+					groups[i], groups[j] = groups[j], groups[i]
+				}
+			}
+		}
+	}
+	return groups, stats
+}
+
+// AnswerWithUser sdružuje extra odpověď s uživatelem (sdílený typ v balíčku).
+type AnswerWithUser struct {
+	Answer         *models.ExtraAnswer
+	User           *models.User
+	HasOriginal    bool // answer byl sloučen (má original_answer v DB)
+}
+
 // GET /admin/extra/{competition_id}/questions/new
 func AdminExtraQuestionNewForm(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -212,16 +481,16 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 		}
 		qRows.Close()
 
-		// Per question, load answers with user
-		type AnswerWithUser struct {
-			Answer *models.ExtraAnswer
-			User   *models.User
-		}
+		// Per question, load answers with user; build groups
 		answersByQuestion := map[int][]AnswerWithUser{}
+		groupsByQuestion := map[int][]*AnswerGroup{}
+		statsByQuestion := map[int]QStats{}
+
 		for _, q := range questions {
 			aRows, _ := db.Pool.Query(ctx,
 				`SELECT ea.id, ea.question_id, ea.user_id, ea.answer, ea.points, ea.created_at,
-				        u.id, u.username
+				        u.id, u.username,
+				        ea.original_answer IS NOT NULL AS has_original
 				   FROM extra_answers ea
 				   JOIN users u ON u.id = ea.user_id
 				  WHERE ea.question_id=$1
@@ -229,23 +498,58 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 			for aRows.Next() {
 				ea := &models.ExtraAnswer{}
 				u := &models.User{}
+				var hasOrig bool
 				_ = aRows.Scan(&ea.ID, &ea.QuestionID, &ea.UserID, &ea.Answer, &ea.Points, &ea.CreatedAt,
-					&u.ID, &u.Username)
+					&u.ID, &u.Username, &hasOrig)
 				ea.User = u
-				answersByQuestion[q.ID] = append(answersByQuestion[q.ID], AnswerWithUser{ea, u})
+				answersByQuestion[q.ID] = append(answersByQuestion[q.ID], AnswerWithUser{ea, u, hasOrig})
 			}
 			aRows.Close()
+
+			groups, stats := buildAnswerGroups(answersByQuestion[q.ID], q.CorrectAnswer)
+			groupsByQuestion[q.ID] = groups
+			statsByQuestion[q.ID] = stats
+		}
+
+		// Přímý dotaz na body správné odpovědi pro každou otázku
+		// (spolehlivější než CurPoints z groupů, které může být nil při smíšených hodnotách)
+		correctPtsByQuestion := map[int]*int{}
+		for _, q := range questions {
+			if q.CorrectAnswer == nil || *q.CorrectAnswer == "" {
+				continue
+			}
+			variants := strings.Split(*q.CorrectAnswer, "|")
+			var normVariants []string
+			for _, v := range variants {
+				v = strings.TrimSpace(v)
+				if v != "" {
+					normVariants = append(normVariants, strings.ToLower(v))
+				}
+			}
+			if len(normVariants) == 0 {
+				continue
+			}
+			var pts *int
+			_ = db.Pool.QueryRow(ctx,
+				`SELECT points FROM extra_answers
+				  WHERE question_id=$1 AND LOWER(TRIM(answer)) = ANY($2)
+				  AND points IS NOT NULL
+				  LIMIT 1`, q.ID, normVariants).Scan(&pts)
+			correctPtsByQuestion[q.ID] = pts
 		}
 
 		flash := middleware.GetFlash(w, r)
 
 		RenderTemplate(w, r, tmpl, "admin/extra_answers.html", TemplateData{
-			"User":              admin,
-			"Comp":              comp,
-			"Questions":         questions,
-			"AnswersByQuestion": answersByQuestion,
-			"Flash":             flash,
-			"AutoDeadline":      autoDeadline,
+			"User":                  admin,
+			"Comp":                  comp,
+			"Questions":             questions,
+			"AnswersByQuestion":     answersByQuestion,
+			"GroupsByQuestion":      groupsByQuestion,
+			"StatsByQuestion":       statsByQuestion,
+			"CorrectPtsByQuestion":  correctPtsByQuestion,
+			"Flash":                 flash,
+			"AutoDeadline":          autoDeadline,
 		})
 	}
 }
@@ -858,16 +1162,18 @@ func AdminExtraDeadlineSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// extra_reveal_at — prázdné = auto (shodné s deadline)
-	revealStr := strings.TrimSpace(r.FormValue("extra_reveal_at"))
+	// extra_reveal_at — "reveal_now=1" = ihned, jinak datetime-local vstup, prázdné = NULL
 	var revealPtr *time.Time
-	if revealStr == "now" {
+	if r.FormValue("reveal_now") == "1" {
 		now := time.Now()
 		revealPtr = &now
-	} else if revealStr != "" {
-		t, err := time.ParseInLocation("2006-01-02T15:04", revealStr, time.Local)
-		if err == nil {
-			revealPtr = &t
+	} else {
+		revealStr := strings.TrimSpace(r.FormValue("extra_reveal_at"))
+		if revealStr != "" {
+			t, err := time.ParseInLocation("2006-01-02T15:04", revealStr, time.Local)
+			if err == nil {
+				revealPtr = &t
+			}
 		}
 	}
 
@@ -1032,4 +1338,332 @@ func AdminExtraNotifyNow(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(fmt.Sprintf(`{"ok":true,"total":%d}`, len(untipped))))
+}
+
+// POST /admin/extra/questions/{question_id}/merge-answers (AJAX)
+// Přepíše texty vybraných odpovědí na kanonický název. Ukládá originál pro undo.
+func AdminExtraMergeAnswers(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	canonical := strings.TrimSpace(r.FormValue("canonical"))
+	sources := r.Form["sources[]"]
+	if canonical == "" || len(sources) == 0 {
+		jsonError(w, "missing_params", http.StatusBadRequest)
+		return
+	}
+	ctx := context.Background()
+	var compID int
+	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM extra_questions WHERE id=$1`, qID).Scan(&compID)
+
+	normCanonical := strings.ToLower(strings.TrimSpace(canonical))
+	for _, src := range sources {
+		normSrc := strings.ToLower(strings.TrimSpace(src))
+		if normSrc == normCanonical {
+			continue // kanonický název nepřepisujeme
+		}
+		// Ulož originál (jen pokud ještě není uložen) a přepiš na kanonický název
+		_, _ = db.Pool.Exec(ctx,
+			`UPDATE extra_answers
+			    SET original_answer = COALESCE(original_answer, answer),
+			        answer = $1
+			  WHERE question_id = $2 AND LOWER(TRIM(answer)) = $3`,
+			canonical, qID, normSrc)
+	}
+	go RecalculateStandings(compID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+}
+
+// POST /admin/extra/questions/{question_id}/unmerge-answers (AJAX)
+// Obnoví původní texty odpovědí (undo sloučení).
+func AdminExtraUnmergeAnswers(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	canonical := strings.TrimSpace(r.FormValue("canonical"))
+	ctx := context.Background()
+	var compID int
+	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM extra_questions WHERE id=$1`, qID).Scan(&compID)
+
+	// Obnov original_answer tam kde je nastaven
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_answers
+		    SET answer = original_answer,
+		        original_answer = NULL
+		  WHERE question_id = $1 AND LOWER(TRIM(answer)) = LOWER(TRIM($2))
+		    AND original_answer IS NOT NULL`,
+		qID, canonical)
+
+	go RecalculateStandings(compID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+}
+
+// POST /admin/extra/questions/{question_id}/save-correct (AJAX)
+// Uloží libovolnou hodnotu correct_answer (pro odebrání varianty přes chip ×).
+func AdminExtraSaveCorrect(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	newVal := strings.TrimSpace(r.FormValue("correct_answer"))
+	ctx := context.Background()
+	var ptr *string
+	if newVal != "" {
+		ptr = &newVal
+	}
+	_, _ = db.Pool.Exec(ctx, `UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, ptr, qID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+}
+
+// POST /admin/extra/questions/{question_id}/add-correct-variant (AJAX)
+// Přidá variantu do correct_answer bez změny bodů.
+func AdminExtraAddCorrectVariant(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	answerText := strings.TrimSpace(r.FormValue("answer_text"))
+	if answerText == "" {
+		jsonError(w, "empty", http.StatusBadRequest)
+		return
+	}
+	ctx := context.Background()
+	var curCorrect *string
+	err := db.Pool.QueryRow(ctx, `SELECT correct_answer FROM extra_questions WHERE id=$1`, qID).Scan(&curCorrect)
+	if err != nil {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+	newCorrect := answerText
+	normNew := strings.ToLower(strings.TrimSpace(answerText))
+	if curCorrect != nil && strings.TrimSpace(*curCorrect) != "" {
+		already := false
+		for _, v := range strings.Split(*curCorrect, "|") {
+			if strings.ToLower(strings.TrimSpace(v)) == normNew {
+				already = true
+				break
+			}
+		}
+		if !already {
+			newCorrect = *curCorrect + "|" + answerText
+		} else {
+			newCorrect = *curCorrect
+		}
+	}
+	_, _ = db.Pool.Exec(ctx, `UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, newCorrect, qID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "correct_answer": newCorrect})
+}
+
+// POST /admin/extra/questions/{question_id}/set-pts-for-correct (AJAX)
+// Nastaví body pro všechny správné varianty, ostatním 0.
+func AdminExtraSetPtsForCorrect(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+	ptsStr := strings.TrimSpace(r.FormValue("points"))
+	ctx := context.Background()
+
+	var compID, maxPts int
+	var correctAnswer *string
+	err := db.Pool.QueryRow(ctx,
+		`SELECT competition_id, max_points, correct_answer FROM extra_questions WHERE id=$1`, qID).
+		Scan(&compID, &maxPts, &correctAnswer)
+	if err != nil {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+	if correctAnswer == nil || strings.TrimSpace(*correctAnswer) == "" {
+		jsonError(w, "no_correct_answer", http.StatusBadRequest)
+		return
+	}
+
+	pts, e := strconv.Atoi(ptsStr)
+	if e != nil || pts < 0 {
+		jsonError(w, "invalid_points", http.StatusBadRequest)
+		return
+	}
+
+	var normVariants []string
+	for _, v := range strings.Split(*correctAnswer, "|") {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			normVariants = append(normVariants, strings.ToLower(v))
+		}
+	}
+
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_answers SET points=$1 WHERE question_id=$2 AND LOWER(TRIM(answer)) = ANY($3)`,
+		pts, qID, normVariants)
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_answers SET points=0 WHERE question_id=$1 AND LOWER(TRIM(answer)) != ALL($2)`,
+		qID, normVariants)
+
+	go RecalculateStandings(compID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "points": pts})
+}
+
+// POST /admin/extra/questions/{question_id}/clear-correct (AJAX)
+// Vymaže správnou odpověď a resetuje všechny body na NULL pro danou otázku.
+func AdminExtraClearCorrect(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	ctx := context.Background()
+
+	var compID int
+	err := db.Pool.QueryRow(ctx, `SELECT competition_id FROM extra_questions WHERE id=$1`, qID).Scan(&compID)
+	if err != nil {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+
+	_, _ = db.Pool.Exec(ctx, `UPDATE extra_questions SET correct_answer=NULL WHERE id=$1`, qID)
+	_, _ = db.Pool.Exec(ctx, `UPDATE extra_answers SET points=NULL WHERE question_id=$1`, qID)
+
+	go RecalculateStandings(compID)
+
+	LogAction(&admin.ID, admin.Username, "extra_answer", "question", &qID,
+		"Reset správné odpovědi a bodů", nil, nil)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+}
+
+// POST /admin/extra/questions/{question_id}/set-correct-group (AJAX)
+// Nastaví správnou odpověď pro otázku a přiřadí body všem odpovědím v dané skupině.
+func AdminExtraSetCorrectGroup(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		jsonError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	qID, _ := strconv.Atoi(r.PathValue("question_id"))
+	if err := r.ParseForm(); err != nil {
+		jsonError(w, "bad_request", http.StatusBadRequest)
+		return
+	}
+
+	answerText := strings.TrimSpace(r.FormValue("answer_text"))
+	ptsStr := r.FormValue("points")
+	ctx := context.Background()
+
+	// Načti otázku
+	var compID, maxPts int
+	var curCorrect *string
+	err := db.Pool.QueryRow(ctx,
+		`SELECT competition_id, max_points, correct_answer FROM extra_questions WHERE id=$1`, qID).
+		Scan(&compID, &maxPts, &curCorrect)
+	if err != nil {
+		jsonError(w, "not_found", http.StatusNotFound)
+		return
+	}
+
+	// Body — admin může zadat libovolnou kladnou hodnotu
+	pts := maxPts
+	if ptsStr != "" {
+		if p, e := strconv.Atoi(ptsStr); e == nil && p >= 0 {
+			pts = p
+		}
+	}
+
+	// Nastav správnou odpověď — přidej jako variantu (nenahrazuj stávající)
+	newCorrect := answerText
+	if curCorrect != nil && strings.TrimSpace(*curCorrect) != "" {
+		// Zkontroluj jestli varianta už existuje
+		already := false
+		normNew := strings.ToLower(strings.TrimSpace(answerText))
+		for _, v := range strings.Split(*curCorrect, "|") {
+			if strings.ToLower(strings.TrimSpace(v)) == normNew {
+				already = true
+				break
+			}
+		}
+		if !already {
+			newCorrect = *curCorrect + "|" + answerText
+		} else {
+			newCorrect = *curCorrect // beze změny
+		}
+	}
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_questions SET correct_answer=$1 WHERE id=$2`, newCorrect, qID)
+
+	// Přiřaď body VŠEM správným variantám (nejen té právě kliknuté)
+	allVariants := strings.Split(newCorrect, "|")
+	var normVariants []string
+	for _, v := range allVariants {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			normVariants = append(normVariants, strings.ToLower(v))
+		}
+	}
+
+	// Správné skupiny → přiřazené body
+	res, _ := db.Pool.Exec(ctx,
+		`UPDATE extra_answers SET points=$1
+		  WHERE question_id=$2 AND LOWER(TRIM(answer)) = ANY($3)`,
+		pts, qID, normVariants)
+	count := res.RowsAffected()
+
+	// Nesprávné skupiny → 0 bodů (jen ty co nejsou v žádné variantě)
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE extra_answers SET points=0
+		  WHERE question_id=$1 AND LOWER(TRIM(answer)) != ALL($2)`,
+		qID, normVariants)
+
+	go RecalculateStandings(compID)
+
+	newVal := fmt.Sprintf("%q → %d b", answerText, pts)
+	LogAction(&admin.ID, admin.Username, "extra_answer", "question", &qID,
+		fmt.Sprintf("Správná odpověď nastavena: %q, %d tipérů → %d b", answerText, count, pts),
+		nil, &newVal)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":             true,
+		"evaluated":      count,
+		"correct_answer": answerText,
+		"points":         pts,
+	})
 }

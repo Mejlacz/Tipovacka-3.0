@@ -45,6 +45,9 @@ func migrateSchema() {
 		`ALTER TABLE extra_questions ADD COLUMN IF NOT EXISTS answer_options TEXT`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_deadline TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_reveal_at TIMESTAMPTZ`,
+		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE extra_answers ADD COLUMN IF NOT EXISTS original_answer TEXT`,
+		`CREATE TABLE IF NOT EXISTS app_config (key VARCHAR(100) PRIMARY KEY, value TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS feedback (
 			id BIGSERIAL PRIMARY KEY,
 			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -77,6 +80,9 @@ func main() {
 
 	// Migrate schema — add columns that might be missing in older DBs
 	migrateSchema()
+
+	// Načti manuální TZ offset override z DB (nastavuje owner na /admin/time)
+	handlers.LoadTZOverrideFromDB()
 
 	// Detect which optional columns exist in the users table at runtime
 	handlers.InitUserSchema()
@@ -260,6 +266,7 @@ func main() {
 	r.Post("/admin/competitions/{competition_id}/extra-notify", handlers.AdminExtraNotifyNow)
 	r.Post("/admin/matches/{match_id}/set-tip", handlers.AdminSetTip)
 	r.Post("/admin/tips/set-ajax", handlers.AdminSetTip) // alias (Python URL)
+	r.Post("/admin/competitions/{competition_id}/users/{user_id}/remove-tips", handlers.AdminRemoveUserTips)
 	r.Get("/admin/unscored", handlers.AdminUnscored(tmpl))
 	r.Get("/admin/unscored-count", handlers.AdminUnscoredCount)
 	r.Get("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsForm(tmpl))
@@ -362,6 +369,10 @@ func main() {
 	r.Get("/admin/users/merge", handlers.AdminUserMergeForm(tmpl))
 	r.Post("/admin/users/merge", handlers.AdminUserMerge)
 
+	// Time diagnostics
+	r.Get("/admin/time", handlers.AdminTimeDiag(tmpl))
+	r.Post("/admin/time/offset", handlers.AdminTimeSetOffset)
+
 	// User import
 	r.Get("/admin/users/import", handlers.AdminUserImportForm(tmpl))
 	r.Post("/admin/users/import", handlers.AdminUserImportSubmit)
@@ -378,6 +389,13 @@ func main() {
 	r.Post("/admin/extra/{competition_id}/import", handlers.AdminExtraImport)
 	r.Post("/admin/extra/{competition_id}/deadline-settings", handlers.AdminExtraDeadlineSettings)
 	r.Post("/admin/extra/answers/set-ajax", handlers.AdminSetExtraAnswerAjax)
+	r.Post("/admin/extra/questions/{question_id}/set-correct-group", handlers.AdminExtraSetCorrectGroup)
+	r.Post("/admin/extra/questions/{question_id}/merge-answers", handlers.AdminExtraMergeAnswers)
+	r.Post("/admin/extra/questions/{question_id}/unmerge-answers", handlers.AdminExtraUnmergeAnswers)
+	r.Post("/admin/extra/questions/{question_id}/save-correct", handlers.AdminExtraSaveCorrect)
+	r.Post("/admin/extra/questions/{question_id}/add-correct-variant", handlers.AdminExtraAddCorrectVariant)
+	r.Post("/admin/extra/questions/{question_id}/set-pts-for-correct", handlers.AdminExtraSetPtsForCorrect)
+	r.Post("/admin/extra/questions/{question_id}/clear-correct", handlers.AdminExtraClearCorrect)
 	r.Get("/admin/extra/teams-ajax", handlers.AdminExtraTeamsAjax)
 
 	// Admin feedback
@@ -462,6 +480,37 @@ func templateFuncs() template.FuncMap {
 		"add":      func(a, b int) int { return a + b },
 		"sub":      func(a, b int) int { return a - b },
 		"mul":      func(a, b int) int { return a * b },
+		"abs":      func(a int) int { if a < 0 { return -a }; return a },
+		// splitPipe splits a string by | and trims whitespace
+		"splitPipe": func(s string) []string {
+			parts := strings.Split(s, "|")
+			var out []string
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					out = append(out, p)
+				}
+			}
+			return out
+		},
+		// seq generates []int{from, from+1, ..., to}
+		"seq": func(from, to int) []int {
+			if to < from {
+				return nil
+			}
+			s := make([]int, to-from+1)
+			for i := range s {
+				s[i] = from + i
+			}
+			return s
+		},
+		// derefStr safely dereferences *string
+		"derefStr": func(p *string) string {
+			if p == nil {
+				return ""
+			}
+			return *p
+		},
 		// intVal dereferences *int safely; returns 0 if nil
 		"intVal": func(p *int) int {
 			if p == nil {
@@ -541,20 +590,25 @@ func templateFuncs() template.FuncMap {
 			}
 			return t.In(time.Local).Format(layout)
 		},
-		// fmtPrague konvertuje UTC timestamp (pgx v5 vrací TIMESTAMP WITHOUT
-		// TIME ZONE jako UTC) na Prague local time a formátuje podle layoutu.
+		// fmtPrague formátuje *time.Time — DB ukládá TIMESTAMP WITHOUT TIME ZONE
+		// jako Prague wall-clock (pgx v5 vrátí stejnou hodnotu labelovanou UTC),
+		// proto žádná timezone konverze není potřeba.
 		"fmtPrague": func(t *time.Time, layout string) string {
 			if t == nil {
 				return ""
 			}
-			return t.In(pragLoc).Format(layout)
+			return t.Format(layout)
 		},
-		// fmtISO formats a *time.Time as UTC ISO 8601 string for JS (e.g. countdown)
+		// fmtISO formats a *time.Time as ISO 8601 string with Prague timezone offset for JS countdown.
+		// DB stores TIMESTAMP WITHOUT TIME ZONE as Prague wall-clock (pgx v5 returns e.g. time.Time{16:20 UTC}).
+		// Reconstruct as real Prague time so JS countdown fires at the correct local moment.
 		"fmtISO": func(t *time.Time) string {
 			if t == nil {
 				return ""
 			}
-			return t.UTC().Format("2006-01-02T15:04:05") + "Z"
+			// t is Prague wall-clock labeled as UTC — rebuild with Prague location
+			prgTime := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), pragLoc)
+			return prgTime.Format(time.RFC3339)
 		},
 		// paginate vrátí slice stránek pro navigaci (čísla 1..total, -1 = "…")
 		"paginate": func(current, total int) []int {

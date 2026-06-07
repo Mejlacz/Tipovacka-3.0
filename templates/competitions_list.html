@@ -67,6 +67,7 @@ main.container { max-width:100% !important; width:100% !important }
             {{else}}
             <span class="badge-archiv">Archiv</span>
             {{end}}
+            {{if .Comp.IsHidden}}<span class="badge-archiv" title="Skrytá pro uživatele">🙈 Skrytá</span>{{end}}
         </td>
         <td style="text-align:center">
             <input type="number" class="sort-input" data-id="{{.Comp.ID}}"

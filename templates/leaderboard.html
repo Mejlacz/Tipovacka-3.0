@@ -8,7 +8,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             <select name="competition_id" onchange="this.form.submit()">
                 {{range .Competitions}}
                 <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
-                    {{.Name}} {{.Season}}
+                    {{if .IsHidden}}🙈 {{end}}{{.Name}} {{.Season}}
                 </option>
                 {{end}}
             </select>
@@ -130,7 +130,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         <tr>
             <th class="col-place">#</th>
             <th class="col-user">Tipér</th>
-            <th class="col-pts">Body</th>
+            {{if .ExtraCols}}<th class="col-total" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>{{end}}
             {{range .Matches}}
             {{$htName := coalesce .HomeTeam.DisplayName .HomeTeam.Name}}
             {{$atName := coalesce .AwayTeam.DisplayName .AwayTeam.Name}}
@@ -190,9 +190,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 {{end}}
             </th>
             {{end}}
-            {{if .ExtraCols}}
-            <th class="col-total" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>
-            {{end}}
+            <th class="col-pts" style="font-size:0.75rem;color:var(--muted-d)">Body</th>
             <th class="col-match" title="Tipy">
                 <div class="match-header" style="font-size:0.78rem">Tipy</div>
             </th>
@@ -201,7 +199,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         <tr class="results-row">
             <td class="col-place" style="color:var(--muted-d)"></td>
             <td class="col-user" style="font-size:0.75rem;color:var(--muted-d)">Výsledky</td>
-            <td class="col-pts"></td>
+            {{if .ExtraCols}}<td class="col-total" style="border-left:2px solid #dee2e6"></td>{{end}}
             {{range .Matches}}
             <td class="cell-result{{if or $.User.IsAdmin $.User.IsOwner}} result-editable{{end}}"
                 {{if or $.User.IsAdmin $.User.IsOwner}}
@@ -226,9 +224,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 {{end}}
             </td>
             {{end}}
-            {{if .ExtraCols}}
-            <td class="col-total" style="border-left:2px solid #dee2e6"></td>
-            {{end}}
+            <td class="col-pts"></td>
             <td></td>
         </tr>
     </thead>
@@ -246,8 +242,24 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                   {{if not $isMe}}data-vs-url="/stats/{{$.SelectedCompetitionID}}/vs/{{$row.User.ID}}"
                   data-stats-url="/stats/{{$.SelectedCompetitionID}}/extended?user_id={{$row.User.ID}}"{{end}}>{{if $isMe}}<span style="display:inline-block;background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(16,185,129,.35);border-radius:20px;padding:.1rem .55rem;font-size:.78rem;font-weight:700">{{$row.User.Username}}</span>{{else}}{{$row.User.Username}}{{end}}</span>
             {{if ge $row.Streak 3}}<span title="{{$row.Streak}}× přesný tip v řadě" style="font-size:.7rem;margin-left:.25rem;cursor:default">🔥{{$row.Streak}}</span>{{end}}
+            {{if and $.User.IsAdmin (not $isMe)}}
+            <button class="user-remove-tips-btn"
+                    data-user-id="{{$row.User.ID}}"
+                    data-username="{{$row.User.Username}}"
+                    data-comp-id="{{$.SelectedCompetitionID}}"
+                    title="Odebrat uživatele ze soutěže (smazat všechny tipy)"
+                    style="background:none;border:none;color:var(--red,#ef4444);cursor:pointer;font-size:0.7rem;padding:0 2px;line-height:1;opacity:.4;margin-left:3px"
+                    onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4">🗑</button>
+            {{end}}
         </td>
-        <td class="col-pts"><strong>{{$row.Total}}</strong></td>
+        {{if $.ExtraCols}}
+        <td class="col-total" style="border-left:2px solid #dee2e6;text-align:center">
+            <strong>{{$row.GrandTotal}}</strong>
+            {{if gt $row.Extra 0}}
+            <br><span style="font-size:0.7rem;color:#888">(+{{$row.Extra}} 🎯)</span>
+            {{end}}
+        </td>
+        {{end}}
         {{range $.Matches}}
         {{$tip := index (index $.TipsByUser $row.User.ID) .ID}}
         {{$started := index $.StartedMatchIDs .ID}}
@@ -291,7 +303,10 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             data-ans="{{$ansText}}"
             {{end}}>
             {{if and $ansText $extraVisible}}
-                <span style="color:#94a3b8">{{truncate $ansText 12}}</span>{{if and $isLast (not (isNilInt $pts))}} <strong style="color:#4ade80">{{intVal $pts}}</strong>{{end}}
+                <span style="color:#94a3b8;display:block;overflow:hidden;text-overflow:ellipsis">{{truncate $ansText 12}}</span>
+                {{if not (isNilInt $pts)}}
+                <strong style="font-size:.8rem;color:{{if gt (intVal $pts) 0}}#4ade80{{else}}#6b7280{{end}}">{{intVal $pts}} b</strong>
+                {{end}}
             {{else if $ansText}}
                 <span class="tip-hidden" title="Skryto do odhalení" style="color:var(--accent)">✓</span>
             {{else}}
@@ -299,15 +314,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             {{end}}
         </td>
         {{end}}
-        {{/* ── Grand total (tipy + extra) ── */}}
-        {{if $.ExtraCols}}
-        <td class="col-total" style="border-left:2px solid #dee2e6;text-align:center">
-            <strong>{{$row.GrandTotal}}</strong>
-            {{if gt $row.Extra 0}}
-            <br><span style="font-size:0.7rem;color:#888">(+{{$row.Extra}} 🎯)</span>
-            {{end}}
-        </td>
-        {{end}}
+        <td class="col-pts" style="text-align:center"><strong>{{$row.Total}}</strong></td>
         {{/* ── Tip ratio ── */}}
         <td class="col-match" style="font-size:0.82rem;text-align:center;white-space:nowrap">
             {{$row.TipRatio}}
@@ -473,6 +480,47 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    // ── Odebrat uživatele ze soutěže (admin) ──
+    table.querySelectorAll('.user-remove-tips-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var userId  = btn.dataset.userId;
+            var username = btn.dataset.username;
+            var compId  = btn.dataset.compId;
+            var overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center';
+            overlay.innerHTML = '<div style="background:var(--bg2);border:2px solid #ef4444;border-radius:12px;padding:1.3rem 1.5rem;max-width:340px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,0.6)">'
+                + '<div style="font-weight:700;color:#ef4444;margin-bottom:.5rem;font-size:1rem">🗑 Odebrat ze soutěže</div>'
+                + '<div style="font-size:.9rem;color:var(--text-d);margin-bottom:.4rem">Uživatel: <strong>' + username + '</strong></div>'
+                + '<div style="font-size:.82rem;color:var(--muted-d);margin-bottom:.75rem">Smažou se <strong style="color:#ef4444">všechny tipy</strong> tohoto uživatele v aktuální soutěži. Uživatel zmizí ze žebříčku.</div>'
+                + '<div style="font-size:.82rem;color:var(--muted-d);margin-bottom:.4rem">Pro potvrzení napiš <code style="background:var(--bg3);padding:0 4px;border-radius:3px">SMAZAT</code>:</div>'
+                + '<input type="text" id="_ur_inp" autocomplete="off" placeholder="SMAZAT" style="width:100%;box-sizing:border-box;background:var(--bg3);color:var(--text-d);border:1px solid #ef4444;border-radius:6px;padding:.4rem .65rem;font-size:.95rem;margin-bottom:.75rem">'
+                + '<div style="display:flex;gap:.5rem;justify-content:flex-end">'
+                + '<button id="_ur_cancel" style="padding:.4rem 1rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);cursor:pointer;font-size:.88rem">Zrušit</button>'
+                + '<button id="_ur_ok" style="padding:.4rem 1rem;border-radius:6px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:.88rem">Odebrat ze soutěže</button>'
+                + '</div></div>';
+            document.body.appendChild(overlay);
+            var inp = overlay.querySelector('#_ur_inp'); inp.focus();
+            function doClose() { document.body.removeChild(overlay); }
+            function doConfirm() {
+                if (inp.value.trim().toUpperCase() !== 'SMAZAT') {
+                    inp.style.borderColor='#f59e0b'; inp.value=''; inp.placeholder='Napiš přesně: SMAZAT'; inp.focus(); return;
+                }
+                doClose();
+                fetch('/admin/competitions/' + compId + '/users/' + userId + '/remove-tips', {
+                    method: 'POST', headers: {'X-CSRF-Token': _csrfToken}
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) { if (data.ok) location.reload(); else alert('Chyba: ' + (data.error || 'neznámá')); })
+                .catch(function() { alert('Chyba spojení.'); });
+            }
+            overlay.querySelector('#_ur_ok').addEventListener('click', doConfirm);
+            overlay.querySelector('#_ur_cancel').addEventListener('click', doClose);
+            inp.addEventListener('keydown', function(e) { if (e.key==='Enter') doConfirm(); if (e.key==='Escape') doClose(); });
+            overlay.addEventListener('click', function(e) { if (e.target===overlay) doClose(); });
+        });
+    });
+
     // ── Ruční notifikace (admin) ──
     table.querySelectorAll('.match-notify-btn').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
@@ -522,15 +570,42 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // ── Match delete (admin) ──
+    function confirmMatchDelete(label, onConfirm) {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center';
+        overlay.innerHTML = '<div style="background:var(--bg2);border:2px solid #ef4444;border-radius:12px;padding:1.3rem 1.5rem;max-width:340px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,0.6)">'
+            + '<div style="font-weight:700;color:#ef4444;margin-bottom:0.5rem;font-size:1rem">🗑 Smazat zápas</div>'
+            + '<div style="font-size:0.9rem;color:var(--text-d);margin-bottom:0.4rem"><strong>' + label + '</strong></div>'
+            + '<div style="font-size:0.82rem;color:var(--muted-d);margin-bottom:0.75rem">Tato akce je nevratná — smaže se zápas i <strong style="color:#ef4444">všechny tipy</strong> k němu.</div>'
+            + '<div style="font-size:0.82rem;color:var(--muted-d);margin-bottom:0.4rem">Pro potvrzení napiš <code style="background:var(--bg3);padding:0 4px;border-radius:3px">SMAZAT</code>:</div>'
+            + '<input type="text" id="_md_inp" autocomplete="off" placeholder="SMAZAT" style="width:100%;box-sizing:border-box;background:var(--bg3);color:var(--text-d);border:1px solid #ef4444;border-radius:6px;padding:0.4rem 0.65rem;font-size:0.95rem;margin-bottom:0.75rem">'
+            + '<div style="display:flex;gap:0.5rem;justify-content:flex-end">'
+            + '<button id="_md_cancel" style="padding:0.4rem 1rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);cursor:pointer;font-size:0.88rem">Zrušit</button>'
+            + '<button id="_md_ok" style="padding:0.4rem 1rem;border-radius:6px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:0.88rem">Smazat zápas</button>'
+            + '</div></div>';
+        document.body.appendChild(overlay);
+        var inp = overlay.querySelector('#_md_inp'); inp.focus();
+        function doClose() { document.body.removeChild(overlay); }
+        function doConfirm() {
+            if (inp.value.trim().toUpperCase() === 'SMAZAT') { doClose(); onConfirm(); }
+            else { inp.style.borderColor='#f59e0b'; inp.value=''; inp.placeholder='Napiš přesně: SMAZAT'; inp.focus(); }
+        }
+        overlay.querySelector('#_md_ok').addEventListener('click', doConfirm);
+        overlay.querySelector('#_md_cancel').addEventListener('click', doClose);
+        inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') doConfirm(); if (e.key === 'Escape') doClose(); });
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) doClose(); });
+    }
+
     table.querySelectorAll('.match-delete-btn').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             var matchId = btn.dataset.matchId, label = btn.dataset.label;
-            if (!confirm('Zrušit zápas: ' + label + '?\n\nSmaže se zápas i všechny tipy k němu.')) return;
-            fetch('/admin/matches/' + matchId + '/delete', { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} })
-                .then(function(r) { return r.json(); })
-                .then(function(data) { if (data.ok) location.reload(); else alert('Chyba: ' + (data.error || 'neznámá')); })
-                .catch(function() { alert('Chyba spojení.'); });
+            confirmMatchDelete(label, function() {
+                fetch('/admin/matches/' + matchId + '/delete', { method: 'POST', headers: {'X-CSRF-Token': _csrfToken} })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) { if (data.ok) location.reload(); else alert('Chyba: ' + (data.error || 'neznámá')); })
+                    .catch(function() { alert('Chyba spojení.'); });
+            });
         });
     });
 

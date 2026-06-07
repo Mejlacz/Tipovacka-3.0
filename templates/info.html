@@ -1,0 +1,158 @@
+<div class="page-header">
+    <h1>ℹ️ Jak funguje Tipovačka</h1>
+</div>
+
+<div style="max-width:700px;line-height:1.75">
+
+<style>
+.info-section {
+    margin-bottom: 2rem;
+}
+.info-section h2 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-d);
+    margin: 0 0 .6rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    border-bottom: 1px solid var(--border-d);
+    padding-bottom: .4rem;
+}
+.info-section p, .info-section li {
+    font-size: .9rem;
+    color: var(--muted-d);
+    margin: .3rem 0;
+}
+.info-section ul {
+    padding-left: 1.3rem;
+    margin: .4rem 0;
+}
+.info-section a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+}
+.info-section a:hover { text-decoration: underline; }
+.info-badge {
+    display: inline-block;
+    background: rgba(16,185,129,.15);
+    color: #34d399;
+    border: 1px solid rgba(16,185,129,.3);
+    border-radius: 6px;
+    font-size: .75rem;
+    font-weight: 700;
+    padding: .1rem .45rem;
+    vertical-align: middle;
+}
+.info-tip {
+    background: var(--bg2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: .55rem .9rem;
+    margin: .6rem 0;
+    font-size: .88rem;
+    color: var(--text-d);
+}
+</style>
+
+<div class="info-section">
+    <h2>🎯 Tipování zápasů</h2>
+    <p>Na stránce <a href="/">Tipovat</a> vidíš všechna otevřená utkání. Zadej předpokládané skóre (domácí : hosté) a klikni ➤.</p>
+    <ul>
+        <li>Tip lze upravit kdykoli <strong>do začátku zápasu</strong> — pak se uzamkne.</li>
+        <li>Tlačítko <strong>💾 Uložit vše</strong> odešle všechny vyplněné tipy najednou.</li>
+        <li>Klávesy: <kbd>Enter</kbd> přeskočí na druhé pole, druhý <kbd>Enter</kbd> tip uloží.</li>
+    </ul>
+    <div class="info-tip">💡 Přesný výsledek = 3 body · Správný vítěz/remíza = 1 bod · Špatně = 0 bodů</div>
+</div>
+
+<div class="info-section">
+    <h2>⭐ Extra otázky</h2>
+    <p>Kromě zápasů bývají k dispozici <a href="/extra">Extra otázky</a> — např. kdo dá nejvíc gólů nebo kdo postoupí. Odpovídej do jejich uzávěrky, po té se zamknou.</p>
+    <ul>
+        <li>Tlačítko <strong>🎯 Tipovat Extra otázky</strong> se zobrazí na hlavní stránce nebo u soutěže — pokud je deadline ještě aktivní.</li>
+        <li>Výsledky extra otázek jsou skryté, dokud je admin neodhalí.</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>🏆 Žebříček</h2>
+    <p>Na <a href="/leaderboard">Žebříčku</a> vidíš pořadí všech tipérů v aktuální soutěži.</p>
+    <ul>
+        <li>Klikni na jméno hráče → zobrazí se jeho statistiky a možnost H2H srovnání.</li>
+        <li>Šipky ↑↓ u pořadí ukazují pohyb oproti předchozímu kolu.</li>
+        <li>🔥 = série přesných tipů v řadě.</li>
+        <li>Tipy před začátkem zápasu jsou skryté (vidíš jen ✓ — tip existuje, ale neznáš skóre).</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>📊 Statistiky</h2>
+    <p>Na stránce <a href="/stats">Statistiky</a> najdeš detailní přehled své výkonnosti — přesnost, vývoj bodů po kolech, srovnání s ostatními.</p>
+    <ul>
+        <li><strong>H2H srovnání</strong> — porovnej se s konkrétním hráčem zápas po zápase.</li>
+        <li><strong>Rozšířené statistiky</strong> — grafy, výkonnost per kolo, série.</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>🏅 Achievementy</h2>
+    <p>Na stránce <a href="/achievements">Achievementy</a> sbíráš odznaky za různé výkony v každé soutěži zvlášť.</p>
+    <ul>
+        <li>🎯 Střelec, 🔮 Věštec, 💎 Perfekcionista, 🥇 Šampion a další…</li>
+        <li>Pohled <strong>🌍 Všechny soutěže</strong> ukáže celkový součet přes všechny soutěže.</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>📁 Archiv</h2>
+    <p>V <a href="/archive">Archivu</a> najdeš uzavřené soutěže — výsledky, žebříček a všechny tipy.</p>
+</div>
+
+<div class="info-section">
+    <h2>💬 Chat</h2>
+    <p>Chceš si popovídat s ostatními tipéry? Otevři <a href="/chat">Chat</a> — zprávy vidí všichni přihlášení uživatelé v reálném čase.</p>
+    <ul>
+        <li><kbd>Enter</kbd> odešle zprávu · <kbd>Shift+Enter</kbd> přidá nový řádek.</li>
+    </ul>
+</div>
+
+<div class="info-section">
+    <h2>🎨 Vzhled — témata a pozadí</h2>
+    <p>Tipovačka má <strong>8 barevných témat</strong>. Změníš je kliknutím na 🎨 v pravém horním rohu — výběr se uloží do prohlížeče a platí jen pro tebe.</p>
+    <ul>
+        <li>🌑 <strong>Dark</strong> — výchozí tmavé</li>
+        <li>🌌 <strong>Midnight</strong> — hluboká fialová</li>
+        <li>🌊 <strong>Ocean</strong> — tmavý oceán, teal akcent</li>
+        <li>🌲 <strong>Forest</strong> — temný les, zelená</li>
+        <li>🌅 <strong>Sunset</strong> — teplá jantarová</li>
+        <li>⚡ <strong>Neon</strong> — kyberpunk, neonová záře</li>
+        <li>🏛️ <strong>Classic</strong> — retro červený styl</li>
+        <li>☀️ <strong>Light</strong> — čistý denní vzhled</li>
+    </ul>
+    <p>Chceš si to ještě víc přizpůsobit? Na stránce <a href="/profile/appearance">Vzhled</a> (nebo přes Profil → Vzhled) si můžeš nastavit:</p>
+    <ul>
+        <li><strong>Vlastní barvy</strong> — akcentová barva, pozadí, text, buňky v žebříčku, barvy bodů…</li>
+        <li><strong>Pozadí stránky</strong> — nahraj vlastní obrázek jako pozadí celé appky</li>
+        <li><strong>Vlastní CSS</strong> — pro pokročilé, úplná volnost ve stylování</li>
+    </ul>
+    <div class="info-tip">💡 Nastavení vzhledu je čistě osobní — ostatní uživatelé tvoje barvy nevidí.</div>
+</div>
+
+<div class="info-section">
+    <h2>👤 Profil</h2>
+    <p>Na stránce <a href="/profile">Profil</a> si můžeš změnit zobrazované jméno, e-mail nebo heslo.</p>
+</div>
+
+<div class="info-section">
+    <h2>📋 Pravidla</h2>
+    <p>Kompletní pravidla soutěže jsou na stránce <a href="/pravidla">Pravidla</a>.</p>
+</div>
+
+<div class="info-section">
+    <h2>✉️ Napište nám</h2>
+    <p>Narazili jste na chybu nebo máte nápad na vylepšení? Napište na stránce <a href="/feedback">Napište nám</a> — můžete přiložit i screenshot. Zpráva půjde přímo adminům.</p>
+</div>
+
+</div>

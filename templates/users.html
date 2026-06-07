@@ -63,6 +63,7 @@
     <h1>👥 Uživatelé</h1>
     <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
         <a href="/admin/users/new" class="btn btn-primary btn-sm">+ Přidat uživatele</a>
+        <a href="/admin/users/merge" class="btn btn-secondary btn-sm">🔀 Sloučit</a>
         <a href="/admin/users/import" class="btn btn-secondary btn-sm">⬆ Import</a>
         <a href="/admin/email" class="btn btn-secondary btn-sm">✉ Sestavit email</a>
         <a href="/admin/export/csv?type=users" class="btn btn-secondary btn-sm">⬇ CSV</a>
@@ -167,6 +168,8 @@
                 <button class="ubtn ubtn-inactive" title="Označit jako neaktivního">💤 Neaktivní</button>
             </form>
             {{end}}
+            <button class="ubtn ubtn-welcome" title="Nastavit heslo"
+                    onclick="openPwDialog({{.ID}}, '{{.Username}}')">🔑</button>
             <form style="display:inline" method="post" action="/admin/users/{{.ID}}/send-welcome">
                 <button class="ubtn ubtn-welcome" title="Odeslat welcome email">📧</button>
             </form>
@@ -305,8 +308,20 @@ function bulkAction(action) {
         inp.type = 'hidden'; inp.name = key; inp.value = val;
         form.appendChild(inp);
     });
+    var csrfInp = document.createElement('input');
+    csrfInp.type = 'hidden'; csrfInp.name = '_csrf';
+    csrfInp.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+    form.appendChild(csrfInp);
     document.body.appendChild(form);
     form.submit();
+}
+
+function openPwDialog(userId, username) {
+    document.getElementById('pw-username').textContent = username;
+    document.getElementById('pw-form').action = '/admin/users/' + userId + '/set-password';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-dialog').showModal();
+    setTimeout(function() { document.getElementById('pw-input').focus(); }, 50);
 }
 
 // Highlight pending tab badge if pending users exist
@@ -318,3 +333,22 @@ function bulkAction(action) {
     }
 })();
 </script>
+
+<dialog id="pw-dialog" style="background:var(--bg2);color:var(--text-d);border:1px solid var(--border-d);border-radius:10px;padding:1.5rem;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+    <form method="post" id="pw-form" action="">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        <div style="font-weight:700;font-size:1rem;margin-bottom:1rem">
+            🔑 Nastavit heslo pro <span id="pw-username" style="color:var(--accent,#3b82f6)"></span>
+        </div>
+        <div style="margin-bottom:1rem">
+            <label style="font-size:.85rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Nové heslo</label>
+            <input type="text" id="pw-input" name="new_password" required
+                   class="form-control" autocomplete="new-password"
+                   placeholder="Zadej nové heslo…" style="width:100%">
+        </div>
+        <div style="display:flex;gap:.5rem">
+            <button type="submit" class="btn btn-primary">Nastavit</button>
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('pw-dialog').close()">Zrušit</button>
+        </div>
+    </form>
+</dialog>

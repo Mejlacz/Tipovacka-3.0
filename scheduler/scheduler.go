@@ -190,7 +190,10 @@ func sendMatchNotifications(ctx context.Context, pool *pgxpool.Pool) {
 
 	for _, m := range matches {
 		// Zkontroluj jestli je teď správný čas odeslat upozornění pro tento zápas
-		matchDateLocal := m.MatchDate.In(loc)
+		// m.MatchDate is Prague wall-clock labeled as UTC (pgx v5 TIMESTAMP WITHOUT TIME ZONE).
+		// Rebuild as real Prague time so shouldNotifyNow compares Prague times correctly.
+		matchDateLocal := time.Date(m.MatchDate.Year(), m.MatchDate.Month(), m.MatchDate.Day(),
+			m.MatchDate.Hour(), m.MatchDate.Minute(), m.MatchDate.Second(), m.MatchDate.Nanosecond(), loc)
 		if !shouldNotifyNow(matchDateLocal, now) {
 			continue
 		}

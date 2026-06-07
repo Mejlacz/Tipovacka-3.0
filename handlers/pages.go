@@ -51,6 +51,20 @@ func getRules(ctx context.Context) string {
 }
 
 // GET /pravidla
+// GET /info — uživatelský manuál
+func InfoPage(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := RequireLogin(w, r)
+		if user == nil {
+			return
+		}
+		RenderTemplate(w, r, tmpl, "info.html", TemplateData{
+			"User":  user,
+			"Title": "Jak funguje Tipovačka",
+		})
+	}
+}
+
 func PravidlaPage(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := RequireLogin(w, r)

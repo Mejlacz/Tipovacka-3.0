@@ -38,6 +38,8 @@
     <a href="/admin/teams"       class="btn btn-secondary">Týmy</a>
     <a href="/admin/roster"      class="btn btn-secondary">🗂️ Roster</a>
     <a href="/admin/users"       class="btn btn-secondary">Uživatelé</a>
+    <a href="/admin/users/merge" class="btn btn-secondary">🔀 Sloučit</a>
+    <a href="/admin/email"       class="btn btn-secondary">📧 Email</a>
     <a href="/admin/unscored"    class="btn btn-secondary">Bez výsledku</a>
     <a href="/admin/results"     class="btn btn-secondary">📊 Výsledky</a>
     <a href="/admin/audit"       class="btn btn-secondary">Audit log</a>
@@ -47,6 +49,7 @@
     {{if .User.IsOwner}}<a href="/admin/history" class="btn btn-secondary">Historie</a>{{end}}
     <a href="/admin/manual"           class="btn btn-secondary">Manuál</a>
     <a href="/admin/health-dashboard" class="btn btn-secondary">🩺 Health</a>
+    <a href="/admin/time"             class="btn btn-secondary">🕐 Čas</a>
 </div>
 
 {{if .Flash}}
@@ -86,10 +89,10 @@
                 </button>
             </form>
             {{if not .Comp.IsActive}}
-            <form method="post" action="/admin/competitions/{{.Comp.ID}}/delete"
-                  onsubmit="return confirm('Smazat soutěž {{.Comp.Name}}?')">
-                <button class="btn btn-sm btn-danger" style="font-size:.78rem;padding:.2rem .5rem">Smazat</button>
-            </form>
+            <button type="button" class="btn btn-sm btn-danger comp-delete-btn"
+                    data-comp-id="{{.Comp.ID}}"
+                    data-comp-name="{{.Comp.Name}}"
+                    style="font-size:.78rem;padding:.2rem .5rem">Smazat</button>
             {{end}}
         </div>
     </div>
@@ -98,3 +101,48 @@
 {{else}}
 <p class="empty">Žádné soutěže.</p>
 {{end}}
+
+<script>
+var _dashCsrf = '{{.CSRFToken}}';
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.comp-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var compId   = btn.dataset.compId;
+            var compName = btn.dataset.compName;
+            var overlay  = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center';
+            overlay.innerHTML = '<div style="background:var(--bg2);border:2px solid #ef4444;border-radius:12px;padding:1.3rem 1.5rem;max-width:360px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,0.6)">'
+                + '<div style="font-weight:700;color:#ef4444;margin-bottom:.5rem;font-size:1rem">🗑 Smazat soutěž</div>'
+                + '<div style="font-size:.9rem;color:var(--text-d);margin-bottom:.4rem"><strong>' + compName + '</strong></div>'
+                + '<div style="font-size:.82rem;color:var(--muted-d);margin-bottom:.75rem">Tato akce je nevratná — smaže se soutěž včetně <strong style="color:#ef4444">všech kol, zápasů a tipů</strong>.</div>'
+                + '<div style="font-size:.82rem;color:var(--muted-d);margin-bottom:.4rem">Pro potvrzení napiš <code style="background:var(--bg3);padding:0 4px;border-radius:3px">SMAZAT</code>:</div>'
+                + '<input type="text" id="_cd_inp" autocomplete="off" placeholder="SMAZAT" style="width:100%;box-sizing:border-box;background:var(--bg3);color:var(--text-d);border:1px solid #ef4444;border-radius:6px;padding:.4rem .65rem;font-size:.95rem;margin-bottom:.75rem">'
+                + '<div style="display:flex;gap:.5rem;justify-content:flex-end">'
+                + '<button id="_cd_cancel" style="padding:.4rem 1rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);cursor:pointer;font-size:.88rem">Zrušit</button>'
+                + '<button id="_cd_ok" style="padding:.4rem 1rem;border-radius:6px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:.88rem">Smazat soutěž</button>'
+                + '</div></div>';
+            document.body.appendChild(overlay);
+            var inp = overlay.querySelector('#_cd_inp'); inp.focus();
+            function doClose() { document.body.removeChild(overlay); }
+            function doConfirm() {
+                if (inp.value.trim().toUpperCase() !== 'SMAZAT') {
+                    inp.style.borderColor = '#f59e0b'; inp.value = ''; inp.placeholder = 'Napiš přesně: SMAZAT'; inp.focus(); return;
+                }
+                doClose();
+                var form = document.createElement('form');
+                form.method = 'post';
+                form.action = '/admin/competitions/' + compId + '/delete';
+                var csrf = document.createElement('input');
+                csrf.type = 'hidden'; csrf.name = '_csrf'; csrf.value = _dashCsrf;
+                form.appendChild(csrf);
+                document.body.appendChild(form);
+                form.submit();
+            }
+            overlay.querySelector('#_cd_ok').addEventListener('click', doConfirm);
+            overlay.querySelector('#_cd_cancel').addEventListener('click', doClose);
+            inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') doConfirm(); if (e.key === 'Escape') doClose(); });
+            overlay.addEventListener('click', function(e) { if (e.target === overlay) doClose(); });
+        });
+    });
+});
+</script>

@@ -23,6 +23,83 @@ var UNDOABLE_ACTIONS = map[string]bool{
 	"admin_set_tip": true,
 }
 
+// historyCategory vrátí kategorii pro danou akci.
+func historyCategory(action string) string {
+	switch action {
+	case "tip_save", "extra_save", "admin_set_tip", "admin_set_extra_answer":
+		return "tipy"
+	case "match_score", "match_score_clear", "match_create", "match_add_quick",
+		"match_edit", "match_delete", "match_date_change", "auto_fetch_results", "api_update_results":
+		return "zapasy"
+	case "round_create", "round_edit", "round_delete", "round_toggle":
+		return "kola"
+	case "user_create", "user_role", "user_delete", "user_approve", "user_block",
+		"user_unblock", "user_toggle_admin", "user_toggle_owner", "user_inactive",
+		"user_import", "merge_user":
+		return "uzivatele"
+	case "team_merge", "team_delete":
+		return "tymy"
+	default:
+		return "system"
+	}
+}
+
+var histCategoryLabel = map[string]string{
+	"tipy":      "🎯 Tipy",
+	"zapasy":    "⚽ Zápasy",
+	"kola":      "📋 Kola",
+	"uzivatele": "👤 Uživatelé",
+	"tymy":      "🛡 Týmy",
+	"system":    "⚙️ Systém",
+}
+
+var histActionIcon = map[string]string{
+	"tip_save":               "🎯",
+	"extra_save":             "💬",
+	"admin_set_tip":          "🛠️",
+	"admin_set_extra_answer": "🛠️",
+	"match_score":            "⚽",
+	"match_score_clear":      "🧹",
+	"match_create":           "➕",
+	"match_add_quick":        "➕",
+	"match_edit":             "✏️",
+	"match_delete":           "🗑️",
+	"match_date_change":      "🗓️",
+	"auto_fetch_results":     "🤖",
+	"api_update_results":     "🔄",
+	"round_create":           "📋",
+	"round_edit":             "✏️",
+	"round_delete":           "🗑️",
+	"round_toggle":           "🔀",
+	"user_create":            "👤",
+	"user_role":              "🔑",
+	"user_delete":            "🗑️",
+	"user_approve":           "✅",
+	"user_block":             "🚫",
+	"user_unblock":           "✅",
+	"merge_user":             "🔀",
+	"user_import":            "📥",
+	"team_merge":             "🔀",
+	"team_delete":            "🗑️",
+	"undo":                   "↩️",
+	"ocr_import":             "🤖",
+	"tip_import":             "📥",
+	"backup":                 "💾",
+	"extra_import":           "📥",
+	"tz_override_set":        "🕐",
+	"tz_override_clear":      "🕐",
+	"scheduler":              "⏰",
+}
+
+// histCatActions mapuje kategorii → slice akcí (sdíleno mezi History a AuditLog).
+var histCatActions = map[string][]string{
+	"tipy":      {"tip_save", "extra_save", "admin_set_tip", "admin_set_extra_answer"},
+	"zapasy":    {"match_score", "match_score_clear", "match_create", "match_add_quick", "match_edit", "match_delete", "match_date_change", "auto_fetch_results", "api_update_results"},
+	"kola":      {"round_create", "round_edit", "round_delete", "round_toggle"},
+	"uzivatele": {"user_create", "user_role", "user_delete", "user_approve", "user_block", "user_unblock", "user_toggle_admin", "user_toggle_owner", "user_inactive", "user_import", "merge_user"},
+	"tymy":      {"team_merge", "team_delete"},
+}
+
 // GET /admin/history
 func AdminHistory(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -36,157 +113,124 @@ func AdminHistory(tmpl *template.Template) http.HandlerFunc {
 		}
 		ctx := context.Background()
 
-		// Load last 300 audit log entries
-		auditRows, _ := db.Pool.Query(ctx,
-			`SELECT id, timestamp, admin_id, admin_username, action, entity_type, entity_id,
-			        description, old_value, new_value, undone
-			   FROM audit_log ORDER BY id DESC LIMIT 300`)
-		var auditEntries []*models.AuditLog
-		for auditRows.Next() {
-			e := &models.AuditLog{}
-			_ = auditRows.Scan(&e.ID, &e.Timestamp, &e.AdminID, &e.AdminUsername, &e.Action,
-				&e.EntityType, &e.EntityID, &e.Description, &e.OldValue, &e.NewValue, &e.Undone)
-			auditEntries = append(auditEntries, e)
+		const perPage = 100
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if page < 1 {
+			page = 1
 		}
-		auditRows.Close()
+		cat := r.URL.Query().Get("cat") // "", "tipy", "zapasy", "kola", "uzivatele", "tymy", "system"
 
-		// Collect tip IDs that already have an audit entry (avoid duplicates)
-		loggedTipIDs := map[int]bool{}
-		tipIDRows, _ := db.Pool.Query(ctx,
-			`SELECT entity_id FROM audit_log WHERE action IN ('tip_save','admin_set_tip') AND entity_id IS NOT NULL`)
-		for tipIDRows.Next() {
-			var tid int
-			_ = tipIDRows.Scan(&tid)
-			loggedTipIDs[tid] = true
+		// ── Počty per kategorie (z audit_log) ──────────────────────────────
+		type CatCount struct {
+			Cat   string
+			Label string
+			Count int
 		}
-		tipIDRows.Close()
-
-		// Fallback: old tips from Tip table without audit record
-		type Event struct {
-			TS   *time.Time
-			Kind string // "tip" or "admin"
-			User string
-			Icon string
-			Text string
-			Sub  string
-			Pts  *int
+		catRows, _ := db.Pool.Query(ctx, `SELECT action, COUNT(*) FROM audit_log GROUP BY action`)
+		rawCounts := map[string]int{}
+		for catRows.Next() {
+			var act string
+			var cnt int
+			_ = catRows.Scan(&act, &cnt)
+			rawCounts[act] += cnt
 		}
-
-		var events []Event
-
-		tipRows, _ := db.Pool.Query(ctx,
-			`SELECT t.id, t.created_at, t.points,
-			        u.username,
-			        hm.name AS home_name, am.name AS away_name,
-			        ro.name AS round_name
-			   FROM tips t
-			   JOIN users u ON u.id = t.user_id
-			   JOIN matches m ON m.id = t.match_id
-			   JOIN teams hm ON hm.id = m.home_team_id
-			   JOIN teams am ON am.id = m.away_team_id
-			   JOIN rounds ro ON ro.id = m.round_id
-			   ORDER BY t.created_at DESC LIMIT 200`)
-		for tipRows.Next() {
-			var tid int
-			var ts *time.Time
-			var pts *int
-			var uname, home, away, roundName string
-			_ = tipRows.Scan(&tid, &ts, &pts, &uname, &home, &away, &roundName)
-			if loggedTipIDs[tid] {
-				continue
-			}
-			events = append(events, Event{
-				TS:   ts,
-				Kind: "tip",
-				User: uname,
-				Icon: "🎯",
-				Text: home + " vs " + away,
-				Sub:  roundName,
-				Pts:  pts,
-			})
+		catRows.Close()
+		catTotals := map[string]int{}
+		totalAll := 0
+		for act, cnt := range rawCounts {
+			c := historyCategory(act)
+			catTotals[c] += cnt
+			totalAll += cnt
 		}
-		tipRows.Close()
-
-		// Audit entries
-		userActions := map[string]bool{"tip_save": true, "extra_save": true}
-		actionIcons := map[string]string{
-			"match_score":          "⚽",
-			"round_create":         "📋",
-			"round_edit":           "✏️",
-			"round_delete":         "🗑️",
-			"match_create":         "➕",
-			"match_delete":         "🗑️",
-			"match_edit":           "✏️",
-			"user_create":          "👤",
-			"user_role":            "🔑",
-			"user_delete":          "🗑️",
-			"undo":                 "↩️",
-			"ocr_import":           "🤖",
-			"backup":               "💾",
-			"tip_import":           "📥",
-			"admin_set_tip":        "🛠️",
-			"admin_set_extra_answer": "🛠️",
-			"tip_save":             "🎯",
-			"extra_save":           "💬",
+		catOrder := []string{"tipy", "zapasy", "kola", "uzivatele", "tymy", "system"}
+		var catCounts []CatCount
+		for _, c := range catOrder {
+			catCounts = append(catCounts, CatCount{Cat: c, Label: histCategoryLabel[c], Count: catTotals[c]})
 		}
 
-		for _, e := range auditEntries {
-			icon := actionIcons[e.Action]
-			if icon == "" {
-				icon = "🔧"
-			}
-			kind := "admin"
-			if userActions[e.Action] {
-				kind = "tip"
-			}
-			uname := e.AdminUsername
-			if uname == "" {
-				uname = "system"
-			}
-			ts := e.Timestamp
-			events = append(events, Event{
-				TS:   ts,
-				Kind: kind,
-				User: uname,
-				Icon: icon,
-				Text: e.Description,
-				Sub:  e.Action,
-				Pts:  nil,
-			})
-		}
-
-		// Sort events by timestamp descending
-		for i := 0; i < len(events)-1; i++ {
-			for j := i + 1; j < len(events); j++ {
-				ti := events[i].TS
-				tj := events[j].TS
-				var a, b time.Time
-				if ti != nil {
-					a = *ti
+		// ── Filtr pro SQL ──────────────────────────────────────────────────
+		var whereSQL string
+		var queryArgs []interface{}
+		if cat != "" {
+			if actions, ok := histCatActions[cat]; ok {
+				whereSQL = ` WHERE action = ANY($1)`
+				queryArgs = append(queryArgs, actions)
+			} else if cat == "system" {
+				// system = vše co není v ostatních kategoriích
+				var allKnown []string
+				for _, acts := range histCatActions {
+					allKnown = append(allKnown, acts...)
 				}
-				if tj != nil {
-					b = *tj
-				}
-				if b.After(a) {
-					events[i], events[j] = events[j], events[i]
-				}
+				whereSQL = ` WHERE action != ALL($1)`
+				queryArgs = append(queryArgs, allKnown)
 			}
-		}
-		if len(events) > 200 {
-			events = events[:200]
 		}
 
-		// Convert timestamps to Prague time
-		for i := range events {
-			if events[i].TS != nil {
-				prg := events[i].TS.In(pragueLocation)
-				events[i].TS = &prg
-			}
+		// ── Celkový počet pro stránkování ──────────────────────────────────
+		countQuery := `SELECT COUNT(*) FROM audit_log` + whereSQL
+		var totalCount int
+		if len(queryArgs) > 0 {
+			_ = db.Pool.QueryRow(ctx, countQuery, queryArgs...).Scan(&totalCount)
+		} else {
+			_ = db.Pool.QueryRow(ctx, countQuery).Scan(&totalCount)
 		}
+		totalPages := (totalCount + perPage - 1) / perPage
+		if totalPages < 1 {
+			totalPages = 1
+		}
+		offset := (page - 1) * perPage
+
+		// ── Záznamy ────────────────────────────────────────────────────────
+		type HistEntry struct {
+			ID          int
+			TS          *time.Time
+			User        string
+			Action      string
+			Icon        string
+			Category    string
+			CatLabel    string
+			Description string
+			OldValue    *string
+			NewValue    *string
+			Undone      bool
+		}
+
+		mainQuery := `SELECT id, timestamp, admin_username, action, description, old_value, new_value, undone
+		               FROM audit_log` + whereSQL + ` ORDER BY id DESC LIMIT $` +
+			strconv.Itoa(len(queryArgs)+1) + ` OFFSET $` + strconv.Itoa(len(queryArgs)+2)
+		queryArgs = append(queryArgs, perPage, offset)
+
+		rows, _ := db.Pool.Query(ctx, mainQuery, queryArgs...)
+		var entries []HistEntry
+		for rows.Next() {
+			var e HistEntry
+			_ = rows.Scan(&e.ID, &e.TS, &e.User, &e.Action, &e.Description, &e.OldValue, &e.NewValue, &e.Undone)
+			if e.User == "" {
+				e.User = "system"
+			}
+			e.Icon = histActionIcon[e.Action]
+			if e.Icon == "" {
+				e.Icon = "🔧"
+			}
+			e.Category = historyCategory(e.Action)
+			e.CatLabel = histCategoryLabel[e.Category]
+			if e.TS != nil {
+				prg := e.TS.In(pragueLocation)
+				e.TS = &prg
+			}
+			entries = append(entries, e)
+		}
+		rows.Close()
 
 		RenderTemplate(w, r, tmpl, "history.html", TemplateData{
-			"User":   admin,
-			"Events": events,
+			"User":        admin,
+			"Entries":     entries,
+			"CatCounts":   catCounts,
+			"TotalAll":    totalAll,
+			"SelectedCat": cat,
+			"Page":        page,
+			"TotalPages":  totalPages,
+			"TotalCount":  totalCount,
 		})
 	}
 }
@@ -205,28 +249,90 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		if page < 1 {
 			page = 1
 		}
-		offset := (page - 1) * perPage
+		cat := r.URL.Query().Get("cat")
 
-		// Non-Owner admins nevidí přesné tipy uživatelů
-		whereClause := ""
-		if !admin.IsOwner {
-			whereClause = ` WHERE action NOT IN ('tip_save','extra_save')`
+		// ── Počty per kategorie ────────────────────────────────────────────
+		type CatCount struct {
+			Cat   string
+			Label string
+			Count int
+		}
+		catRows, _ := db.Pool.Query(ctx, `SELECT action, COUNT(*) FROM audit_log GROUP BY action`)
+		rawCounts := map[string]int{}
+		for catRows.Next() {
+			var act string
+			var cnt int
+			_ = catRows.Scan(&act, &cnt)
+			rawCounts[act] += cnt
+		}
+		catRows.Close()
+		catTotals := map[string]int{}
+		totalAll := 0
+		for act, cnt := range rawCounts {
+			c := historyCategory(act)
+			catTotals[c] += cnt
+			totalAll += cnt
+		}
+		catOrder := []string{"tipy", "zapasy", "kola", "uzivatele", "tymy", "system"}
+		var catCounts []CatCount
+		for _, c := range catOrder {
+			catCounts = append(catCounts, CatCount{Cat: c, Label: histCategoryLabel[c], Count: catTotals[c]})
 		}
 
-		// Celkový počet záznamů pro stránkování
+		// ── WHERE clause: role + kategorie ────────────────────────────────
+		var conditions []string
+		var queryArgs []interface{}
+
+		// Non-Owner admins nevidí přesné tipy uživatelů
+		if !admin.IsOwner {
+			conditions = append(conditions, `action NOT IN ('tip_save','extra_save')`)
+		}
+
+		if cat != "" {
+			if actions, ok := histCatActions[cat]; ok {
+				queryArgs = append(queryArgs, actions)
+				conditions = append(conditions, `action = ANY($`+strconv.Itoa(len(queryArgs))+`)`)
+			} else if cat == "system" {
+				var allKnown []string
+				for _, acts := range histCatActions {
+					allKnown = append(allKnown, acts...)
+				}
+				queryArgs = append(queryArgs, allKnown)
+				conditions = append(conditions, `action != ALL($`+strconv.Itoa(len(queryArgs))+`)`)
+			}
+		}
+
+		whereClause := ""
+		for i, c := range conditions {
+			if i == 0 {
+				whereClause = " WHERE " + c
+			} else {
+				whereClause += " AND " + c
+			}
+		}
+
+		// Celkový počet pro stránkování
 		var totalCount int
-		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM audit_log`+whereClause).Scan(&totalCount)
+		countArgs := make([]interface{}, len(queryArgs))
+		copy(countArgs, queryArgs)
+		_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM audit_log`+whereClause, countArgs...).Scan(&totalCount)
 		totalPages := (totalCount + perPage - 1) / perPage
 		if totalPages < 1 {
 			totalPages = 1
 		}
+		offset := (page - 1) * perPage
 
+		// Hlavní dotaz
+		mainArgs := make([]interface{}, len(queryArgs))
+		copy(mainArgs, queryArgs)
+		mainArgs = append(mainArgs, perPage, offset)
 		auditQuery := `SELECT id, timestamp, admin_id, admin_username, action, entity_type, entity_id,
 			        description, old_value, new_value, undone
 			   FROM audit_log` + whereClause +
-			` ORDER BY id DESC LIMIT $1 OFFSET $2`
+			` ORDER BY id DESC LIMIT $` + strconv.Itoa(len(mainArgs)-1) +
+			` OFFSET $` + strconv.Itoa(len(mainArgs))
 
-		rows, _ := db.Pool.Query(ctx, auditQuery, perPage, offset)
+		rows, _ := db.Pool.Query(ctx, auditQuery, mainArgs...)
 		var entries []*models.AuditLog
 		for rows.Next() {
 			e := &models.AuditLog{}
@@ -261,6 +367,9 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 			"Page":            page,
 			"TotalPages":      totalPages,
 			"TotalCount":      totalCount,
+			"TotalAll":        totalAll,
+			"CatCounts":       catCounts,
+			"SelectedCat":     cat,
 		})
 	}
 }

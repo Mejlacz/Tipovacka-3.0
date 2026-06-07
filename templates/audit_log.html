@@ -7,6 +7,18 @@
 <div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">{{index .Flash "msg"}}</div>
 {{end}}
 
+{{/* ── Kategorie tabs ── */}}
+<div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem">
+    <a href="/admin/audit" style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .75rem;border-radius:20px;border:1px solid var(--border-d);background:{{if eq .SelectedCat ""}}var(--accent){{else}}var(--bg2){{end}};color:{{if eq .SelectedCat ""}}#fff{{else}}var(--muted-d){{end}};font-size:.8rem;font-weight:600;text-decoration:none;white-space:nowrap">
+        Vše <span style="font-size:.72rem;opacity:.75">({{.TotalAll}})</span>
+    </a>
+    {{range .CatCounts}}
+    <a href="/admin/audit?cat={{.Cat}}" style="display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .75rem;border-radius:20px;border:1px solid var(--border-d);background:{{if eq $.SelectedCat .Cat}}var(--accent){{else}}var(--bg2){{end}};color:{{if eq $.SelectedCat .Cat}}#fff{{else}}var(--muted-d){{end}};font-size:.8rem;font-weight:600;text-decoration:none;white-space:nowrap">
+        {{.Label}} <span style="font-size:.72rem;opacity:.75">({{.Count}})</span>
+    </a>
+    {{end}}
+</div>
+
 <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;flex-wrap:wrap">
     <input type="text" id="audit-search" placeholder="🔍 Filtrovat — admin, akce, popis…"
            oninput="filterAudit(this.value)"
@@ -59,7 +71,7 @@
 {{if gt .TotalPages 1}}
 <div style="display:flex;align-items:center;gap:.4rem;justify-content:center;margin-top:1rem;flex-wrap:wrap">
     {{if gt .Page 1}}
-    <a href="/admin/audit?page={{sub .Page 1}}" class="btn btn-sm btn-secondary">‹ Předchozí</a>
+    <a href="/admin/audit?cat={{.SelectedCat}}&page={{sub .Page 1}}" class="btn btn-sm btn-secondary">‹ Předchozí</a>
     {{end}}
     {{range paginate .Page .TotalPages}}
     {{if eq . -1}}
@@ -67,11 +79,11 @@
     {{else if eq . $.Page}}
     <span style="padding:.2rem .55rem;background:var(--accent,#6366f1);color:#fff;border-radius:5px;font-size:.82rem">{{.}}</span>
     {{else}}
-    <a href="/admin/audit?page={{.}}" class="btn btn-sm btn-secondary" style="font-size:.82rem;padding:.2rem .55rem">{{.}}</a>
+    <a href="/admin/audit?cat={{$.SelectedCat}}&page={{.}}" class="btn btn-sm btn-secondary" style="font-size:.82rem;padding:.2rem .55rem">{{.}}</a>
     {{end}}
     {{end}}
     {{if lt .Page .TotalPages}}
-    <a href="/admin/audit?page={{add .Page 1}}" class="btn btn-sm btn-secondary">Další ›</a>
+    <a href="/admin/audit?cat={{.SelectedCat}}&page={{add .Page 1}}" class="btn btn-sm btn-secondary">Další ›</a>
     {{end}}
     <span style="font-size:.78rem;color:var(--muted-d);margin-left:.4rem">strana {{.Page}} / {{.TotalPages}}</span>
 </div>

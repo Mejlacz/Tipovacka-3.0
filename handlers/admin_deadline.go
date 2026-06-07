@@ -30,7 +30,7 @@ func AdminDeadlineAlerts(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Pool.Query(ctx, `
 		SELECT m.id,
 		       ht.name || ' – ' || at.name,
-		       TO_CHAR(r.deadline AT TIME ZONE 'Europe/Prague', 'DD.MM HH24:MI'),
+		       TO_CHAR(r.deadline, 'DD.MM HH24:MI'),
 		       (SELECT COUNT(*) FROM users u
 		        WHERE COALESCE(u.is_approved,true)=true AND COALESCE(u.is_blocked,false)=false AND COALESCE(u.is_inactive,false)=false
 		          AND u.id NOT IN (SELECT user_id FROM tips WHERE match_id=m.id)) AS missing

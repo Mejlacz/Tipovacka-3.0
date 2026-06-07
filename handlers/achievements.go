@@ -44,6 +44,7 @@ var CompAchievements = []Achievement{
 	{ID: "c_rounds2", Icon: "👑👑", Name: "Sériový král", Desc: "Vyhrál alespoň 2 různá kola v soutěži.", Category: "speciální"},
 	{ID: "c_top3", Icon: "🥉", Name: "Medailista", Desc: "TOP 3 v soutěži (min. 5 účastníků s alespoň 1 tipem).", Category: "pořadí"},
 	{ID: "c_champion", Icon: "🥇", Name: "Šampion", Desc: "1. místo v uzavřené soutěži (min. 5 účastníků).", Category: "pořadí"},
+	{ID: "c_no_exact", Icon: "😅", Name: "Žádný přesný", Desc: "Odehrál alespoň 5 tipů v soutěži bez jediného přesného výsledku.", Category: "speciální"},
 }
 
 // userAchStats holds per-user computed data for achievement checking.
@@ -85,6 +86,7 @@ func checkCompAchievement(id string, s userAchStats) bool {
 	case "c_rounds2":   return s.RoundsWon >= 2
 	case "c_top3":      return s.Rank > 0 && s.Rank <= 3 && s.NumParticipants >= 5
 	case "c_champion":  return s.Rank == 1 && s.NumParticipants >= 5 && !s.CompIsActive
+	case "c_no_exact":  return s.Exact == 0 && s.FinishedTips >= 5
 	}
 	return false
 }
@@ -391,7 +393,7 @@ func AchievementsPage(tmpl *template.Template) http.HandlerFunc {
 		// LIMIT keeps old historical competitions out of the selector.
 		compRows, _ := db.Pool.Query(ctx,
 			`SELECT id, name, season, is_active, sport, sort_order FROM competitions
-			  ORDER BY sort_order NULLS LAST, id DESC LIMIT 10`)
+			  WHERE COALESCE(is_hidden,false)=false ORDER BY sort_order NULLS LAST, id DESC LIMIT 10`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}

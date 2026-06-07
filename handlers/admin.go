@@ -102,7 +102,7 @@ func AdminCompetitionsList(tmpl *template.Template) http.HandlerFunc {
 
 		ctx := context.Background()
 		rows, _ := db.Pool.Query(ctx,
-			`SELECT c.id, c.name, c.season, c.is_active, c.sport, c.sort_order,
+			`SELECT c.id, c.name, c.season, c.is_active, c.is_hidden, c.sport, c.sort_order,
 			        COUNT(DISTINCT r.id) AS rounds_count,
 			        COUNT(DISTINCT m.id) AS matches_count,
 			        COUNT(DISTINCT t.id) AS tips_count,
@@ -127,7 +127,7 @@ func AdminCompetitionsList(tmpl *template.Template) http.HandlerFunc {
 		for rows.Next() {
 			c := &models.Competition{}
 			var rc, mc, tc, tmc int
-			_ = rows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.Sport, &c.SortOrder,
+			_ = rows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.IsHidden, &c.Sport, &c.SortOrder,
 				&rc, &mc, &tc, &tmc)
 			compData = append(compData, cData{
 				Comp: c, SportLabel: getSportLabel(c.Sport),
@@ -196,8 +196,8 @@ func AdminCompetitionEditForm(tmpl *template.Template) http.HandlerFunc {
 		ctx := context.Background()
 		comp := &models.Competition{}
 		err := db.Pool.QueryRow(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order, COALESCE(fd_code,'') FROM competitions WHERE id = $1`, compID).
-			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.Sport, &comp.SortOrder, &comp.FdCode)
+			`SELECT id, name, season, is_active, is_hidden, sport, sort_order, COALESCE(fd_code,'') FROM competitions WHERE id = $1`, compID).
+			Scan(&comp.ID, &comp.Name, &comp.Season, &comp.IsActive, &comp.IsHidden, &comp.Sport, &comp.SortOrder, &comp.FdCode)
 		if err != nil {
 			http.Redirect(w, r, "/admin", http.StatusSeeOther)
 			return
@@ -225,9 +225,10 @@ func AdminCompetitionEditSubmit(w http.ResponseWriter, r *http.Request) {
 	sport    := r.FormValue("sport")
 	fdCode   := strings.ToUpper(strings.TrimSpace(r.FormValue("fd_code")))
 	isActive := r.FormValue("is_active") == "on"
+	isHidden := r.FormValue("is_hidden") == "on"
 	_, _ = db.Pool.Exec(context.Background(),
-		`UPDATE competitions SET name=$1, season=$2, sport=$3, fd_code=$4, is_active=$5 WHERE id=$6`,
-		name, season, sport, fdCode, isActive, compID)
+		`UPDATE competitions SET name=$1, season=$2, sport=$3, fd_code=$4, is_active=$5, is_hidden=$6 WHERE id=$7`,
+		name, season, sport, fdCode, isActive, isHidden, compID)
 	middleware.SetFlash(w, r, "ok", "Soutěž byla uložena.")
 	http.Redirect(w, r, "/admin/competitions", http.StatusSeeOther)
 }
@@ -732,6 +733,39 @@ func AdminUserResetPassword(w http.ResponseWriter, r *http.Request) {
 	hash, _ := HashPassword(newPw)
 	_, _ = db.Pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, hash, userID)
 	middleware.SetFlash(w, r, "info", "Nové heslo pro <b>"+username+"</b>: <code>"+newPw+"</code>")
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// ─── POST /admin/users/{id}/set-password ─────────────────────────────────────
+
+func AdminUserSetPassword(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	userID, _ := strconv.Atoi(r.PathValue("user_id"))
+	ctx := context.Background()
+	var username string
+	var isOwner bool
+	if userCols.IsOwner {
+		_ = db.Pool.QueryRow(ctx, `SELECT username, is_owner FROM users WHERE id=$1`, userID).
+			Scan(&username, &isOwner)
+	} else {
+		_ = db.Pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, userID).Scan(&username)
+	}
+	if isOwner && !admin.IsOwner {
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+	newPw := strings.TrimSpace(r.FormValue("new_password"))
+	if newPw == "" {
+		middleware.SetFlash(w, r, "err", "Heslo nesmí být prázdné.")
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+		return
+	}
+	hash, _ := HashPassword(newPw)
+	_, _ = db.Pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, hash, userID)
+	middleware.SetFlash(w, r, "ok", "Heslo pro <b>"+username+"</b> bylo změněno.")
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
 

@@ -45,6 +45,7 @@
             {{if $u.IsApproved}}<a href="/stats">{{tr $.Lang "nav_stats"}}</a>{{end}}
             {{if $u.IsApproved}}<a href="/archive">{{tr $.Lang "nav_archive"}}</a>{{end}}
             <a href="/pravidla">{{tr $.Lang "nav_rules"}}</a>
+            {{if $u.IsApproved}}<a href="/info">ℹ️ Info</a>{{end}}
             {{if $u.IsApproved}}<a href="/feedback">💬 Napište nám</a>{{end}}
             {{if $u.IsAdmin}}
             <div class="nav-dropdown">

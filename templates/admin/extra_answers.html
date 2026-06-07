@@ -7,8 +7,11 @@
     </div>
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
       {{if .Questions}}
-      <form method="post" action="/admin/extra/{{.Comp.ID}}/auto-evaluate" style="display:inline">
-        <button type="submit" class="btn btn-primary" style="font-size:0.85rem">🎯 Vyhodnotit vše</button>
+      <form method="post" action="/admin/extra/{{.Comp.ID}}/auto-evaluate" style="display:inline"
+            onsubmit="return confirm('Vyhodnotit všechny otázky najednou dle nastavených správných odpovědí?')">
+        <button type="submit" class="btn btn-primary" style="font-size:0.85rem;background:#059669;border-color:#059669">
+          🎯 Vyhodnotit vše
+        </button>
       </form>
       {{end}}
       <a href="/admin/extra/{{.Comp.ID}}/export" class="btn btn-secondary"
@@ -64,7 +67,7 @@
         </div>
         <div style="display:flex;gap:0.5rem">
           <button type="submit" class="btn btn-secondary" style="font-size:0.85rem">💾 Uložit</button>
-          <button type="submit" name="extra_reveal_at" value="now" class="btn btn-primary" style="font-size:0.85rem"
+          <button type="submit" name="reveal_now" value="1" class="btn btn-primary" style="font-size:0.85rem"
                   onclick="return confirm('Zveřejnit výsledky ihned?')">
             🚀 Zveřejnit nyní
           </button>
@@ -89,93 +92,597 @@
     <p class="empty">Žádné extra otázky pro tuto soutěž.</p>
     <p><a href="/admin/extra/{{.Comp.ID}}/questions/new" class="btn btn-primary">➕ Přidat první otázku</a></p>
   {{else}}
-  <form method="post" action="/admin/extra/{{.Comp.ID}}/answers">
+  <form method="post" action="/admin/extra/{{.Comp.ID}}/answers" id="extra-eval-form">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
 
     {{range $idx, $q := .Questions}}
     {{$answers := index $.AnswersByQuestion $q.ID}}
-    <div class="card mb-3">
-      <div class="card-body">
+    {{$groups  := index $.GroupsByQuestion  $q.ID}}
+    {{$stats   := index $.StatsByQuestion   $q.ID}}
+    <div class="card mb-3" style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem 1.2rem;margin-bottom:1.1rem">
 
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem">
-          <div>
-            <span style="font-size:0.8rem;color:var(--muted-d);margin-right:0.3rem">{{add $idx 1}}.</span>
-            <strong style="font-size:1.05rem">{{$q.Text}}</strong>
-            <span style="font-size:0.78rem;color:var(--muted-d);margin-left:0.4rem">(max {{$q.MaxPoints}} b.)</span>
-            {{if $q.IsClosed}}
-              <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#f87171;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">zavřeno</span>
-            {{else}}
-              <span style="font-size:0.75rem;background:rgba(16,185,129,0.15);color:#34d399;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">otevřeno</span>
-            {{end}}
-          </div>
-          <div style="display:flex;gap:0.35rem;flex-wrap:wrap">
-            {{if $q.CorrectAnswer}}
-            <form method="post" action="/admin/extra/{{$.Comp.ID}}/auto-evaluate?q={{$q.ID}}" style="margin:0">
-              <button type="submit" class="btn btn-sm btn-primary" style="font-size:0.78rem"
-                      title="Správná odpověď: {{$q.CorrectAnswer}}">
-                🎯 Vyhodnotit
-              </button>
-            </form>
-            {{end}}
-            <form method="post" action="/admin/extra/questions/{{$q.ID}}/toggle-close" style="margin:0">
-              <button type="submit" class="btn btn-sm btn-secondary" style="font-size:0.78rem">
-                {{if $q.IsClosed}}🔓 Otevřít{{else}}🔒 Uzavřít{{end}}
-              </button>
-            </form>
-            <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete" style="margin:0"
-                  onsubmit="return confirm('Smazat otázku a všechny její odpovědi?')">
-              <button type="submit" class="btn btn-sm" style="font-size:0.78rem;color:var(--red,#ef4444)">🗑 Smazat</button>
-            </form>
-          </div>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap">
-          <label style="font-size:0.85rem;font-weight:600;white-space:nowrap">Správná odpověď:</label>
-          <input type="text" name="correct_{{$q.ID}}"
-                 value="{{if $q.CorrectAnswer}}{{$q.CorrectAnswer}}{{end}}"
-                 placeholder="např. McDavid (více možností oddělit |)"
-                 class="form-control" style="max-width:300px;font-size:0.85rem">
-        </div>
-
-        {{if not $answers}}
-          <p style="color:var(--muted-d);font-style:italic;font-size:0.85rem">Zatím žádné odpovědi.</p>
-        {{else}}
-        <div style="overflow-x:auto">
-        <table class="table" style="font-size:0.88rem;margin-bottom:0">
-          <thead>
-            <tr>
-              <th style="width:160px">Tipér</th>
-              <th>Odpověď</th>
-              <th style="width:130px;text-align:center">Body (0–{{$q.MaxPoints}})</th>
-            </tr>
-          </thead>
-          <tbody>
-          {{range $answers}}
-          <tr>
-            <td>{{.User.Username}}</td>
-            <td>{{.Answer.Answer}}</td>
-            <td style="text-align:center">
-              <input type="number" name="pts_{{.Answer.ID}}"
-                     value="{{if .Answer.Points}}{{.Answer.Points}}{{end}}"
-                     min="0" max="{{$q.MaxPoints}}"
-                     style="width:70px;text-align:center;padding:0.25rem 0.4rem;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);border-radius:4px;font-size:0.88rem"
-                     placeholder="–">
-            </td>
-          </tr>
+      {{/* ── Hlavička otázky ── */}}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+          <span style="font-size:.8rem;color:var(--muted-d)">{{add $idx 1}}.</span>
+          <strong style="font-size:1rem">{{$q.Text}}</strong>
+          <span style="font-size:.75rem;color:var(--muted-d)">(max {{$q.MaxPoints}} b.)</span>
+          {{if $q.IsClosed}}
+            <span style="font-size:.72rem;background:rgba(239,68,68,.15);color:#f87171;padding:.12rem .45rem;border-radius:10px">zavřeno</span>
+          {{else}}
+            <span style="font-size:.72rem;background:rgba(16,185,129,.15);color:#34d399;padding:.12rem .45rem;border-radius:10px">otevřeno</span>
           {{end}}
-          </tbody>
-        </table>
+          {{/* ── Progress badge ── */}}
+          {{if $stats.Total}}
+          <span style="font-size:.72rem;padding:.12rem .5rem;border-radius:10px;font-weight:700;
+                       background:{{if eq $stats.Evaluated $stats.Total}}rgba(52,211,153,.18){{else if eq $stats.Evaluated 0}}rgba(156,163,175,.12){{else}}rgba(251,191,36,.15){{end}};
+                       color:{{if eq $stats.Evaluated $stats.Total}}#34d399{{else if eq $stats.Evaluated 0}}#9ca3af{{else}}#fbbf24{{end}}"
+                title="{{$stats.Evaluated}} z {{$stats.Total}} odpovědí má přiřazeny body">
+            {{if eq $stats.Evaluated $stats.Total}}✅{{else if eq $stats.Evaluated 0}}⏳{{else}}⚡{{end}}
+            {{$stats.Evaluated}}/{{$stats.Total}} ohodnoceno
+          </span>
+          {{end}}
         </div>
-        {{end}}
-
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+          <form method="post" action="/admin/extra/questions/{{$q.ID}}/toggle-close" style="margin:0">
+            <button type="submit" class="btn btn-sm btn-secondary" style="font-size:.76rem">
+              {{if $q.IsClosed}}🔓 Otevřít{{else}}🔒 Uzavřít{{end}}
+            </button>
+          </form>
+          <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete" style="margin:0"
+                onsubmit="return confirm('Smazat otázku a všechny její odpovědi?')">
+            <button type="submit" class="btn btn-sm" style="font-size:.76rem;color:#ef4444">🗑</button>
+          </form>
+        </div>
       </div>
+
+      {{/* ── Správná odpověď + chips ── */}}
+      {{/* Skrytý input pro form submit */}}
+      <input type="hidden" name="correct_{{$q.ID}}" id="correct_{{$q.ID}}" value="{{strVal $q.CorrectAnswer}}">
+      <div style="display:flex;align-items:flex-start;gap:.6rem;margin-bottom:.9rem;flex-wrap:wrap">
+        <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d);padding-top:.3rem">✓ Správná:</label>
+        <div id="chips_{{$q.ID}}" style="display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;min-height:2rem">
+          {{if $q.CorrectAnswer}}
+            {{range splitPipe (strVal $q.CorrectAnswer)}}
+            <span class="variant-chip" data-q-id="{{$q.ID}}" data-variant="{{.}}"
+                  style="display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .5rem;
+                         background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.35);
+                         border-radius:20px;font-size:.8rem;color:#34d399">
+              {{.}}
+              <button type="button" onclick="removeVariant('{{$q.ID}}','{{.}}')"
+                      style="background:none;border:none;color:#f87171;cursor:pointer;font-size:.85rem;
+                             padding:0;line-height:1;margin-left:.1rem" title="Odebrat variantu">×</button>
+            </span>
+            {{end}}
+          {{else}}
+          <span style="font-size:.82rem;color:var(--muted-d);font-style:italic">žádná — vyberte kliknutím níže</span>
+          {{end}}
+        </div>
+        {{if $q.CorrectAnswer}}
+        <button type="button" class="btn-clear-correct"
+                data-q-id="{{$q.ID}}"
+                data-correct-input="correct_{{$q.ID}}"
+                title="Vymazat vše a resetovat body"
+                style="padding:.28rem .5rem;border-radius:6px;border:1px solid rgba(239,68,68,.4);
+                       background:rgba(239,68,68,.08);color:#f87171;cursor:pointer;font-size:.78rem;white-space:nowrap">
+          🗑 Reset
+        </button>
+        {{end}}
+        <label style="font-size:.82rem;font-weight:600;white-space:nowrap;color:var(--muted-d)">Body:</label>
+        {{$correctPts := index $.CorrectPtsByQuestion $q.ID}}
+        <input type="number" id="body_{{$q.ID}}"
+               value="{{if $correctPts}}{{intVal $correctPts}}{{end}}"
+               data-q-id="{{$q.ID}}"
+               min="0"
+               style="width:68px;text-align:center;font-size:.85rem;padding:.35rem .4rem;
+                      background:var(--bg3);border:1px solid var(--accent);border-radius:6px;color:var(--text-d)">
+        <button type="button" class="btn-apply-pts"
+                data-q-id="{{$q.ID}}"
+                data-body-input="body_{{$q.ID}}"
+                style="padding:.35rem .7rem;border-radius:6px;border:none;
+                       background:var(--accent);color:#fff;cursor:pointer;font-size:.82rem;font-weight:700;white-space:nowrap"
+                title="Přenese zadané body do správných skupin a uloží">
+          ✓ Uložit body
+        </button>
+        <span style="font-size:.75rem;color:var(--muted-d)">více variant oddělit <code style="background:var(--bg3);padding:0 3px;border-radius:3px">|</code></span>
+      </div>
+
+      {{/* ── Tabulka skupin ── */}}
+      {{if not $answers}}
+        <p style="color:var(--muted-d);font-style:italic;font-size:.85rem">Zatím žádné odpovědi.</p>
+      {{else}}
+      {{/* Skryté inputs pro form submit — pts_{answer_id} */}}
+      <div style="display:none">
+        {{range $answers}}
+        <input type="number" name="pts_{{.Answer.ID}}" id="pts_{{.Answer.ID}}"
+               data-norm="{{.Answer.Answer}}"
+               value="{{if .Answer.Points}}{{intVal .Answer.Points}}{{end}}"
+               min="0">
+        {{end}}
+      </div>
+
+      {{/* ── Sloučit panel (zobrazí se při výběru) ── */}}
+      <div id="merge-bar-{{$q.ID}}" style="display:none;margin-bottom:.6rem;padding:.5rem .75rem;
+           background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);border-radius:8px;
+           display:none;align-items:center;gap:.6rem;flex-wrap:wrap">
+        <span style="font-size:.82rem;color:#818cf8" id="merge-info-{{$q.ID}}">0 vybraných</span>
+        <button type="button" class="btn-merge-selected"
+                data-q-id="{{$q.ID}}"
+                data-body-input="body_{{$q.ID}}"
+                data-correct-input="correct_{{$q.ID}}"
+                style="padding:.3rem .7rem;border-radius:6px;border:none;background:#6366f1;
+                       color:#fff;cursor:pointer;font-size:.82rem;font-weight:700">
+          🔀 Sloučit
+        </button>
+        <button type="button" class="btn-clear-selection" data-q-id="{{$q.ID}}"
+                style="padding:.3rem .6rem;border-radius:6px;border:1px solid var(--border-d);
+                       background:transparent;color:var(--muted-d);cursor:pointer;font-size:.78rem">
+          Zrušit výběr
+        </button>
+      </div>
+
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:.85rem" id="grp-table-{{$q.ID}}">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border-d)">
+            <th style="padding:.4rem .3rem;width:28px"></th>
+            <th style="padding:.4rem .5rem;text-align:left;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d)">Odpověď</th>
+            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:60px">Počet</th>
+            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:70px">Shoda</th>
+            <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:90px">Body</th>
+            <th style="padding:.4rem .5rem;width:120px"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {{range $groups}}
+        <tr class="grp-row" data-q-id="{{$q.ID}}" data-answer="{{.Text}}"
+            style="border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;
+                   {{if .IsMatch}}background:rgba(52,211,153,.07){{else if .IsSimilar}}background:rgba(251,191,36,.05){{end}}">
+          <td style="padding:.4rem .3rem;text-align:center">
+            <input type="checkbox" class="grp-check" data-q-id="{{$q.ID}}" data-answer="{{.Text}}"
+                   style="width:15px;height:15px;cursor:pointer;accent-color:#6366f1">
+          </td>
+          <td style="padding:.4rem .5rem">
+            <span style="font-weight:{{if .IsMatch}}700{{else}}400{{end}};
+                         color:{{if .IsMatch}}#34d399{{else if .IsSimilar}}#fbbf24{{else}}var(--text-d){{end}}">
+              {{.Text}}
+            </span>
+            {{if .UserNames}}
+            <div style="font-size:.72rem;color:var(--muted-d);margin-top:.1rem">
+              {{range $i, $u := .UserNames}}{{if $i}}, {{end}}{{$u}}{{end}}
+            </div>
+            {{end}}
+          </td>
+          <td style="padding:.4rem .5rem;text-align:center;font-weight:700;color:var(--muted-d)">{{.Count}}</td>
+          <td style="padding:.4rem .5rem;text-align:center;font-size:.82rem">
+            {{if .IsMatch}}
+              <span style="color:#34d399" title="Přesná shoda se správnou odpovědí">✅</span>
+            {{else if .IsSimilar}}
+              <span style="color:#fbbf24" title="Podobná odpověď (vzdálenost {{.SimilarDist}})">≈{{.SimilarDist}}</span>
+            {{else}}
+              <span style="color:var(--muted-d)">—</span>
+            {{end}}
+          </td>
+          <td style="padding:.3rem .4rem;text-align:center">
+            {{if .IsMatch}}
+            <input type="number"
+                   class="grp-pts-vis grp-pts-correct"
+                   data-norm="{{.NormText}}"
+                   data-q-id="{{$q.ID}}"
+                   data-is-match="1"
+                   data-db-val="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
+                   value=""
+                   min="0"
+                   readonly
+                   style="width:62px;text-align:center;padding:.25rem .3rem;
+                          border:1px solid rgba(52,211,153,.5);
+                          background:rgba(52,211,153,.08);color:#34d399;border-radius:4px;font-size:.85rem;font-weight:700;cursor:default"
+                   placeholder="—">
+            {{else}}
+            <input type="number"
+                   class="grp-pts-vis"
+                   data-norm="{{.NormText}}"
+                   data-q-id="{{$q.ID}}"
+                   value="{{if .CurPoints}}{{intVal .CurPoints}}{{end}}"
+                   min="0"
+                   style="width:62px;text-align:center;padding:.25rem .3rem;
+                          border:1px solid {{if .AllEval}}rgba(156,163,175,.3){{else}}var(--border-d){{end}};
+                          background:var(--bg3);color:var(--text-d);border-radius:4px;font-size:.85rem"
+                   placeholder="—">
+            {{end}}
+          </td>
+          <td style="padding:.35rem .5rem;text-align:right">
+            {{if .HasMerged}}
+            <button type="button" class="btn-unmerge"
+                    data-q-id="{{$q.ID}}"
+                    data-canonical="{{.Text}}"
+                    title="Vrátit původní odpovědi"
+                    style="padding:.25rem .5rem;border-radius:5px;border:1px solid rgba(251,191,36,.4);
+                           background:rgba(251,191,36,.08);color:#fbbf24;cursor:pointer;font-size:.72rem;white-space:nowrap;margin-right:.25rem">
+              ↩ Rozdělit
+            </button>
+            {{end}}
+            {{if not .IsMatch}}
+            <button type="button" class="btn-set-correct"
+                    data-q-id="{{$q.ID}}"
+                    data-answer="{{.Text}}"
+                    data-norm="{{.NormText}}"
+                    data-body-input="body_{{$q.ID}}"
+                    data-correct-input="correct_{{$q.ID}}"
+                    style="padding:.25rem .6rem;border-radius:5px;border:1px solid rgba(99,102,241,.4);
+                           background:rgba(99,102,241,.1);color:#818cf8;cursor:pointer;font-size:.75rem;white-space:nowrap">
+              ✓ Správná
+            </button>
+            {{else}}
+            <span style="font-size:.75rem;color:#34d399;font-weight:700">✅ označena</span>
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+        </tbody>
+      </table>
+      </div>
+      {{end}}
+
     </div>
     {{end}}
 
-    <div style="padding:0.5rem 0 1.5rem">
-      <button type="submit" class="btn btn-primary">💾 Uložit bodování</button>
+    <div style="padding:.5rem 0 1.5rem">
+      <button type="submit" class="btn btn-primary">💾 Uložit (správné odpovědi + upravené body)</button>
     </div>
 
   </form>
   {{end}}
 
 </div>
+
+<script>
+var _extraCsrf = '{{.CSRFToken}}';
+
+// Odebrání varianty — uloží rovnou do DB
+window.removeVariant = function(qId, variant) {
+    var inp = document.getElementById('correct_' + qId);
+    if (!inp) return;
+    var parts = inp.value.split('|').map(function(v){return v.trim();}).filter(function(v){return v && v !== variant;});
+    var newVal = parts.join('|');
+    inp.value = newVal;
+    renderChips(qId, parts);
+
+    // Uloži do DB přes form submit s aktuální hodnotou
+    var fd = new URLSearchParams();
+    fd.append('_csrf', _extraCsrf);
+    fd.append('correct_answer', newVal);
+    fd.append('question_id', qId);
+    fetch('/admin/extra/questions/' + qId + '/save-correct', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: fd
+    }).catch(function() {});
+};
+
+function renderChips(qId, parts) {
+    var container = document.getElementById('chips_' + qId);
+    if (!container) return;
+    if (parts.length === 0) {
+        container.innerHTML = '<span style="font-size:.82rem;color:var(--muted-d);font-style:italic">žádná — vyberte kliknutím níže</span>';
+        return;
+    }
+    container.innerHTML = parts.map(function(v) {
+        return '<span style="display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .5rem;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.35);border-radius:20px;font-size:.8rem;color:#34d399">'
+            + v
+            + '<button type="button" onclick="removeVariant(\'' + qId + '\',\'' + v.replace(/'/g, "\\'") + '\')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:.85rem;padding:0;line-height:1;margin-left:.1rem" title="Odebrat">×</button>'
+            + '</span>';
+    }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+
+    // ── Body input → live-sync do zelených readonly inputů ──────────────────
+    document.querySelectorAll('input[id^="body_"]').forEach(function(bodyInp) {
+        var qId = bodyInp.id.replace('body_', '');
+        var correctInps = document.querySelectorAll('.grp-pts-correct[data-q-id="' + qId + '"]');
+
+        // Při načtení: nastav zelené inputy a hidden pts_ na hodnotu Body (z DB, nebo prázdné)
+        var initVal = bodyInp.value; // prázdné pokud není v DB
+        correctInps.forEach(function(inp) {
+            inp.value = initVal;
+            syncGroupPts(inp.dataset.norm, initVal);
+        });
+
+        // Live-sync při změně
+        bodyInp.addEventListener('input', function() {
+            var val = bodyInp.value;
+            correctInps.forEach(function(inp) {
+                inp.value = val;
+                syncGroupPts(inp.dataset.norm, val);
+            });
+        });
+    });
+
+    // ── ✓ Uložit body: AJAX, bez scrollu nahoru ─────────────────────────────
+    document.querySelectorAll('.btn-apply-pts').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId     = btn.dataset.qId;
+            var bodyInp = document.getElementById(btn.dataset.bodyInput);
+            var pts     = bodyInp ? parseInt(bodyInp.value, 10) : NaN;
+            if (isNaN(pts) || pts < 0) {
+                alert('Zadej platný počet bodů.');
+                if (bodyInp) bodyInp.focus();
+                return;
+            }
+            var origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳';
+            var fd = new URLSearchParams();
+            fd.append('_csrf', _extraCsrf);
+            fd.append('points', pts);
+            fetch('/admin/extra/questions/' + qId + '/set-pts-for-correct', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    document.querySelectorAll('.grp-pts-correct[data-q-id="' + qId + '"]').forEach(function(inp) {
+                        inp.value = data.points;
+                    });
+                    if (bodyInp) bodyInp.value = data.points;
+                    btn.textContent = '✅ Uloženo';
+                    btn.style.background = '#059669';
+                    setTimeout(function() { btn.disabled = false; btn.textContent = origText; btn.style.background = ''; }, 2000);
+                } else {
+                    btn.disabled = false; btn.textContent = origText;
+                    alert('Chyba: ' + (data.error || 'neznámá'));
+                }
+            })
+            .catch(function() { btn.disabled = false; btn.textContent = origText; alert('Chyba spojení.'); });
+        });
+    });
+
+    // ── Sync viditelný group input → hidden pts_{id} inputs ─────────────────
+    function syncGroupPts(normText, value) {
+        document.querySelectorAll('input[name^="pts_"]').forEach(function(inp) {
+            var n = (inp.dataset.norm || '').trim().toLowerCase();
+            if (n === normText) inp.value = value;
+        });
+    }
+    document.querySelectorAll('.grp-pts-vis').forEach(function(inp) {
+        inp.addEventListener('input', function() {
+            syncGroupPts(inp.dataset.norm, inp.value);
+        });
+    });
+
+    // ── 🗑 Reset: vymaž správnou odpověď a všechny body ─────────────────────
+    document.querySelectorAll('.btn-clear-correct').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId          = btn.dataset.qId;
+            var correctInpId = btn.dataset.correctInput;
+            var ci = document.getElementById(correctInpId);
+            var cur = ci ? ci.value : '';
+            if (!confirm('Resetovat otázku?\n\nVymaže se správná odpověď' + (cur ? ' ("' + cur + '")' : '') + ' a všem tipérům se smažou body (vrátí se na nevyhodnoceno).')) return;
+
+            btn.disabled = true;
+            btn.textContent = '⏳';
+
+            var fd = new URLSearchParams();
+            fd.append('_csrf', _extraCsrf);
+
+            fetch('/admin/extra/questions/' + qId + '/clear-correct', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    if (ci) ci.value = '';
+                    btn.textContent = '✅';
+                    setTimeout(function() { location.reload(); }, 400);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '🗑 Reset';
+                    alert('Chyba: ' + (data.error || 'neznámá'));
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = '🗑 Reset';
+                alert('Chyba spojení.');
+            });
+        });
+    });
+
+    // ── ✓ Správná: AJAX set correct answer + assign points ──────────────────
+    document.querySelectorAll('.btn-set-correct').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId          = btn.dataset.qId;
+            var answerText   = btn.dataset.answer;
+            var normText     = btn.dataset.norm || answerText.trim().toLowerCase();
+            var bodyInpId    = btn.dataset.bodyInput;
+            var correctInpId = btn.dataset.correctInput;
+
+            var bodyInp = document.getElementById(bodyInpId);
+            var pts = bodyInp ? parseInt(bodyInp.value, 10) : null;
+            if (isNaN(pts) || pts === null) {
+                alert('Zadej počet bodů do pole "Body" u této otázky.');
+                if (bodyInp) bodyInp.focus();
+                return;
+            }
+
+            var correctInp = document.getElementById(correctInpId);
+            var existing = correctInp ? correctInp.value.trim() : '';
+            var msg = existing
+                ? 'Přidat "' + answerText + '" jako další variantu správné odpovědi (' + pts + ' b)?\n\nStávající: ' + existing + '\nNová varianta bude přidána za |.\n\nOstatní skupiny (bez jakékoli správné odpovědi) dostanou 0 b.'
+                : 'Nastavit "' + answerText + '" jako správnou odpověď (' + pts + ' b)?\n\nOstatní skupiny dostanou 0 b.';
+            if (!confirm(msg)) return;
+
+            btn.disabled = true;
+            btn.textContent = '⏳';
+
+            var fd = new URLSearchParams();
+            fd.append('_csrf', _extraCsrf);
+            fd.append('answer_text', answerText);
+            fd.append('points', pts);
+
+            fetch('/admin/extra/questions/' + qId + '/set-correct-group', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: fd
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    var ci = document.getElementById(correctInpId);
+                    var newVal = data.correct_answer || answerText;
+                    if (ci) ci.value = newVal;
+                    // Aktualizuj chips
+                    renderChips(qId, newVal.split('|').map(function(v){return v.trim();}).filter(Boolean));
+                    // Aktualizuj viditelný input správné skupiny
+                    document.querySelectorAll('.grp-pts-vis').forEach(function(inp) {
+                        if (inp.dataset.norm === normText) inp.value = data.points;
+                    });
+                    syncGroupPts(normText, data.points);
+                    btn.textContent = '✅ Uloženo';
+                    btn.style.color = '#34d399';
+                    btn.style.borderColor = 'rgba(52,211,153,.4)';
+                    setTimeout(function() { location.reload(); }, 600);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '✓ Správná';
+                    alert('Chyba: ' + (data.error || 'neznámá'));
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = '✓ Správná';
+                alert('Chyba spojení.');
+            });
+        });
+    });
+
+    // ── ↩ Rozdělit (undo merge) ─────────────────────────────────────────────
+    document.querySelectorAll('.btn-unmerge').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId = btn.dataset.qId;
+            var canonical = btn.dataset.canonical;
+            if (!confirm('Vrátit původní odpovědi sloučené pod "' + canonical + '"?')) return;
+            btn.disabled = true; btn.textContent = '⏳';
+            var fd = new URLSearchParams();
+            fd.append('_csrf', _extraCsrf);
+            fd.append('canonical', canonical);
+            fetch('/admin/extra/questions/' + qId + '/unmerge-answers', {
+                method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd
+            }).then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.ok) { location.reload(); }
+                else { btn.disabled = false; btn.textContent = '↩ Rozdělit'; alert('Chyba: ' + (d.error || '')); }
+            }).catch(function() { btn.disabled = false; btn.textContent = '↩ Rozdělit'; alert('Chyba spojení.'); });
+        });
+    });
+
+    // ── Checkboxy skupin + Sloučit vybrané ──────────────────────────────────
+    function updateMergeBar(qId) {
+        var checked = document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]:checked');
+        var bar = document.getElementById('merge-bar-' + qId);
+        var info = document.getElementById('merge-info-' + qId);
+        if (checked.length >= 1) {
+            bar.style.display = 'flex';
+            var names = [];
+            checked.forEach(function(cb) { names.push(cb.dataset.answer); });
+            info.textContent = names.join(' + ');
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    document.querySelectorAll('.grp-check').forEach(function(cb) {
+        cb.addEventListener('change', function(e) {
+            e.stopPropagation();
+            updateMergeBar(cb.dataset.qId);
+            // Vizuálně zvýrazni řádek
+            var row = cb.closest('tr');
+            if (cb.checked) row.style.outline = '2px solid rgba(99,102,241,.5)';
+            else row.style.outline = '';
+        });
+    });
+
+    // Klik na řádek = toggle checkbox
+    document.querySelectorAll('.grp-row').forEach(function(row) {
+        row.addEventListener('click', function(e) {
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+            var cb = row.querySelector('.grp-check');
+            if (!cb) return;
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event('change'));
+        });
+    });
+
+    document.querySelectorAll('.btn-clear-selection').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId = btn.dataset.qId;
+            document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]').forEach(function(cb) {
+                cb.checked = false;
+                var row = cb.closest('tr');
+                if (row) row.style.outline = '';
+            });
+            updateMergeBar(qId);
+        });
+    });
+
+    document.querySelectorAll('.btn-merge-selected').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var qId = btn.dataset.qId;
+            var checked = document.querySelectorAll('.grp-check[data-q-id="' + qId + '"]:checked');
+            if (checked.length < 2) { alert('Vyber aspoň 2 skupiny ke sloučení.'); return; }
+            var answers = [];
+            checked.forEach(function(cb) { answers.push(cb.dataset.answer); });
+
+            // Dialog — vyber kanonický název
+            var overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center';
+            var html = '<div style="background:var(--bg2);border:2px solid rgba(99,102,241,.5);border-radius:12px;padding:1.3rem 1.5rem;max-width:400px;width:92%;box-shadow:0 8px 30px rgba(0,0,0,.6)">'
+                + '<div style="font-weight:700;font-size:1rem;margin-bottom:.5rem">🔀 Sloučit skupiny</div>'
+                + '<div style="font-size:.82rem;color:var(--muted-d);margin-bottom:.75rem">Vyber, pod jakým názvem se mají všechny sloučit:</div>';
+            answers.forEach(function(a, i) {
+                html += '<label style="display:flex;align-items:center;gap:.5rem;padding:.45rem .6rem;border-radius:6px;cursor:pointer;margin-bottom:.3rem;border:1px solid var(--border-d);background:var(--bg3)">'
+                    + '<input type="radio" name="_mc_radio" value="' + a.replace(/"/g,'&quot;') + '"' + (i===0?' checked':'') + ' style="accent-color:#6366f1;flex-shrink:0"> '
+                    + '<span style="font-size:.9rem">' + a + '</span>'
+                    + '</label>';
+            });
+            html += '<div style="font-size:.78rem;color:var(--muted-d);margin:.6rem 0 .8rem">Ostatní odpovědi budou přepsány na vybraný název. Lze vrátit tlačítkem ↩ Rozdělit.</div>'
+                + '<div style="display:flex;gap:.5rem;justify-content:flex-end">'
+                + '<button id="_mc_cancel" style="padding:.4rem 1rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);cursor:pointer">Zrušit</button>'
+                + '<button id="_mc_ok" style="padding:.4rem 1rem;border-radius:6px;border:none;background:#6366f1;color:#fff;font-weight:700;cursor:pointer">🔀 Sloučit</button>'
+                + '</div></div>';
+            overlay.innerHTML = html;
+            document.body.appendChild(overlay);
+
+            function doClose() { if (overlay.parentNode) document.body.removeChild(overlay); }
+            overlay.querySelector('#_mc_cancel').addEventListener('click', doClose);
+            overlay.addEventListener('click', function(e) { if (e.target === overlay) doClose(); });
+
+            overlay.querySelector('#_mc_ok').addEventListener('click', function() {
+                var sel = overlay.querySelector('input[name="_mc_radio"]:checked');
+                var canonical = sel ? sel.value : answers[0];
+                doClose();
+
+                btn.disabled = true;
+                btn.textContent = '⏳';
+                var fd = new URLSearchParams();
+                fd.append('_csrf', _extraCsrf);
+                fd.append('canonical', canonical);
+                answers.filter(function(a){ return a !== canonical; }).forEach(function(a) { fd.append('sources[]', a); });
+                fetch('/admin/extra/questions/' + qId + '/merge-answers', {
+                    method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd
+                }).then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.ok) { location.reload(); }
+                    else { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba: ' + (d.error||'')); }
+                }).catch(function() { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba spojení.'); });
+            });
+        });
+    });
+
+});
+</script>

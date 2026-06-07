@@ -1,0 +1,170 @@
+<style>
+.tc-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem }
+@media(max-width:700px){ .tc-grid { grid-template-columns:1fr } }
+.tc-card { background:var(--bg2); border:1px solid var(--border-d); border-radius:10px; padding:1.1rem 1.25rem }
+.tc-card h3 { margin:0 0 .75rem; font-size:.8rem; font-weight:700; text-transform:uppercase;
+              letter-spacing:.07em; color:var(--muted-d) }
+.tc-val { font-size:1.1rem; font-weight:700; font-family:monospace; color:#e2e8f0; word-break:break-all }
+.tc-sub { font-size:.75rem; color:var(--muted-d); margin-top:.25rem }
+.tc-ok  { color:#34d399 }
+.tc-warn { color:#fbbf24 }
+.tc-err { color:#f87171 }
+.status-bar { border-radius:8px; padding:.65rem 1rem; margin-bottom:1.5rem; font-size:.9rem; font-weight:600 }
+.status-ok   { background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.3); color:#34d399 }
+.status-warn { background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.3); color:#fbbf24 }
+.override-card { background:var(--bg2); border:1px solid var(--border-d); border-radius:10px; padding:1.1rem 1.25rem; margin-bottom:1.5rem }
+.override-card h3 { margin:0 0 .75rem; font-size:.8rem; font-weight:700; text-transform:uppercase;
+                    letter-spacing:.07em; color:var(--muted-d) }
+</style>
+
+<div class="page-header">
+    <h1>🕐 Diagnostika času</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+{{/* ── Status bar ── */}}
+{{if .TimeInSync}}
+<div class="status-bar status-ok">✅ Vše sedí — NowPrague() odpovídá pražskému času z location (rozdíl ≤ 1 min)</div>
+{{else}}
+<div class="status-bar status-warn">⚠️ Nesoulad! NowPrague() se liší od pražského času o {{.DiffMinutes}} minut. Zkontroluj nastavení níže.</div>
+{{end}}
+
+{{/* ── TZ Override aktivní ── */}}
+{{if .TZOverride}}
+<div class="status-bar" style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#60a5fa;margin-bottom:1.5rem">
+    🔧 Manuální TZ override je aktivní: UTC{{.PragueOffsetNow}} min ({{.TZOverride}} min).
+    NowPrague() nepoužívá Europe/Prague location.
+</div>
+{{end}}
+
+{{/* ── Časy ── */}}
+<div class="tc-grid">
+    <div class="tc-card">
+        <h3>🌍 UTC — serverový čas</h3>
+        <div class="tc-val">{{.UTCNow.Format "2006-01-02 15:04:05"}}</div>
+        <div class="tc-sub">time.Now().UTC() — základní referenční čas</div>
+    </div>
+
+    <div class="tc-card">
+        <h3>🇨🇿 Praha — z Location</h3>
+        {{if .PragueLocErr}}
+        <div class="tc-val tc-err">⚠ Chyba LoadLocation</div>
+        <div class="tc-sub tc-err">{{.PragueLocErr}}</div>
+        {{else}}
+        <div class="tc-val">{{.PragueFromLoc.Format "2006-01-02 15:04:05"}}</div>
+        <div class="tc-sub">time.Now().In(Europe/Prague) — offset UTC{{if ge .PragueOffsetNow 0}}+{{end}}{{.PragueOffsetNow}} min</div>
+        {{end}}
+    </div>
+
+    <div class="tc-card">
+        <h3>🗄 Databáze — NOW()</h3>
+        <div class="tc-val">{{.DBNow.Format "2006-01-02 15:04:05"}} <span style="font-size:.75rem;color:var(--muted-d)">{{.DBNow.Format "Z07:00"}}</span></div>
+        <div class="tc-sub">SELECT NOW() — čas v DB s timezone</div>
+    </div>
+
+    <div class="tc-card">
+        <h3>🗄 Databáze — Praha</h3>
+        <div class="tc-val">{{.DBPragueNow.Format "2006-01-02 15:04:05"}}</div>
+        <div class="tc-sub">SELECT NOW() AT TIME ZONE 'Europe/Prague'</div>
+    </div>
+
+    <div class="tc-card" style="grid-column:1/-1;border-color:{{if .TimeInSync}}rgba(52,211,153,.4){{else}}rgba(251,191,36,.5){{end}}">
+        <h3>🏁 App NowPrague() — co se používá pro deadline</h3>
+        <div class="tc-val {{if .TimeInSync}}tc-ok{{else}}tc-warn{{end}}">{{.AppNowPrague.Format "2006-01-02 15:04:05"}}</div>
+        <div class="tc-sub">
+            Výsledek NowPrague() — porovnává se s match_date při zamykání tipů.
+            {{if .TZOverride}}Používá manuální override ({{.TZOverride}} min od UTC).{{else}}Používá Europe/Prague location.{{end}}
+        </div>
+    </div>
+</div>
+
+{{/* ── Příklad zápasu ── */}}
+{{if .Example}}
+<div class="tc-card" style="margin-bottom:1.5rem">
+    <h3>⚽ Příklad — nejbližší zápas v pipeline</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;margin-top:.5rem">
+        <div>
+            <div style="font-size:.75rem;color:var(--muted-d)">Zápas</div>
+            <div style="font-weight:700">{{.Example.Home}} vs {{.Example.Away}}</div>
+        </div>
+        <div>
+            <div style="font-size:.75rem;color:var(--muted-d)">Raw z DB (pgx wall-clock UTC)</div>
+            <div style="font-family:monospace">{{.Example.RawInDB.Format "2006-01-02 15:04:05"}} UTC</div>
+        </div>
+        <div>
+            <div style="font-size:.75rem;color:var(--muted-d)">Tipovačka zobrazuje (fmtPrague)</div>
+            <div style="font-weight:700;color:#e2e8f0">{{.Example.FmtPrague}}</div>
+        </div>
+        <div>
+            <div style="font-size:.75rem;color:var(--muted-d)">JS countdown (fmtISO → RFC3339)</div>
+            <div style="font-family:monospace;font-size:.82rem">{{.Example.FmtISO}}</div>
+        </div>
+        <div>
+            <div style="font-size:.75rem;color:var(--muted-d)">Tipování otevřeno?</div>
+            {{if .Example.IsBeforeNow}}
+            <div class="tc-ok">✅ Ano (deadline ještě neuplynul)</div>
+            {{else}}
+            <div class="tc-warn">🔒 Ne (deadline uplynul)</div>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{else}}
+<div class="tc-card" style="margin-bottom:1.5rem;color:var(--muted-d)">
+    <h3>⚽ Příklad zápasu</h3>
+    Žádný budoucí zápas s datem v DB.
+</div>
+{{end}}
+
+{{/* ── Owner: manuální override ── */}}
+{{if .User.IsOwner}}
+<div class="override-card">
+    <h3>🔧 Manuální TZ override (jen Owner)</h3>
+    <p style="font-size:.84rem;color:var(--muted-d);margin:.0 0 1rem">
+        Použij pokud Europe/Prague location vrací špatný čas. Override nastaví fixní offset od UTC pro NowPrague()
+        a tím i pro zamykání tipů. Praha CEST (léto) = <strong>+120</strong> min, Praha CET (zima) = <strong>+60</strong> min.
+        Nastavení přežije restart serveru (uloženo v DB).
+    </p>
+
+    {{if .TZOverride}}
+    <div style="margin-bottom:1rem;padding:.6rem .85rem;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);border-radius:6px;font-size:.85rem">
+        Aktivní override: <strong>{{.TZOverride}} minut od UTC</strong>
+        (UTC{{if ge .PragueOffsetNow 0}}+{{end}}{{.PragueOffsetNow}} min)
+    </div>
+    {{end}}
+
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
+        <form method="post" action="/admin/time/offset" style="display:flex;gap:.5rem;align-items:flex-end">
+            <div>
+                <label style="display:block;font-size:.8rem;color:var(--muted-d);margin-bottom:.3rem">Offset (minuty od UTC)</label>
+                <input type="number" name="offset_minutes"
+                       value="{{if .TZOverride}}{{.TZOverride}}{{else}}120{{end}}"
+                       min="-720" max="720" step="1"
+                       style="width:120px;padding:.4rem .6rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.9rem" />
+            </div>
+            <input type="hidden" name="action" value="set" />
+            <button type="submit" class="btn btn-primary btn-sm">Nastavit override</button>
+        </form>
+
+        {{if .TZOverride}}
+        <form method="post" action="/admin/time/offset">
+            <input type="hidden" name="action" value="clear" />
+            <button type="submit" class="btn btn-secondary btn-sm"
+                    onclick="return confirm('Vymazat override a vrátit se na automatický Europe/Prague?')">
+                🗑 Vymazat override
+            </button>
+        </form>
+        {{end}}
+    </div>
+</div>
+{{else}}
+<div class="tc-card" style="color:var(--muted-d);font-size:.85rem">
+    🔒 Manuální override je dostupný jen pro Owner.
+</div>
+{{end}}

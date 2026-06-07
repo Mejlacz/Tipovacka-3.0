@@ -224,7 +224,10 @@ func ashLoadEvents(leagueID, season string) ([]tsdbEvent, error) {
 	return list.Events, nil
 }
 
-// tsdbEventDate převede datum + čas z TheSportsDB na time.Time v Prague tz.
+// tsdbEventDate převede datum + čas z TheSportsDB na time.Time.
+// TheSportsDB vrací časy v UTC. Konvertujeme UTC → Praha a vracíme jako
+// naive timestamp (UTC location, Praha wall-clock) — stejný formát jaký
+// používá NowPrague() a jaký pgx v5 ukládá do TIMESTAMP WITHOUT TIME ZONE.
 func tsdbEventDate(dateEvent, strTime string) *time.Time {
 	if dateEvent == "" {
 		return nil
@@ -235,11 +238,13 @@ func tsdbEventDate(dateEvent, strTime string) *time.Time {
 	} else {
 		ts += "T00:00:00"
 	}
-	t, err := time.ParseInLocation("2006-01-02T15:04:05", ts, pragueLocation)
+	utc, err := time.ParseInLocation("2006-01-02T15:04:05", ts, time.UTC)
 	if err != nil {
 		return nil
 	}
-	return &t
+	local := utc.In(pragueLocation)
+	naive := time.Date(local.Year(), local.Month(), local.Day(), local.Hour(), local.Minute(), local.Second(), 0, time.UTC)
+	return &naive
 }
 
 // ── ashPreview — vrátí náhled zápasů pro frontend ────────────────────────────

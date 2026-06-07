@@ -31,7 +31,7 @@ func ProfilePage(tmpl *template.Template) http.HandlerFunc {
 
 		// Competitions
 		compRows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE is_active = TRUE ORDER BY sort_order ASC NULLS LAST, id DESC`)
+			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE is_active = TRUE AND COALESCE(is_hidden,false)=false ORDER BY sort_order ASC NULLS LAST, id DESC`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}
@@ -294,7 +294,7 @@ func ProfileNotifications(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	// Get active competition IDs
 	activeIDs := map[int]bool{}
-	acRows, _ := db.Pool.Query(ctx, `SELECT id FROM competitions WHERE is_active=TRUE`)
+	acRows, _ := db.Pool.Query(ctx, `SELECT id FROM competitions WHERE is_active=TRUE AND COALESCE(is_hidden,false)=false`)
 	for acRows.Next() {
 		var id int
 		_ = acRows.Scan(&id)

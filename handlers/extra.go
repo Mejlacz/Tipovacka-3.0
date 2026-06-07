@@ -28,7 +28,7 @@ func ExtraView(tmpl *template.Template) http.HandlerFunc {
 
 		compRows, _ := db.Pool.Query(ctx,
 			`SELECT id, name, season, is_active, sport, sort_order, extra_deadline, extra_reveal_at
-			   FROM competitions WHERE is_active = TRUE ORDER BY sort_order ASC NULLS LAST, id DESC`)
+			   FROM competitions WHERE is_active = TRUE AND COALESCE(is_hidden,false)=false ORDER BY sort_order ASC NULLS LAST, id DESC`)
 		var competitions []*models.Competition
 		for compRows.Next() {
 			c := &models.Competition{}

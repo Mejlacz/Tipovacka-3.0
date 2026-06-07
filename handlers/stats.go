@@ -319,10 +319,10 @@ func StatsRedirect(w http.ResponseWriter, r *http.Request) {
 	var compID int
 	// Try active first
 	_ = db.Pool.QueryRow(ctx,
-		`SELECT id FROM competitions WHERE is_active=TRUE ORDER BY id DESC LIMIT 1`).Scan(&compID)
+		`SELECT id FROM competitions WHERE is_active=TRUE AND COALESCE(is_hidden,false)=false ORDER BY id DESC LIMIT 1`).Scan(&compID)
 	if compID == 0 {
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id FROM competitions ORDER BY id DESC LIMIT 1`).Scan(&compID)
+			`SELECT id FROM competitions WHERE COALESCE(is_hidden,false)=false ORDER BY id DESC LIMIT 1`).Scan(&compID)
 	}
 	if compID > 0 {
 		http.Redirect(w, r, "/stats/"+strconv.Itoa(compID), http.StatusSeeOther)
@@ -354,7 +354,7 @@ func StatsDetail(tmpl *template.Template) http.HandlerFunc {
 		s := computeStats(ctx, user, comp)
 
 		allCompRows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions ORDER BY id DESC`)
+			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE COALESCE(is_hidden,false)=false ORDER BY id DESC`)
 		var activeComps, inactiveComps []*models.Competition
 		for allCompRows.Next() {
 			c := &models.Competition{}
@@ -622,7 +622,7 @@ func StatsExtended(tmpl *template.Template) http.HandlerFunc {
 
 		// All competitions for nav
 		allCompRows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions ORDER BY id DESC`)
+			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE COALESCE(is_hidden,false)=false ORDER BY id DESC`)
 		var activeComps, inactiveComps []*models.Competition
 		for allCompRows.Next() {
 			c := &models.Competition{}
@@ -810,7 +810,7 @@ func StatsVs(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		allCompRows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, season, is_active, sport, sort_order FROM competitions ORDER BY id DESC`)
+			`SELECT id, name, season, is_active, sport, sort_order FROM competitions WHERE COALESCE(is_hidden,false)=false ORDER BY id DESC`)
 		var activeComps, inactiveComps []*models.Competition
 		for allCompRows.Next() {
 			c := &models.Competition{}
