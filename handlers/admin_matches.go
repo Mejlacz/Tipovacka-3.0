@@ -125,6 +125,7 @@ func AdminMatchCreate(w http.ResponseWriter, r *http.Request) {
 		middleware.SetFlash(w, r, "ok", "Zápas přidán.")
 	}
 	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+}
 
 // POST /admin/matches/{id}/edit
 func AdminMatchEdit(w http.ResponseWriter, r *http.Request) {
