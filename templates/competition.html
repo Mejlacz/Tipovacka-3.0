@@ -1,5 +1,5 @@
 <div class="page-header">
-    <h1>{{.Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
+    <h1>{{trx .Lang .Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
     {{if and .User .User.IsAdmin}}
     <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-primary btn-sm">{{tr .Lang "tips_add_match"}}</a>
     {{end}}
@@ -10,7 +10,7 @@
    style="display:inline-flex;align-items:center;gap:0.4rem;margin-bottom:1.1rem;
           padding:0.45rem 1rem;border-radius:8px;font-size:0.9rem;font-weight:600;
           text-decoration:none;background:var(--accent);color:#fff">
-    🎯 Tipovat Extra otázky
+    🎯 {{tr .Lang "extra_btn_tip"}}
 </a>
 {{end}}
 

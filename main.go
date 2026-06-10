@@ -569,6 +569,11 @@ func templateFuncs() template.FuncMap {
 		"tr": func(lang, key string) string {
 			return i18n.Tr(lang, key)
 		},
+		// trx translates dynamic DB content (competition names, extra questions)
+		// CS → EN via Google Translate with in-memory cache; returns original for CS
+		"trx": func(lang, text string) string {
+			return i18n.TrDynamic(lang, text)
+		},
 		// splitLines splits a string by newlines and returns non-empty trimmed lines
 		"splitLines": func(s string) []string {
 			parts := strings.Split(s, "\n")
