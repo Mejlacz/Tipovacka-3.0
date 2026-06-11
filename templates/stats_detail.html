@@ -68,7 +68,7 @@
 {{if .S}}
 <div style="margin-bottom:1.5rem;display:flex;gap:.4rem;flex-wrap:wrap">
     <a href="/stats/{{.CompID}}/extended" class="btn btn-sm btn-secondary">📊 Rozšířené statistiky</a>
-    <button id="pr-chart-toggle" class="btn btn-sm btn-secondary" onclick="togglePrChart()">📈 Přesnost per kolo</button>
+    <button id="pr-chart-toggle" class="btn btn-sm btn-secondary" onclick="togglePrChart()">📈 Přesnost v čase</button>
 </div>
 <div id="pr-chart-wrap" style="display:none;background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem;margin-bottom:1.5rem">
     <canvas id="pr-chart" style="max-height:280px"></canvas>
@@ -81,7 +81,7 @@ function togglePrChart() {
     var btn  = document.getElementById('pr-chart-toggle');
     var open = wrap.style.display === 'none';
     wrap.style.display = open ? 'block' : 'none';
-    btn.textContent = open ? '📉 Skrýt graf' : '📈 Přesnost per kolo';
+    btn.textContent = open ? '📉 Skrýt graf' : '📈 Přesnost v čase';
     if (open && !_prLoaded) { _prLoaded = true; loadPrChart(); }
 }
 function loadPrChart() {

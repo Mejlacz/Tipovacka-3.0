@@ -251,7 +251,7 @@
                 {{/* Sezóna / kolo */}}
                 <div class="api-form-group" style="margin-bottom:.5rem" id="api-season-group">
                     <label class="api-label">
-                        <span id="api-season-label-text">Kolo v API</span>
+                        <span id="api-season-label-text">Matchday v API</span>
                         <span id="api-season-count" class="api-season-badge" style="display:none"></span>
                     </label>
                     <div id="api-matchday-row-football">
@@ -809,7 +809,7 @@ window.setApiSport = function(sport) {
     var badge = qs('#api-season-count');
     if(mdf) mdf.style.display = sport === 'football' ? '' : 'none';
     if(mdh) mdh.style.display = sport === 'hockey'   ? '' : 'none';
-    if(lbl) lbl.textContent   = sport === 'hockey'   ? 'Sezóna' : 'Kolo v API';
+    if(lbl) lbl.textContent   = sport === 'hockey'   ? 'Sezóna' : 'Matchday v API';
     if(badge && sport === 'football') badge.style.display = 'none';
     // Action button label
     updateActionBtn();

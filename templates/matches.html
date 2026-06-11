@@ -1,7 +1,7 @@
 <div class="page-header">
-    <h1>⚽ Zápasy — {{.Round.Name}}</h1>
+    <h1>⚽ Zápasy — {{.Comp.Name}} <span class="muted" style="font-size:.9rem;font-weight:400">{{.Comp.Season}}</span></h1>
     <div style="display:flex;gap:.5rem">
-        <a href="/admin/competitions/{{.Round.CompetitionID}}/rounds" class="btn btn-secondary btn-sm">← Kola</a>
+        <a href="/admin/competitions/{{.Comp.ID}}/edit" class="btn btn-secondary btn-sm">← Soutěž</a>
         <a href="/admin/results" class="btn btn-primary btn-sm">📊 Výsledky</a>
     </div>
 </div>
@@ -12,7 +12,26 @@
 </div>
 {{end}}
 
-<form method="post" action="/admin/rounds/{{.Round.ID}}/matches/new"
+{{/* ── Deadline soutěže ── */}}
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+    <span style="font-size:.85rem;font-weight:600">⏰ Deadline tipování:</span>
+    <form method="post" action="/admin/competitions/{{.Comp.ID}}/set-deadline"
+          style="display:inline-flex;align-items:center;gap:.4rem">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        <input type="datetime-local" name="deadline" lang="cs"
+               value="{{fmtTime .Comp.Deadline "2006-01-02T15:04"}}"
+               style="font-size:.82rem;padding:.25rem .45rem;border:1px solid var(--border-d);border-radius:4px;background:var(--bg3);color:var(--text-d)" />
+        <button type="submit" class="btn btn-sm btn-secondary">Uložit</button>
+        {{if .Comp.Deadline}}
+            <span style="font-size:.78rem;color:var(--muted-d)">Aktuální: {{fmtPrague .Comp.Deadline "02.01.2006 15:04"}}</span>
+        {{else}}
+            <span style="font-size:.78rem;color:var(--muted-d)">Prázdné = otevřeno do začátku každého zápasu</span>
+        {{end}}
+    </form>
+</div>
+
+{{/* ── Přidat zápas ── */}}
+<form method="post" action="/admin/competitions/{{.Comp.ID}}/matches/new"
       style="display:flex;gap:.5rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap">
     <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
     <select name="home_team_id" required style="flex:1;min-width:140px">
@@ -26,7 +45,7 @@
     <input type="datetime-local" name="match_date" lang="cs" />
     <button type="submit" class="btn btn-primary btn-sm">+ Přidat</button>
 </form>
-{{if not .Teams}}<p style="color:#f87171;font-size:.82rem">⚠️ Žádné týmy nejsou přiřazeny k této soutěži — zápas nelze přidat. Přiřaď týmy přes <a href="/admin/competitions/{{.Round.CompetitionID}}/teams">správu týmů soutěže</a>.</p>{{end}}
+{{if not .Teams}}<p style="color:#f87171;font-size:.82rem">⚠️ Žádné týmy nejsou přiřazeny k této soutěži — zápas nelze přidat. Přiřaď týmy přes <a href="/admin/competitions/{{.Comp.ID}}/teams">správu týmů soutěže</a>.</p>{{end}}
 
 {{if .Matches}}
 
@@ -65,7 +84,7 @@
             {{if .MatchDate}}{{.MatchDate.Format "02.01. 15:04"}}{{else}}—{{end}}
         </td>
         <td style="padding:.4rem .5rem">
-            {{if .HomeScore}}
+            {{if .IsFinished}}
                 <span style="margin-right:.3rem">{{intVal .HomeScore}}:{{intVal .AwayScore}} ✅</span>
                 <form style="display:inline" method="post" action="/admin/matches/{{.ID}}/clear-result"
                       onsubmit="return confirm('Smazat skóre {{intVal .HomeScore}}:{{intVal .AwayScore}}?')">
@@ -109,7 +128,7 @@
                        value="{{if .MatchDate}}{{.MatchDate.Format "2006-01-02T15:04"}}{{end}}" />
                 <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem">Uložit</button>
                 <button type="button" class="btn btn-sm btn-secondary" style="font-size:.78rem"
-                        onclick="toggleMatchEdit({{.ID}})">Zrušit</button>
+                        onclick="toggleMatchEdit('{{.ID}}')">Zrušit</button>
             </form>
         </td>
     </tr>
@@ -117,7 +136,7 @@
     </tbody>
 </table>
 {{else}}
-<p class="empty">Žádné zápasy v tomto kole.</p>
+<p class="empty">Žádné zápasy. Přidej první zápas výše.</p>
 {{end}}
 
 <script>
