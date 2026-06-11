@@ -5,12 +5,12 @@
 <div style="margin-bottom:1.5rem">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;flex-wrap:wrap;gap:.4rem">
         <h2 style="font-size:.88rem;font-weight:700;color:var(--muted-d);margin:0;text-transform:uppercase;letter-spacing:.05em">
-            ⚡ Otevřená tipování
+            {{tr .Lang "tips_open_section"}}
         </h2>
         <div style="display:flex;align-items:center;gap:.5rem">
             <span id="qt-flash" style="font-size:.8rem;display:none"></span>
             <button id="qt-save-all" style="padding:.3rem .75rem;font-size:.82rem;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:7px;cursor:pointer;white-space:nowrap">
-                💾 Uložit vše
+                💾 {{tr .Lang "tips_save_all"}}
             </button>
         </div>
     </div>
@@ -66,7 +66,7 @@
        style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.4rem;margin-bottom:0.6rem;
               padding:0.35rem 0.85rem;border-radius:8px;font-size:0.85rem;font-weight:600;
               text-decoration:none;background:var(--accent);color:#fff">
-        🎯 Tipovat Extra otázky – {{.Name}}
+        {{tr $.Lang "tips_extra_btn"}} – {{.Name}}
     </a>
     {{end}}
 {{end}}
@@ -112,6 +112,12 @@
 </style>
 
 <script>
+var LANG_QT = {
+    nothingToSave: '{{tr .Lang "tips_nothing_to_save"}}',
+    saving:  '⏳ {{tr .Lang "tips_saving"}}…',
+    saveAll: '💾 {{tr .Lang "tips_save_all"}}',
+    errors:  '{{tr .Lang "tips_errors"}}'
+};
 (function() {
     var flash = document.getElementById('qt-flash');
     var flashTimer;
@@ -181,11 +187,11 @@
                 return sc.length >= 2 && sc[0].value !== '' && sc[1].value !== '';
             });
             if (!forms.length) {
-                showFlash('Žádné tipy k uložení', 'warn');
+                showFlash(LANG_QT.nothingToSave, 'warn');
                 return;
             }
             saveAllBtn.disabled = true;
-            saveAllBtn.textContent = '⏳ Ukládám…';
+            saveAllBtn.textContent = LANG_QT.saving;
             var saved = 0, failed = 0, pending = forms.length;
             forms.forEach(function(form) {
                 submitFormAjax(form, function(ok) {
@@ -193,11 +199,11 @@
                     pending--;
                     if (pending === 0) {
                         saveAllBtn.disabled = false;
-                        saveAllBtn.textContent = '💾 Uložit vše';
+                        saveAllBtn.textContent = LANG_QT.saveAll;
                         if (failed === 0) {
-                            showFlash('✅ Uloženo ' + saved + ' tipů', 'ok');
+                            showFlash('✅ ' + saved, 'ok');
                         } else {
-                            showFlash('✅ ' + saved + ' ok, ❌ ' + failed + ' chyb', 'err');
+                            showFlash('✅ ' + saved + ' ok, ❌ ' + failed + ' ' + LANG_QT.errors, 'err');
                         }
                     }
                 });

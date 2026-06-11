@@ -112,10 +112,13 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 			}
 
 			for _, m := range pendingMatches {
+				if tipMap[m.ID] != nil {
+					continue // skrýt natipované
+				}
 				comp := compByID[m.CompetitionID]
 				ctx2 := IndexMatchCtx{
 					Match: m,
-					Tip:   tipMap[m.ID],
+					Tip:   nil,
 				}
 				if comp != nil {
 					ctx2.CompName = comp.Name
@@ -256,9 +259,18 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 
 		allLocked := len(matchContextAll) > 0 && len(tippable) == 0
 
+		// Jen nenatipované zápasy
+		var untipped []matchCtxRow
+		for _, row := range tippable {
+			if row.Tip == nil {
+				untipped = append(untipped, row)
+			}
+		}
+		allTipped := len(tippable) > 0 && len(untipped) == 0
+
 		// Convert to interface{} slice for template
-		tippableIface := make([]interface{}, len(tippable))
-		for i, v := range tippable {
+		tippableIface := make([]interface{}, len(untipped))
+		for i, v := range untipped {
 			tippableIface[i] = v
 		}
 
@@ -300,6 +312,7 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 			"Comp":         comp,
 			"MatchContext": tippableIface,
 			"AllLocked":    allLocked,
+			"AllTipped":    allTipped,
 			"ExtraOpen":    extraOpen,
 		})
 	}

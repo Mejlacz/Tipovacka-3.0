@@ -10,12 +10,14 @@
    style="display:inline-flex;align-items:center;gap:0.4rem;margin-bottom:1.1rem;
           padding:0.45rem 1rem;border-radius:8px;font-size:0.9rem;font-weight:600;
           text-decoration:none;background:var(--accent);color:#fff">
-    🎯 Tipovat Extra otázky
+    {{tr .Lang "tips_extra_btn"}}
 </a>
 {{end}}
 
 {{if not .MatchContext}}
-    {{if .AllLocked}}
+    {{if .AllTipped}}
+    <div class="alert alert-success" style="max-width:480px">{{tr .Lang "tips_all_tipped_wait"}}</div>
+    {{else if .AllLocked}}
     <div class="alert alert-success" style="max-width:480px">{{tr .Lang "tips_all_tipped"}}</div>
     {{else}}
     <p class="empty">{{tr .Lang "tips_no_active"}}</p>
@@ -26,7 +28,7 @@
      background:var(--bg1,#0f1923);padding:0.45rem 0;margin-bottom:0.5rem;
      border-bottom:1px solid var(--border-d,rgba(255,255,255,.08));text-align:right">
     <button id="bulk-save-btn" class="btn btn-primary" style="padding:0.35rem 1.1rem;font-size:0.92rem">
-        💾 Uložit vše
+        💾 {{tr .Lang "tips_save_all"}}
     </button>
     <span id="bulk-save-status" style="margin-left:0.7rem;font-size:0.82rem;display:none"></span>
 </div>
@@ -132,7 +134,14 @@
 }());
 
 
-var LANG_STARTING = 'Právě začíná!';
+var LANG_STARTING = '{{tr .Lang "tips_starting"}}';
+var LANG_TIPS = {
+    nothingToSave: '{{tr .Lang "tips_nothing_to_save"}}',
+    saving:   '⏳ {{tr .Lang "tips_saving"}}…',
+    saved:    '✅ {{tr .Lang "tips_saved"}}',
+    saveAll:  '💾 {{tr .Lang "tips_save_all"}}',
+    errors:   '{{tr .Lang "tips_errors"}}'
+};
 (function () {
     var els = document.querySelectorAll('.match-countdown[data-countdown]');
     if (!els.length) return;
@@ -180,14 +189,14 @@ var LANG_STARTING = 'Právě začíná!';
     document.addEventListener('input', function(e) { if (e.target.classList.contains('score-input')) updateBar(); });
     btn.addEventListener('click', function () {
         var forms = getOpenForms().filter(isFilled);
-        if (!forms.length) { status.textContent = 'Nic k uložení.'; status.style.display='block'; setTimeout(function(){status.style.display='none';},2000); return; }
-        btn.disabled = true; btn.textContent = '⏳ Ukládám…'; status.style.display='none';
+        if (!forms.length) { status.textContent = LANG_TIPS.nothingToSave; status.style.display='block'; setTimeout(function(){status.style.display='none';},2000); return; }
+        btn.disabled = true; btn.textContent = LANG_TIPS.saving; status.style.display='none';
         var total = forms.length, done = 0, failed = 0;
         function finish() {
             done++;
             if (done + failed < total) return;
-            if (failed === 0) { btn.textContent = '✅ Uloženo'; setTimeout(function(){window.location.reload();}, 800); }
-            else { btn.disabled=false; btn.textContent='💾 Uložit vše'; status.textContent='⚠️ '+failed+' chyb'; status.style.display='block'; }
+            if (failed === 0) { btn.textContent = LANG_TIPS.saved; setTimeout(function(){window.location.reload();}, 800); }
+            else { btn.disabled=false; btn.textContent=LANG_TIPS.saveAll; status.textContent='⚠️ '+failed+' '+LANG_TIPS.errors; status.style.display='block'; }
         }
         forms.forEach(function (form) {
             var body = new URLSearchParams();

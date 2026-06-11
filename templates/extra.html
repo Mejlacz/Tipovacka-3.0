@@ -87,7 +87,7 @@
                     <span style="font-size:0.8rem;color:var(--muted-d);margin-right:0.4rem">{{add $i 1}}.</span>
                     <strong style="font-size:1.05rem">{{$q.Text}}</strong>
                     {{if $q.IsClosed}}
-                    <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#f87171;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">Uzavřeno</span>
+                    <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#f87171;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">{{tr $.Lang "extra_closed"}}</span>
                     {{end}}
                     {{if ne $q.MaxPoints 3}}
                     <span style="font-size:0.75rem;color:var(--muted-d);margin-left:0.4rem">({{$q.MaxPoints}} b)</span>
@@ -103,7 +103,7 @@
             {{/* Správná odpověď — zobrazit jen pokud jsou výsledky zveřejněny */}}
             {{if and $.IsRevealed $q.CorrectAnswer}}
             <div style="font-size:0.82rem;color:#fbbf24;background:rgba(245,158,11,0.12);padding:0.3rem 0.7rem;border-radius:6px;margin-bottom:0.6rem">
-                Správná odpověď: <strong>{{$q.CorrectAnswer}}</strong>
+                {{tr $.Lang "extra_correct"}} <strong>{{$q.CorrectAnswer}}</strong>
             </div>
             {{end}}
 
@@ -115,7 +115,7 @@
                 <select class="extra-input"
                         {{if $locked}}disabled{{end}}
                         style="flex:1;padding:0.45rem 0.7rem;border-radius:7px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem;{{if $locked}}opacity:0.7;{{end}}">
-                    <option value="">— vyberte —</option>
+                    <option value="">{{tr $.Lang "extra_select_ph"}}</option>
                     {{range splitLines (strVal $q.AnswerOptions)}}
                     <option value="{{.}}" {{if and $ans (eq $ans.Answer .)}}selected{{end}}>{{.}}</option>
                     {{end}}
@@ -125,7 +125,7 @@
                 <input type="text"
                        class="extra-input"
                        value="{{if $ans}}{{$ans.Answer}}{{end}}"
-                       placeholder="Váš tip…"
+                       placeholder="{{tr $.Lang "extra_placeholder"}}"
                        {{if $locked}}disabled{{end}}
                        style="flex:1;padding:0.45rem 0.7rem;border-radius:7px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem;{{if $locked}}opacity:0.7;{{end}}"
                        maxlength="200">
@@ -134,11 +134,11 @@
                 <button class="btn btn-secondary extra-save"
                         style="white-space:nowrap;min-width:80px"
                         type="button">
-                    Uložit
+                    {{tr $.Lang "extra_save"}}
                 </button>
                 {{else}}
                 <span style="font-size:0.8rem;color:var(--muted-d);min-width:80px;text-align:center">
-                    {{if and $.IsRevealed $ans $ans.Points}}Ohodnoceno{{else}}Uzavřeno{{end}}
+                    {{if and $.IsRevealed $ans $ans.Points}}{{tr $.Lang "extra_evaluated"}}{{else}}{{tr $.Lang "extra_closed"}}{{end}}
                 </span>
                 {{end}}
             </div>
@@ -147,9 +147,9 @@
             {{if $.User.IsAdmin}}
             <div style="margin-top:0.6rem;text-align:right">
                 <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete"
-                      onsubmit="return confirm('Opravdu smazat otázku {{$q.Text}}?')" style="display:inline">
+                      onsubmit="return confirm('{{tr $.Lang "extra_delete_q"}} {{$q.Text}}?')" style="display:inline">
                     <button type="submit" style="font-size:0.75rem;color:#dc3545;background:none;border:none;cursor:pointer;text-decoration:underline">
-                        Smazat otázku
+                        {{tr $.Lang "extra_delete_confirm"}}
                     </button>
                 </form>
             </div>
@@ -164,6 +164,13 @@
 </div>
 
 <script>
+var LANG_EXTRA = {
+    saved:   '✅ {{tr .Lang "extra_saved"}}',
+    save:    '{{tr .Lang "extra_save"}}',
+    qClosed: '❌ {{tr .Lang "extra_q_closed"}}',
+    saveErr: '❌ {{tr .Lang "extra_save_error"}}',
+    connErr: '❌ {{tr .Lang "extra_conn_error"}}'
+};
 document.addEventListener('DOMContentLoaded', function () {
     var flash = document.getElementById('extra-flash');
 
@@ -193,19 +200,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(function (data) {
                     if (data.ok) {
                         btn.textContent = '✓';
-                        showMsg('✅ Uloženo', 'ok');
-                        setTimeout(function () { btn.textContent = 'Uložit'; btn.disabled = false; }, 1200);
+                        showMsg(LANG_EXTRA.saved, 'ok');
+                        setTimeout(function () { btn.textContent = LANG_EXTRA.save; btn.disabled = false; }, 1200);
                     } else {
-                        btn.textContent = 'Uložit';
+                        btn.textContent = LANG_EXTRA.save;
                         btn.disabled = false;
-                        if (data.error === 'closed') showMsg('❌ Otázka je uzavřena', 'err');
-                        else showMsg('❌ Chyba při ukládání', 'err');
+                        if (data.error === 'closed') showMsg(LANG_EXTRA.qClosed, 'err');
+                        else showMsg(LANG_EXTRA.saveErr, 'err');
                     }
                 })
                 .catch(function () {
-                    btn.textContent = 'Uložit';
+                    btn.textContent = LANG_EXTRA.save;
                     btn.disabled = false;
-                    showMsg('❌ Chyba spojení', 'err');
+                    showMsg(LANG_EXTRA.connErr, 'err');
                 });
         }
 
