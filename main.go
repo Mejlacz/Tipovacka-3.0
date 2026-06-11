@@ -583,6 +583,10 @@ func templateFuncs() template.FuncMap {
 		"tr": func(lang, key string) string {
 			return i18n.Tr(lang, key)
 		},
+		// trc auto-translates DB content (competition names, extra questions…)
+		"trc": func(lang, text string) string {
+			return i18n.Trc(lang, text)
+		},
 		// splitLines splits a string by newlines and returns non-empty trimmed lines
 		"splitLines": func(s string) []string {
 			parts := strings.Split(s, "\n")

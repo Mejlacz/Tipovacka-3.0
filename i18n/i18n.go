@@ -2,6 +2,16 @@
 // Jednoduchý překladový systém (CS / EN).
 package i18n
 
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
+)
+
 var translations = map[string]map[string]string{
 	"cs": {
 		"nav_leaderboard":    "Žebříček",
@@ -142,6 +152,9 @@ var translations = map[string]map[string]string{
 		"extra_delete_confirm": "Smazat otázku",
 		"extra_select_ph":    "— vyberte —",
 		"extra_delete_q":     "Opravdu smazat otázku",
+		"extra_locked_revealed": "🔒 Tipování uzavřeno · Výsledky zveřejněny",
+		"extra_locked_pending":  "🔒 Tipování uzavřeno · Výsledky budou zveřejněny brzy",
+		"extra_deadline_label":  "⏰ Deadline pro tipování:",
 		"profile_title":      "👤 Profil",
 		"profile_personal":   "Osobní údaje",
 		"profile_nickname":   "Přezdívka",
@@ -446,6 +459,9 @@ var translations = map[string]map[string]string{
 		"extra_delete_confirm": "Delete question",
 		"extra_select_ph":    "— select —",
 		"extra_delete_q":     "Really delete question",
+		"extra_locked_revealed": "🔒 Tipping closed · Results revealed",
+		"extra_locked_pending":  "🔒 Tipping closed · Results coming soon",
+		"extra_deadline_label":  "⏰ Tipping deadline:",
 		"profile_title":      "👤 Profile",
 		"profile_personal":   "Personal info",
 		"profile_nickname":   "Nickname",
@@ -611,6 +627,70 @@ var translations = map[string]map[string]string{
 		"email_manual_plus":  "+ manual emails",
 		"email_translate_en": "🌐 Add EN translation (Google Translate)",
 	},
+}
+
+// ── Auto-překlad DB obsahu (názvy soutěží, extra otázky…) ────────────────────
+
+var (
+	trcCache  = map[string]string{} // klíč: lang + "\x00" + text
+	trcMu     sync.Mutex
+	trcClient = &http.Client{Timeout: 5 * time.Second}
+)
+
+// Trc přeloží libovolný text (z DB) do daného jazyka přes Google Translate.
+// - lang == "cs" nebo prázdný text → vrátí text beze změny
+// - výsledky se cachují v paměti procesu
+// - při chybě překladu vrátí originál
+func Trc(lang, text string) string {
+	if lang == "cs" || lang == "" || text == "" {
+		return text
+	}
+	key := lang + "\x00" + text
+	trcMu.Lock()
+	if v, ok := trcCache[key]; ok {
+		trcMu.Unlock()
+		return v
+	}
+	trcMu.Unlock()
+
+	result := googleTranslate(text, lang)
+	if result == "" {
+		return text
+	}
+	trcMu.Lock()
+	trcCache[key] = result
+	trcMu.Unlock()
+	return result
+}
+
+// googleTranslate volá free Google Translate endpoint (stejně jako admin_email.go).
+func googleTranslate(text, target string) string {
+	apiURL := "https://translate.googleapis.com/translate_a/single?client=gtx&sl=cs&tl=" +
+		url.QueryEscape(target) + "&dt=t&q=" + url.QueryEscape(text)
+	resp, err := trcClient.Get(apiURL)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var rawAny []interface{}
+	if err := json.Unmarshal(body, &rawAny); err != nil || len(rawAny) == 0 {
+		return ""
+	}
+	parts, ok := rawAny[0].([]interface{})
+	if !ok {
+		return ""
+	}
+	var sb strings.Builder
+	for _, p := range parts {
+		if arr, ok := p.([]interface{}); ok && len(arr) > 0 {
+			if s, ok := arr[0].(string); ok {
+				sb.WriteString(s)
+			}
+		}
+	}
+	return sb.String()
 }
 
 // Tr translates a key to the given language.

@@ -1,5 +1,5 @@
 <div class="page-header">
-    <h1>{{.Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
+    <h1>{{trc .Lang .Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
     {{if and .User .User.IsAdmin}}
     <a href="/admin/competitions/{{.Comp.ID}}/matches" class="btn btn-primary btn-sm">{{tr .Lang "tips_add_match"}}</a>
     {{end}}

@@ -8,7 +8,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             <select name="competition_id" onchange="this.form.submit()">
                 {{range .Competitions}}
                 <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
-                    {{if .IsHidden}}🙈 {{end}}{{.Name}} {{.Season}}
+                    {{if .IsHidden}}🙈 {{end}}{{trc $.Lang .Name}} {{.Season}}
                 </option>
                 {{end}}
             </select>
