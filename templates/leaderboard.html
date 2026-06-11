@@ -90,10 +90,10 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
 
 {{/* ── Barevná legenda ── */}}
 <div class="lb-legend" style="margin-bottom:.75rem;font-size:.82rem;display:flex;gap:1rem;flex-wrap:wrap">
-    <span class="lb-legend-item"><span class="lb-legend-dot tip-exact" style="display:inline-block;width:12px;height:12px;background:var(--ui-exact-bg,#16a34a);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Přesný tip</span>
-    <span class="lb-legend-item"><span class="lb-legend-dot tip-winner" style="display:inline-block;width:12px;height:12px;background:var(--ui-winner-bg,#b45309);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Správný vítěz</span>
-    <span class="lb-legend-item"><span class="lb-legend-dot tip-miss" style="display:inline-block;width:12px;height:12px;background:var(--bg3);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Špatný tip</span>
-    <span class="lb-legend-item"><span style="color:var(--accent);font-size:0.9rem">✓</span> Vsazeno (skryto)</span>
+    <span class="lb-legend-item"><span class="lb-legend-dot tip-exact" style="display:inline-block;width:12px;height:12px;background:var(--ui-exact-bg,#16a34a);border-radius:2px;margin-right:3px;vertical-align:middle"></span>{{tr .Lang "lb_legend_exact"}}</span>
+    <span class="lb-legend-item"><span class="lb-legend-dot tip-winner" style="display:inline-block;width:12px;height:12px;background:var(--ui-winner-bg,#b45309);border-radius:2px;margin-right:3px;vertical-align:middle"></span>{{tr .Lang "lb_legend_winner"}}</span>
+    <span class="lb-legend-item"><span class="lb-legend-dot tip-miss" style="display:inline-block;width:12px;height:12px;background:var(--bg3);border-radius:2px;margin-right:3px;vertical-align:middle"></span>{{tr .Lang "lb_legend_miss"}}</span>
+    <span class="lb-legend-item"><span style="color:var(--accent);font-size:0.9rem">✓</span> {{tr .Lang "lb_legend_hidden"}}</span>
 </div>
 
 {{if or .User.IsAdmin .User.IsOwner}}
@@ -109,8 +109,8 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         {{/* ── Row 1: column headers ── */}}
         <tr>
             <th class="col-place">#</th>
-            <th class="col-user">Tipér</th>
-            {{if .ExtraCols}}<th class="col-total" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>{{end}}
+            <th class="col-user">{{tr .Lang "lb_tipster"}}</th>
+            {{if .ExtraCols}}<th class="col-total" style="border-left:2px solid #dee2e6" title="{{tr .Lang "lb_total"}} ({{tr .Lang "lb_tips"}} + extra)">{{tr .Lang "lb_total"}}</th>{{end}}
             {{range .Matches}}
             {{$htName := coalesce .HomeTeam.DisplayName .HomeTeam.Name}}
             {{$atName := coalesce .AwayTeam.DisplayName .AwayTeam.Name}}
@@ -170,15 +170,15 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 {{end}}
             </th>
             {{end}}
-            <th class="col-pts" style="font-size:0.75rem;color:var(--muted-d)">Body</th>
-            <th class="col-match" title="Tipy">
-                <div class="match-header" style="font-size:0.78rem">Tipy</div>
+            <th class="col-pts" style="font-size:0.75rem;color:var(--muted-d)">{{tr .Lang "lb_points"}}</th>
+            <th class="col-match" title="{{tr .Lang "lb_tips"}}">
+                <div class="match-header" style="font-size:0.78rem">{{tr .Lang "lb_tips"}}</div>
             </th>
         </tr>
         {{/* ── Row 2: results ── */}}
         <tr class="results-row">
             <td class="col-place" style="color:var(--muted-d)"></td>
-            <td class="col-user" style="font-size:0.75rem;color:var(--muted-d)">Výsledky</td>
+            <td class="col-user" style="font-size:0.75rem;color:var(--muted-d)">{{tr .Lang "lb_results"}}</td>
             {{if .ExtraCols}}<td class="col-total" style="border-left:2px solid #dee2e6"></td>{{end}}
             {{range .Matches}}
             <td class="cell-result{{if or $.User.IsAdmin $.User.IsOwner}} result-editable{{end}}"
@@ -645,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var modal = document.createElement('div');
     modal.id = 'tipster-modal';
     modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:2000;align-items:flex-start;justify-content:center;padding-top:' + (navH + 12) + 'px;padding-left:1rem;padding-right:1rem;overflow-y:auto';
-    modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:16px;padding:1.4rem 1.25rem 1.1rem;width:min(380px,92vw);margin-bottom:1rem"><div id="tipster-modal-body"></div><button id="tipster-modal-close" class="btn btn-secondary btn-sm" style="margin-top:1.1rem;width:100%">Zavřít</button></div>';
+    modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:16px;padding:1.4rem 1.25rem 1.1rem;width:min(380px,92vw);margin-bottom:1rem"><div id="tipster-modal-body"></div><button id="tipster-modal-close" class="btn btn-secondary btn-sm" style="margin-top:1.1rem;width:100%">{{tr .Lang "lb_modal_close"}}</button></div>';
     document.body.appendChild(modal);
     document.getElementById('tipster-modal-close').addEventListener('click', function() { modal.style.display = 'none'; });
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });

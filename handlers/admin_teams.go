@@ -934,6 +934,52 @@ func AdminRosterToggle(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"ok":true}`))
 }
 
+// POST /admin/teams/bulk-delete (AJAX)
+// Tělo: URL-encoded, pole "ids" = JSON pole intů
+func AdminTeamBulkDelete(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"ok":false,"error":"unauthorized"}`))
+		return
+	}
+	// r.Form already parsed by CSRF middleware
+	raw := r.FormValue("ids")
+	if raw == "" {
+		w.Write([]byte(`{"ok":false,"error":"missing ids"}`))
+		return
+	}
+	var idStrs []string
+	if err := json.Unmarshal([]byte(raw), &idStrs); err != nil {
+		b, _ := json.Marshal(map[string]interface{}{"ok": false, "error": "bad JSON: " + err.Error()})
+		w.Write(b)
+		return
+	}
+	ctx := context.Background()
+	deleted, skipped := 0, 0
+	for _, idStr := range idStrs {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		var mc int
+		_ = db.Pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM matches WHERE home_team_id=$1 OR away_team_id=$1`, id).Scan(&mc)
+		if mc > 0 {
+			skipped++
+			continue
+		}
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE team_id=$1`, id)
+		res, _ := db.Pool.Exec(ctx, `DELETE FROM teams WHERE id=$1`, id)
+		if res.RowsAffected() > 0 {
+			deleted++
+		}
+	}
+	b, _ := json.Marshal(map[string]interface{}{"ok": true, "deleted": deleted, "skipped": skipped})
+	w.Write(b)
+}
+
 // ── appendTeamAlias ────────────────────────────────────────────────────────────
 // Appends name as an alias on a team (comma-separated in the alias column).
 // If the name is already present (case-insensitive), it is skipped.

@@ -1,4 +1,4 @@
-// handlers/admin_matches.go — Tipovačka 2.0
+// handlers/admin_matches.go — Tipovačka 3.0
 // Správa zápasů + výsledky + přepočet bodů.
 package handlers
 
@@ -96,6 +96,13 @@ func AdminMatchCreate(w http.ResponseWriter, r *http.Request) {
 	homeTeamID, _ := strconv.Atoi(r.FormValue("home_team_id"))
 	awayTeamID, _ := strconv.Atoi(r.FormValue("away_team_id"))
 	matchDateStr := r.FormValue("match_date")
+
+	if homeTeamID == 0 || awayTeamID == 0 {
+		middleware.SetFlash(w, r, "error", "Chyba: nevybrán tým (domácí="+strconv.Itoa(homeTeamID)+", hosté="+strconv.Itoa(awayTeamID)+"). Jsou týmy přiřazeny k soutěži?")
+		http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
+		return
+	}
+
 	var matchDate *time.Time
 	if matchDateStr != "" {
 		t, err := time.ParseInLocation("2006-01-02T15:04", matchDateStr, pragueLocation)

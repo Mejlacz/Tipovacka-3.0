@@ -21,16 +21,16 @@
     <h2 style="margin:0 0 1rem;font-size:1rem">🖼️ {{tr .Lang "profile_bg"}}</h2>
     {{if .User.BackgroundURL}}
     <div style="margin-bottom:.75rem">
-        <img src="{{strVal .User.BackgroundURL}}" alt="Profilová fotka"
+        <img src="{{strVal .User.BackgroundURL}}" alt="{{tr .Lang "profile_bg_alt"}}"
              style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border-d)" />
     </div>
     <form method="post" action="/profile/avatar/delete" style="display:inline;margin-bottom:.75rem">
         <button type="submit" class="btn btn-sm btn-danger"
-                onclick="return confirm('Opravdu smazat profilovou fotku?')">Smazat fotku</button>
+                onclick="return confirm('{{tr .Lang "profile_confirm_del"}}')">{{tr .Lang "profile_delete_avatar"}}</button>
     </form>
     <div style="margin-top:.75rem">
     {{else}}
-    <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">Nemáš nastavenou profilovou fotku.</p>
+    <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">{{tr .Lang "profile_no_avatar"}}</p>
     <div>
     {{end}}
         <form method="post" action="/profile/avatar" enctype="multipart/form-data">
@@ -41,10 +41,10 @@
                 <div style="display:flex;flex-direction:column;gap:.4rem">
                     <input type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp" required
                            id="avatar-input" style="font-size:.82rem" />
-                    <button type="submit" class="btn btn-sm btn-primary" id="avatar-upload-btn" style="display:none">⬆️ Nahrát fotku</button>
+                    <button type="submit" class="btn btn-sm btn-primary" id="avatar-upload-btn" style="display:none">{{tr .Lang "profile_upload_avatar"}}</button>
                 </div>
             </div>
-            <p style="color:var(--muted-d);font-size:.78rem;margin:.4rem 0 0">Max 5 MB, formáty: JPG, PNG, WEBP.</p>
+            <p style="color:var(--muted-d);font-size:.78rem;margin:.4rem 0 0">{{tr .Lang "profile_avatar_hint"}}</p>
         </form>
         <script>
         (function() {
@@ -74,12 +74,12 @@
     <form method="post" action="/profile/update">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
             <div class="form-group" style="margin-bottom:0">
-                <label>Jméno</label>
-                <input type="text" name="first_name" value="{{if .User.FirstName}}{{strVal .User.FirstName}}{{end}}" placeholder="Nepovinné" />
+                <label>{{tr .Lang "profile_firstname"}}</label>
+                <input type="text" name="first_name" value="{{if .User.FirstName}}{{strVal .User.FirstName}}{{end}}" placeholder="{{tr .Lang "profile_optional"}}" />
             </div>
             <div class="form-group" style="margin-bottom:0">
-                <label>Příjmení</label>
-                <input type="text" name="last_name" value="{{if .User.LastName}}{{strVal .User.LastName}}{{end}}" placeholder="Nepovinné" />
+                <label>{{tr .Lang "profile_lastname"}}</label>
+                <input type="text" name="last_name" value="{{if .User.LastName}}{{strVal .User.LastName}}{{end}}" placeholder="{{tr .Lang "profile_optional"}}" />
             </div>
         </div>
         <div class="form-group">
@@ -91,7 +91,7 @@
             <input type="email" name="email" value="{{if .User.Email}}{{strVal .User.Email}}{{end}}" />
         </div>
         <div class="form-group">
-            <label>Jazyk</label>
+            <label>{{tr .Lang "profile_language"}}</label>
             <select name="lang" style="width:100%;padding:.45rem .6rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.9rem">
                 <option value="cs" {{if eq .User.Lang "cs"}}selected{{end}}>🇨🇿 Čeština</option>
                 <option value="en" {{if eq .User.Lang "en"}}selected{{end}}>🇬🇧 English</option>
@@ -103,9 +103,9 @@
 
 {{/* ── Vzhled rozhraní ── */}}
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 .75rem;font-size:1rem">🎨 Vzhled rozhraní</h2>
-    <p style="color:var(--muted-d);font-size:.85rem;margin:0 0 .75rem">Barvy tipů, font a akcent — vlastní rozhraní přizpůsobené tobě.</p>
-    <a href="/profile/appearance" class="btn btn-secondary btn-sm">Upravit vzhled →</a>
+    <h2 style="margin:0 0 .75rem;font-size:1rem">{{tr .Lang "profile_appearance_title"}}</h2>
+    <p style="color:var(--muted-d);font-size:.85rem;margin:0 0 .75rem">{{tr .Lang "profile_appearance_desc"}}</p>
+    <a href="/profile/appearance" class="btn btn-secondary btn-sm">{{tr .Lang "profile_appearance_btn"}}</a>
 </section>
 
 {{/* ── Změna hesla ── */}}
@@ -134,7 +134,7 @@
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
     <h2 style="margin:0 0 .5rem;font-size:1rem">{{tr .Lang "profile_notify"}}</h2>
     <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">
-        Dostávej push notifikace před začátkem tipování.
+        {{tr .Lang "profile_notify_desc"}} {{tr .Lang "profile_notify_before"}}
     </p>
     <form method="post" action="/profile/notifications">
         <div style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:.75rem">
@@ -147,7 +147,7 @@
         </label>
         {{end}}
         </div>
-        <button type="submit" class="btn btn-primary btn-sm">Uložit nastavení</button>
+        <button type="submit" class="btn btn-primary btn-sm">{{tr .Lang "profile_save_settings"}}</button>
     </form>
 </section>
 {{end}}
@@ -158,7 +158,7 @@
 <section id="push-section" style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
     <h2 style="margin:0 0 .5rem;font-size:1rem">{{tr .Lang "profile_push"}}</h2>
     <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">
-        Přihlášená zařízení: <strong>{{.PushDevices}}</strong> — push platí jen pro toto zařízení.
+        {{tr .Lang "profile_push_devices_lbl"}} <strong>{{.PushDevices}}</strong> {{tr .Lang "profile_push_device_hint"}}
     </p>
     <div id="push-unsupported" style="display:none">
         <p class="muted" style="font-size:.85rem">Push notifikace nejsou v tomto prohlížeči podporovány.</p>
@@ -170,8 +170,8 @@
     {{if .PushSubs}}
     <table style="width:100%;border-collapse:collapse;margin-top:.75rem;font-size:.78rem">
         <thead><tr style="background:var(--bg3)">
-            <th style="padding:.3rem .5rem;text-align:left">Zařízení</th>
-            <th style="padding:.3rem .5rem;text-align:left">Endpoint</th>
+            <th style="padding:.3rem .5rem;text-align:left">{{tr .Lang "profile_push_device_col"}}</th>
+            <th style="padding:.3rem .5rem;text-align:left">{{tr .Lang "profile_push_endpoint"}}</th>
             <th style="padding:.3rem .5rem"></th>
         </tr></thead>
         <tbody>
@@ -182,7 +182,7 @@
             <td style="padding:.3rem .5rem">
                 <form method="post" action="/profile/push-delete/{{.ID}}" style="display:inline">
                     <button type="submit" class="btn btn-sm btn-danger" style="padding:.1rem .4rem;font-size:.75rem"
-                            onclick="return confirm('Odebrat tento push přístroj?')">✕</button>
+                            onclick="return confirm('{{tr .Lang "profile_push_rm_confirm"}}')">✕</button>
                 </form>
             </td>
         </tr>
@@ -201,13 +201,13 @@
     <div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border-d)">
         <div style="font-weight:700;margin-bottom:.4rem">{{.Comp.Name}} {{.Comp.Season}}</div>
         <div style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;font-size:.82rem;color:var(--muted-d)">
-            <span>🎯 Přesné: <strong style="color:#e2e8f0">{{.Exact}}</strong></span>
-            <span>✅ Výsledek: <strong style="color:#e2e8f0">{{.Winner}}</strong></span>
-            <span>❌ Špatně: <strong style="color:#e2e8f0">{{.Miss}}</strong></span>
-            <span>📋 Tipů: <strong style="color:#e2e8f0">{{.TipsGiven}}</strong> / {{.TotalFinished}}</span>
-            <span>📦 Body tipy: <strong style="color:#e2e8f0">{{.TipPts}}</strong></span>
-            {{if .ExtraPts}}<span>🏅 Extra: <strong style="color:#e2e8f0">{{.ExtraPts}}</strong></span>{{end}}
-            <span>🏆 Celkem: <strong style="color:#fbbf24;font-size:1rem">{{.GrandTotal}}</strong></span>
+            <span>{{tr $.Lang "profile_stat_exact"}} <strong style="color:#e2e8f0">{{.Exact}}</strong></span>
+            <span>{{tr $.Lang "profile_stat_winner"}} <strong style="color:#e2e8f0">{{.Winner}}</strong></span>
+            <span>{{tr $.Lang "profile_stat_miss"}} <strong style="color:#e2e8f0">{{.Miss}}</strong></span>
+            <span>{{tr $.Lang "profile_stat_tips"}} <strong style="color:#e2e8f0">{{.TipsGiven}}</strong> / {{.TotalFinished}}</span>
+            <span>{{tr $.Lang "profile_stat_tippts"}} <strong style="color:#e2e8f0">{{.TipPts}}</strong></span>
+            {{if .ExtraPts}}<span>{{tr $.Lang "profile_stat_extra"}} <strong style="color:#e2e8f0">{{.ExtraPts}}</strong></span>{{end}}
+            <span>{{tr $.Lang "profile_stat_total"}} <strong style="color:#fbbf24;font-size:1rem">{{.GrandTotal}}</strong></span>
         </div>
     </div>
     {{end}}
@@ -216,11 +216,11 @@
 
 {{/* ── Odhlášení ── */}}
 <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 .75rem;font-size:1rem">🚪 Odhlásit se</h2>
+    <h2 style="margin:0 0 .75rem;font-size:1rem">{{tr .Lang "profile_logout_title"}}</h2>
     <form method="post" action="/logout">
         <button type="submit"
                 style="width:100%;padding:.6rem;border-radius:8px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);color:#f87171;font-size:.95rem;font-weight:600;cursor:pointer">
-            Odhlásit se
+            {{tr .Lang "profile_logout_btn"}}
         </button>
     </form>
 </section>
@@ -241,8 +241,8 @@
     if (ctrl) ctrl.style.display = 'block';
     function updateBtn(reg) {
         reg.pushManager.getSubscription().then(function(sub) {
-            if (btn) btn.textContent = sub ? '🔕 Vypnout push' : '🔔 Zapnout push';
-            if (stat) stat.textContent = sub ? 'Push je zapnutý na tomto zařízení.' : 'Push není zapnutý.';
+            if (btn) btn.textContent = sub ? '{{tr .Lang "profile_push_off"}}' : '{{tr .Lang "profile_push_on"}}';
+            if (stat) stat.textContent = sub ? '{{tr .Lang "profile_push_on_status"}}' : '{{tr .Lang "profile_push_off_status"}}';
         });
     }
     navigator.serviceWorker.ready.then(function(reg) {
@@ -267,7 +267,7 @@
                         if (sub) {
                             fetch('/profile/push-subscribe', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(sub)}).then(function() { updateBtn(reg); });
                         }
-                    }).catch(function(e) { if (stat) stat.textContent = 'Chyba: ' + e; });
+                    }).catch(function(e) { if (stat) stat.textContent = '{{tr .Lang "profile_push_error"}} ' + e; });
                 }
             });
         });
