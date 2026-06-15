@@ -342,11 +342,11 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		}
 		rows.Close()
 
-		// Undoable: last 3 not-yet-undone undoable actions
+		// Undoable: last 100 not-yet-undone undoable actions
 		undoRows, _ := db.Pool.Query(ctx,
 			`SELECT id FROM audit_log
 			  WHERE undone = FALSE AND action = ANY($1)
-			  ORDER BY id DESC LIMIT 3`,
+			  ORDER BY id DESC LIMIT 100`,
 			[]string{"match_score", "user_create", "user_role", "admin_set_tip"})
 		undoableIDs := map[int]bool{}
 		for undoRows.Next() {
@@ -399,11 +399,11 @@ func AdminAuditUndo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify it's within last 3 undoable
+	// Verify it's within last 100 undoable
 	undoRows, _ := db.Pool.Query(ctx,
 		`SELECT id FROM audit_log
 		  WHERE undone = FALSE AND action = ANY($1)
-		  ORDER BY id DESC LIMIT 3`,
+		  ORDER BY id DESC LIMIT 100`,
 		[]string{"match_score", "user_create", "user_role", "admin_set_tip"})
 	undoableIDs := map[int]bool{}
 	for undoRows.Next() {
@@ -414,7 +414,7 @@ func AdminAuditUndo(w http.ResponseWriter, r *http.Request) {
 	undoRows.Close()
 
 	if !undoableIDs[entryID] {
-		middleware.SetFlash(w, r, "warn", "Lze vrátit jen posledních 3 akce.")
+		middleware.SetFlash(w, r, "warn", "Lze vrátit jen posledních 100 akcí.")
 		http.Redirect(w, r, "/admin/audit", http.StatusSeeOther)
 		return
 	}
