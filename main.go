@@ -498,6 +498,7 @@ func templateFuncs() template.FuncMap {
 		"add":      func(a, b int) int { return a + b },
 		"sub":      func(a, b int) int { return a - b },
 		"mul":      func(a, b int) int { return a * b },
+		"mod":      func(a, b int) int { return a % b },
 		"abs":      func(a int) int { if a < 0 { return -a }; return a },
 		// splitPipe splits a string by | and trims whitespace
 		"splitPipe": func(s string) []string {
