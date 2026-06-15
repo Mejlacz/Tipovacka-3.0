@@ -102,10 +102,12 @@ func RegisterSubmit(tmpl *template.Template) http.HandlerFunc {
 		var userID int
 		err = db.Pool.QueryRow(ctx, sql, vals...).Scan(&userID)
 		if err != nil {
+			LogAction(nil, username, "register_fail", "user", nil, "CHYBA registrace "+username+" ("+email+"): "+err.Error(), nil, nil)
 			renderErr("Chyba při registraci.")
 			return
 		}
 
+		LogAction(&userID, username, "register", "user", &userID, "Nová registrace: "+username+" ("+email+")", nil, nil)
 		middleware.SetUserID(w, r, userID)
 		http.Redirect(w, r, "/pending", http.StatusSeeOther)
 	}
@@ -154,17 +156,20 @@ func LoginSubmit(tmpl *template.Template) http.HandlerFunc {
 			"SELECT "+cols+" FROM users "+whereClause+" LIMIT 1", login)
 		if err := scanUser(u, row); err != nil {
 			log.Printf("[login] chyba pro '%s': %v", login, err)
+			LogAction(nil, login, "login_fail", "user", nil, "Neznámý uživatel: "+login, nil, nil)
 			renderErr("Špatné přihlašovací údaje.")
 			return
 		}
 
 		if !VerifyPassword(password, u.PasswordHash) {
 			log.Printf("[login] špatné heslo pro '%s'", login)
+			LogAction(&u.ID, u.Username, "login_fail", "user", &u.ID, "Špatné heslo pro: "+u.Username, nil, nil)
 			renderErr("Špatné přihlašovací údaje.")
 			return
 		}
 
 		if u.IsBlocked {
+			LogAction(&u.ID, u.Username, "login_fail", "user", &u.ID, "Pokus o přihlášení zablokovaného uživatele: "+u.Username, nil, nil)
 			renderErr("Váš účet byl zablokován.")
 			return
 		}
@@ -180,6 +185,7 @@ func LoginSubmit(tmpl *template.Template) http.HandlerFunc {
 			_, _ = db.Pool.Exec(ctx, `UPDATE users SET last_login = NOW() WHERE id = $1`, u.ID)
 		}
 
+		LogAction(&u.ID, u.Username, "login", "user", &u.ID, "Přihlášení: "+u.Username, nil, nil)
 		middleware.SetUserID(w, r, u.ID)
 		middleware.SetLang(w, r, u.Lang)
 		http.Redirect(w, r, "/", http.StatusSeeOther)

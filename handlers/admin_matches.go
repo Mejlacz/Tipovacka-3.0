@@ -169,12 +169,17 @@ func AdminMatchCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if _, err := db.Pool.Exec(ctx,
+	var newMatchID int
+	if err := db.Pool.QueryRow(ctx,
 		`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, is_finished)
-		 VALUES ($1,$2,$3,$4,false)`,
-		compID, homeTeamID, awayTeamID, matchDate); err != nil {
+		 VALUES ($1,$2,$3,$4,false) RETURNING id`,
+		compID, homeTeamID, awayTeamID, matchDate).Scan(&newMatchID); err != nil {
+		desc := "CHYBA přidání zápasu homeID=" + strconv.Itoa(homeTeamID) + " awayID=" + strconv.Itoa(awayTeamID) + " comp=" + strconv.Itoa(compID) + ": " + err.Error()
+		LogAction(&admin.ID, admin.Username, "match_create", "match", nil, desc, nil, nil)
 		middleware.SetFlash(w, r, "error", "Chyba při ukládání zápasu: "+err.Error())
 	} else {
+		newVal := `{"competition_id":` + strconv.Itoa(compID) + `,"home_team_id":` + strconv.Itoa(homeTeamID) + `,"away_team_id":` + strconv.Itoa(awayTeamID) + `,"match_date":"` + matchDateStr + `"}`
+		LogAction(&admin.ID, admin.Username, "match_create", "match", &newMatchID, "Zápas přidán: homeID="+strconv.Itoa(homeTeamID)+" vs awayID="+strconv.Itoa(awayTeamID)+" (soutěž "+strconv.Itoa(compID)+")", nil, &newVal)
 		middleware.SetFlash(w, r, "ok", "Zápas přidán.")
 	}
 	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
@@ -196,22 +201,40 @@ func AdminMatchEdit(w http.ResponseWriter, r *http.Request) {
 	matchDateStr := r.FormValue("match_date")
 
 	ctx := context.Background()
-	// Zjisti competition_id zápasu
-	var compID int
-	_ = db.Pool.QueryRow(ctx, `SELECT competition_id FROM matches WHERE id=$1`, matchID).Scan(&compID)
+	// Načti starý stav + competition_id
+	var compID, oldHomeID, oldAwayID int
+	var oldMatchDate *time.Time
+	_ = db.Pool.QueryRow(ctx,
+		`SELECT competition_id, home_team_id, away_team_id, match_date FROM matches WHERE id=$1`, matchID).
+		Scan(&compID, &oldHomeID, &oldAwayID, &oldMatchDate)
 
+	oldDateStr := ""
+	if oldMatchDate != nil {
+		oldDateStr = oldMatchDate.Format("2006-01-02T15:04")
+	}
+	oldVal := `{"home_team_id":` + strconv.Itoa(oldHomeID) + `,"away_team_id":` + strconv.Itoa(oldAwayID) + `,"match_date":"` + oldDateStr + `"}`
+	newVal := `{"home_team_id":` + strconv.Itoa(homeTeamID) + `,"away_team_id":` + strconv.Itoa(awayTeamID) + `,"match_date":"` + matchDateStr + `"}`
+
+	var execErr error
 	if matchDateStr != "" {
 		var matchDate *time.Time
 		if t, err := time.ParseInLocation("2006-01-02T15:04", matchDateStr, pragueLocation); err == nil {
 			matchDate = &t
 		}
-		_, _ = db.Pool.Exec(ctx,
+		_, execErr = db.Pool.Exec(ctx,
 			`UPDATE matches SET home_team_id=$1, away_team_id=$2, match_date=$3 WHERE id=$4`,
 			homeTeamID, awayTeamID, matchDate, matchID)
 	} else {
-		_, _ = db.Pool.Exec(ctx,
+		_, execErr = db.Pool.Exec(ctx,
 			`UPDATE matches SET home_team_id=$1, away_team_id=$2 WHERE id=$3`,
 			homeTeamID, awayTeamID, matchID)
+	}
+	if execErr != nil {
+		desc := "CHYBA editace zápasu " + strconv.Itoa(matchID) + ": " + execErr.Error()
+		LogAction(&admin.ID, admin.Username, "match_edit", "match", &matchID, desc, &oldVal, &newVal)
+	} else {
+		desc := "Editace zápasu " + strconv.Itoa(matchID) + ": homeID " + strconv.Itoa(oldHomeID) + "→" + strconv.Itoa(homeTeamID) + " awayID " + strconv.Itoa(oldAwayID) + "→" + strconv.Itoa(awayTeamID)
+		LogAction(&admin.ID, admin.Username, "match_edit", "match", &matchID, desc, &oldVal, &newVal)
 	}
 	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
 }
