@@ -20,11 +20,22 @@
 </div>
 
 <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;flex-wrap:wrap">
-    <input type="text" id="audit-search" placeholder="🔍 Filtrovat — admin, akce, popis…"
+    <input type="text" id="audit-search" placeholder="🔍 Filtrovat — admin, popis…"
            oninput="filterAudit(this.value)"
-           style="flex:1;min-width:220px;max-width:380px;font-size:.85rem;
+           style="flex:1;min-width:180px;max-width:320px;font-size:.85rem;
                   background:var(--bg2);border:1px solid var(--border-d);border-radius:6px;
                   color:var(--text-d);padding:.4rem .65rem" />
+    <select id="action-filter" onchange="applyActionFilter(this.value)"
+            style="font-size:.82rem;background:var(--bg2);border:1px solid var(--border-d);
+                   border-radius:6px;color:var(--text-d);padding:.35rem .6rem;min-width:160px">
+        <option value="">— všechny akce —</option>
+        {{range .AvailableActions}}
+        <option value="{{.}}" {{if eq . $.SelectedAction}}selected{{end}}>{{.}}</option>
+        {{end}}
+    </select>
+    {{if .SelectedAction}}
+    <a href="/admin/audit?cat={{.SelectedCat}}" style="font-size:.8rem;color:var(--muted-d);text-decoration:none">✕ zrušit filtr akce</a>
+    {{end}}
     <span id="audit-count" style="font-size:.8rem;color:var(--muted-d)">{{.TotalCount}} záznamů</span>
 </div>
 
@@ -76,7 +87,7 @@
 {{if gt .TotalPages 1}}
 <div style="display:flex;align-items:center;gap:.4rem;justify-content:center;margin-top:1rem;flex-wrap:wrap">
     {{if gt .Page 1}}
-    <a href="/admin/audit?cat={{.SelectedCat}}&page={{sub .Page 1}}" class="btn btn-sm btn-secondary">‹ Předchozí</a>
+    <a href="/admin/audit?cat={{.SelectedCat}}&action={{.SelectedAction}}&page={{sub .Page 1}}" class="btn btn-sm btn-secondary">‹ Předchozí</a>
     {{end}}
     {{range paginate .Page .TotalPages}}
     {{if eq . -1}}
@@ -84,11 +95,11 @@
     {{else if eq . $.Page}}
     <span style="padding:.2rem .55rem;background:var(--accent,#6366f1);color:#fff;border-radius:5px;font-size:.82rem">{{.}}</span>
     {{else}}
-    <a href="/admin/audit?cat={{$.SelectedCat}}&page={{.}}" class="btn btn-sm btn-secondary" style="font-size:.82rem;padding:.2rem .55rem">{{.}}</a>
+    <a href="/admin/audit?cat={{$.SelectedCat}}&action={{$.SelectedAction}}&page={{.}}" class="btn btn-sm btn-secondary" style="font-size:.82rem;padding:.2rem .55rem">{{.}}</a>
     {{end}}
     {{end}}
     {{if lt .Page .TotalPages}}
-    <a href="/admin/audit?cat={{.SelectedCat}}&page={{add .Page 1}}" class="btn btn-sm btn-secondary">Další ›</a>
+    <a href="/admin/audit?cat={{.SelectedCat}}&action={{.SelectedAction}}&page={{add .Page 1}}" class="btn btn-sm btn-secondary">Další ›</a>
     {{end}}
     <span style="font-size:.78rem;color:var(--muted-d);margin-left:.4rem">strana {{.Page}} / {{.TotalPages}}</span>
 </div>
@@ -107,5 +118,10 @@ function filterAudit(q) {
     });
     var cnt = document.getElementById('audit-count');
     if(cnt) cnt.textContent = q ? (visible + ' shod') : ('{{.TotalCount}} záznamů');
+}
+function applyActionFilter(action) {
+    var url = '/admin/audit?cat={{.SelectedCat}}';
+    if(action) url += '&action=' + encodeURIComponent(action);
+    window.location.href = url;
 }
 </script>

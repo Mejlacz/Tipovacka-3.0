@@ -250,6 +250,7 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 			page = 1
 		}
 		cat := r.URL.Query().Get("cat")
+		selectedAction := r.URL.Query().Get("action")
 
 		// ── Počty per kategorie ────────────────────────────────────────────
 		type CatCount struct {
@@ -301,6 +302,36 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 				conditions = append(conditions, `action != ALL($`+strconv.Itoa(len(queryArgs))+`)`)
 			}
 		}
+		if selectedAction != "" {
+			queryArgs = append(queryArgs, selectedAction)
+			conditions = append(conditions, `action = $`+strconv.Itoa(len(queryArgs)))
+		}
+
+		// Dostupné akce pro select (respektuje cat filtr, ale ne action filtr)
+		var availableActions []string
+		actConditions := conditions[:len(conditions)]
+		if selectedAction != "" {
+			actConditions = conditions[:len(conditions)-1]
+		}
+		actWhere := ""
+		actArgs := queryArgs[:len(queryArgs)]
+		if selectedAction != "" {
+			actArgs = queryArgs[:len(queryArgs)-1]
+		}
+		for i, c := range actConditions {
+			if i == 0 {
+				actWhere = " WHERE " + c
+			} else {
+				actWhere += " AND " + c
+			}
+		}
+		actRows, _ := db.Pool.Query(ctx, `SELECT DISTINCT action FROM audit_log`+actWhere+` ORDER BY action`, actArgs...)
+		for actRows.Next() {
+			var a string
+			_ = actRows.Scan(&a)
+			availableActions = append(availableActions, a)
+		}
+		actRows.Close()
 
 		whereClause := ""
 		for i, c := range conditions {
@@ -359,17 +390,19 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		flash := middleware.GetFlash(w, r)
 
 		RenderTemplate(w, r, tmpl, "audit_log.html", TemplateData{
-			"User":            admin,
-			"Entries":         entries,
-			"UndoableIDs":     undoableIDs,
-			"UndoableActions": UNDOABLE_ACTIONS,
-			"Flash":           flash,
-			"Page":            page,
-			"TotalPages":      totalPages,
-			"TotalCount":      totalCount,
-			"TotalAll":        totalAll,
-			"CatCounts":       catCounts,
-			"SelectedCat":     cat,
+			"User":             admin,
+			"Entries":          entries,
+			"UndoableIDs":      undoableIDs,
+			"UndoableActions":  UNDOABLE_ACTIONS,
+			"Flash":            flash,
+			"Page":             page,
+			"TotalPages":       totalPages,
+			"TotalCount":       totalCount,
+			"TotalAll":         totalAll,
+			"CatCounts":        catCounts,
+			"SelectedCat":      cat,
+			"SelectedAction":   selectedAction,
+			"AvailableActions": availableActions,
 		})
 	}
 }
