@@ -284,8 +284,11 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		var conditions []string
 		var queryArgs []interface{}
 
-		// Non-Owner admins nevidí přesné tipy uživatelů
-		if !admin.IsOwner {
+		// Tipy se zobrazují pouze v záložce "tipy", ne v "Vše"
+		if cat == "" {
+			conditions = append(conditions, `action NOT IN ('tip_save','extra_save')`)
+		} else if !admin.IsOwner {
+			// Non-Owner admins nevidí přesné tipy ani v záložce tipy
 			conditions = append(conditions, `action NOT IN ('tip_save','extra_save')`)
 		}
 
