@@ -253,6 +253,7 @@ func main() {
 
 	// Admin manual page
 	r.Get("/admin/manual", handlers.AdminManual(tmpl))
+	r.Get("/admin/code-map", handlers.AdminCodeMap(tmpl))
 
 	// Admin rounds (přesměrování na competition matches — kola jsou odstraněna)
 	r.Get("/admin/competitions/{competition_id}/rounds", handlers.AdminRoundsList(tmpl))

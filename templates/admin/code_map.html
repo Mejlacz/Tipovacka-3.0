@@ -1,0 +1,400 @@
+<div class="page-header">
+    <h1>🗺️ Mapa kódu</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+<p style="color:var(--muted-d);font-size:.85rem;margin-bottom:1.5rem">
+    Přehled všech souborů v <code>handlers/</code> — kam sáhnout, když se něco rozbije.
+</p>
+
+<style>
+.cm-section { margin-bottom:2rem }
+.cm-section h2 { font-size:1rem;font-weight:700;color:var(--accent);margin:0 0 .75rem;padding-bottom:.35rem;border-bottom:1px solid var(--border-d) }
+.cm-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:.75rem }
+.cm-card { background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:.85rem 1rem }
+.cm-card h3 { margin:0 0 .4rem;font-size:.9rem;font-family:monospace;color:var(--text-d) }
+.cm-card ul { margin:0;padding:0 0 0 1.1rem;list-style:disc }
+.cm-card li { font-size:.8rem;color:var(--muted-d);line-height:1.55 }
+.cm-card li b { color:var(--text-d);font-weight:600 }
+</style>
+
+{{/* ─── Jádro ─────────────────────────────────────────────────── */}}
+<div class="cm-section">
+<h2>Jádro aplikace</h2>
+<div class="cm-grid">
+
+<div class="cm-card">
+<h3>common.go</h3>
+<ul>
+<li><b>RequireAdmin / RequireLogin / RequireApproved</b> — auth middleware</li>
+<li><b>GetCurrentUser</b> — načtení přihlášeného ze session</li>
+<li><b>RenderTemplate</b> — renderování šablon (přidává CSRF, flash)</li>
+<li><b>LogAction</b> — zápis do audit logu</li>
+<li><b>RecalculateTips / RecalculateStandings</b> — přepočet bodů po výsledku</li>
+<li><b>InitUserSchema</b> — detekuje které sloupce v DB existují</li>
+<li><b>buildUserInsertSQL / buildUserUpdateSQL</b> — dynamické SQL (kompatibilita schématu)</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>tips.go</h3>
+<ul>
+<li><b>Index</b> — domovská stránka s přehledem soutěží</li>
+<li><b>CompetitionDetail</b> — stránka soutěže se zápasy a tipy</li>
+<li><b>SubmitTip / SubmitTipAjax</b> — uložení tipu (formulář + AJAX)</li>
+<li><b>RoundRedirect</b> — přesměrování starých URL</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>leaderboard.go</h3>
+<ul>
+<li><b>Leaderboard</b> — hlavní žebříček soutěže</li>
+<li><b>LeaderboardChartData</b> — data pro graf vývoje bodů</li>
+<li><b>MyRankAPI</b> — aktuální pořadí přihlášeného (AJAX)</li>
+<li><b>loadAllUsers</b> — sdílená funkce načtení všech uživatelů</li>
+</ul>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Správa (admin) ──────────────────────────────────────────── */}}
+<div class="cm-section">
+<h2>Správa (admin)</h2>
+<div class="cm-grid">
+
+<div class="cm-card">
+<h3>admin.go <span style="font-size:.72rem;color:var(--muted-d);font-family:sans-serif">~1200 řádků</span></h3>
+<ul>
+<li><b>AdminCompetitionCreate/Edit/Toggle/Delete/SetDeadline</b> — CRUD soutěží</li>
+<li><b>AdminUsersList, AdminUserApprove, AdminUserBlock/Unblock</b></li>
+<li><b>AdminUserToggleAdmin/Owner/Inactive/Hidden</b> — přepínání rolí</li>
+<li><b>AdminUserResetPassword / AdminUserSetPassword / AdminUserSetRole</b></li>
+<li><b>AdminUserNewSubmit / AdminUserEditSubmit</b> — vytvoření/editace uživatele</li>
+<li><b>AdminUserSendWelcome</b> — uvítací email</li>
+<li><b>AdminDashboard</b> — admin přehled, <b>AdminUsersBulkAction</b> — hromadné akce</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_matches.go <span style="font-size:.72rem;color:var(--muted-d);font-family:sans-serif">~800 řádků</span></h3>
+<ul>
+<li><b>AdminMatchCreate</b> — přidání zápasu (+ kontrola duplikátů)</li>
+<li><b>AdminMatchEdit</b> — editace týmů/data zápasu</li>
+<li><b>AdminMatchSetResult / AdminMatchClearResult</b> — zadání/smazání výsledku</li>
+<li><b>AdminMatchDelete</b> — smazání zápasu</li>
+<li><b>AdminMatchSetDate</b> — změna data zápasu</li>
+<li><b>AdminSetTip</b> — admin přepíše tip uživatele</li>
+<li><b>AdminRemoveUserTips</b> — smazání všech tipů uživatele</li>
+<li><b>AdminUnscored / AdminBulkResultsForm/Submit</b> — hromadné zadávání výsledků</li>
+<li><b>AdminQuickAddMatchAjax</b> — rychlé přidání přes AJAX</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_teams.go <span style="font-size:.72rem;color:var(--muted-d);font-family:sans-serif">~1300 řádků, největší soubor</span></h3>
+<ul>
+<li><b>AdminTeamsList / AdminTeamCreate / AdminTeamEdit / AdminTeamDelete</b></li>
+<li><b>AdminTeamMerge / AdminTeamMergeBulk</b> — slučování duplicitních týmů</li>
+<li><b>AdminTeamOrphans / AdminTeamOrphansBulk</b> — týmy bez soutěže</li>
+<li><b>AdminTeamDupes</b> — detekce duplicit</li>
+<li><b>AdminCompetitionTeamsForm/Save</b> — přiřazení týmů k soutěži</li>
+<li><b>AdminTeamsImportCSV / AdminTeamsImportXLSX</b> — import ze souboru</li>
+<li><b>AdminRosterMatrix/Toggle</b> — matice hráč/tým</li>
+<li><b>AdminTeamBulkAssign</b> — hromadné přiřazení</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_audit.go</h3>
+<ul>
+<li><b>AdminAuditLog</b> — log všech admin akcí (filtrace, pagination)</li>
+<li><b>AdminHistory</b> — jednodušší pohled na historii změn</li>
+<li><b>AdminAuditUndo</b> — vrácení akce zpět (posledních 100 undoable)</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_extra.go <span style="font-size:.72rem;color:var(--muted-d);font-family:sans-serif">~1600 řádků</span></h3>
+<ul>
+<li><b>AdminExtraQuestionNewForm/Submit / AdminExtraQuestionDelete/ToggleClose</b></li>
+<li><b>AdminExtraAnswersView / AdminExtraAnswersSave</b> — prohlížení a hodnocení</li>
+<li><b>AdminExtraAutoEvaluate</b> — automatické vyhodnocení (fuzzy matching)</li>
+<li><b>AdminExtraSaveCorrect / AdminExtraAddCorrectVariant</b></li>
+<li><b>AdminExtraMergeAnswers / AdminExtraUnmergeAnswers</b></li>
+<li><b>AdminSetExtraAnswerAjax</b> — AJAX nastavení odpovědi konkrétnímu uživateli</li>
+<li><b>AdminExtraImport / AdminExtraExport</b></li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_email.go</h3>
+<ul>
+<li><b>sendEmail / sendEmailHTML</b> — sdílené pomocné funkce (volané odjinud)</li>
+<li><b>AdminEmailForm / AdminEmailSend</b> — hromadný email všem uživatelům</li>
+<li><b>translateToEN</b> — překlad předmětu pro anglické uživatele</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_export.go</h3>
+<ul>
+<li><b>AdminTipsExportCSV</b> — export tipů jako CSV</li>
+<li><b>AdminGeneralExportCSV / AdminGeneralExportXLSX</b> — kompletní export dat</li>
+<li><b>AdminTipsImportForm/Submit</b> — import tipů ze souboru</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_groups.go</h3>
+<ul>
+<li><b>AdminGroupsList / AdminGroupsNew / AdminGroupsDelete</b></li>
+<li><b>AdminGroupsAddMember / AdminGroupsRemoveMember</b></li>
+<li><b>AdminGroupsToggleHidden / AdminGroupsToggleDeadline</b></li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_health.go</h3>
+<ul>
+<li><b>AdminHealthDashboard</b> — přehled stavu DB, cache, services</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_keepalive.go</h3>
+<ul>
+<li><b>AdminKeepalive / AdminKeepaliveEnable/Disable</b></li>
+<li><b>getWorkflowState</b> — stav GitHub Actions workflow</li>
+<li>Udržuje server na Fly.io aktivní (aby nespal)</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_time.go</h3>
+<ul>
+<li><b>AdminTimeDiag</b> — diagnostika časů v DB vs server</li>
+<li><b>AdminTimeSetOffset</b> — ruční override časového posunu (DEBUG)</li>
+<li><b>LoadTZOverrideFromDB</b> — načtení override při startu</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_rounds.go</h3>
+<ul>
+<li>Stub funkce — kola jsou odstraněna z DB</li>
+<li>Zůstaly kvůli kompatibilitě URL, ale nefungují</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_neon_sync.go</h3>
+<ul>
+<li><b>RunNeonSync</b> — zkopíruje data z produkční DB do zálohy (Neon)</li>
+<li><b>AdminNeonSync / AdminNeonSyncRun / AdminNeonSyncSettings</b></li>
+</ul>
+</div>
+
+</div>
+</div>
+
+{{/* ─── API import ─────────────────────────────────────────────── */}}
+<div class="cm-section">
+<h2>API import výsledků</h2>
+<div class="cm-grid">
+
+<div class="cm-card">
+<h3>admin_api_import.go <span style="font-size:.72rem;color:var(--muted-d);font-family:sans-serif">football-data.org</span></h3>
+<ul>
+<li><b>AdminAPICompetitions / AdminAPIRounds</b> — seznam soutěží/kol z API</li>
+<li><b>AdminAPIPreview</b> — náhled zápasů před importem</li>
+<li><b>AdminAPIImport</b> — skutečný import zápasů do DB</li>
+<li><b>AdminAPIUpdateResults</b> — stažení výsledků z API</li>
+<li><b>AutoFetchResults</b> — automatické stahování (volá cron)</li>
+<li><b>resolveOrUpsertTeam</b> — najde nebo vytvoří tým při importu</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_api_hockey.go <span style="font-size:.72rem;color:var(--muted-d);font-family:sans-serif">thesportsdb.com</span></h3>
+<ul>
+<li><b>AdminAPIHockeyLeagues / AdminAPIHockeySeasons</b> — seznam soutěží</li>
+<li><b>ashPreview / ashImport</b> — náhled a import hokejových zápasů</li>
+<li><b>ashUpdateResults</b> — stažení hokejových výsledků</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_api_teams.go</h3>
+<ul>
+<li><b>AdminAPITeamResolve</b> — AJAX: najde tým v DB podle jména (pro import)</li>
+<li><b>lookupExistingTeam</b> — fuzzy lookup týmu</li>
+</ul>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Import zápasů ───────────────────────────────────────────── */}}
+<div class="cm-section">
+<h2>Import zápasů (text / OCR)</h2>
+<div class="cm-grid">
+
+<div class="cm-card">
+<h3>admin_match_import.go</h3>
+<ul>
+<li><b>parseMILine / parseMatchImportText</b> — parsování textu (formát: „Tým A - Tým B 15.3. 18:00")</li>
+<li><b>AdminMatchImportForm / Parse / Confirm / Cancel</b> — flow: form → preview → uložení</li>
+<li><b>matchTeamsWithKnown</b> — fuzzy matching na existující týmy</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_ocr.go</h3>
+<ul>
+<li><b>parseOCRText</b> — parsování OCR výstupu (fotka/screenshot rozpisu)</li>
+<li><b>AdminOCRForm / Parse / Confirm / Cancel</b> — stejný flow jako match import</li>
+<li><b>upsertTeamByName</b> — vytvoří tým pokud neexistuje</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_user_import.go</h3>
+<ul>
+<li><b>AdminUserImportSubmit</b> — hromadný import uživatelů z CSV/textu</li>
+</ul>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Uživatelské funkce ──────────────────────────────────────── */}}
+<div class="cm-section">
+<h2>Uživatelské funkce</h2>
+<div class="cm-grid">
+
+<div class="cm-card">
+<h3>auth.go</h3>
+<ul>
+<li><b>RegisterForm / RegisterSubmit</b> — registrace (loguje i chyby)</li>
+<li><b>LoginForm / LoginSubmit</b> — přihlášení (loguje úspěch i neúspěch)</li>
+<li><b>Logout</b> — odhlášení</li>
+<li><b>ForgotPasswordForm / ForgotPasswordSubmit</b> — zapomenuté heslo (email s tokenem)</li>
+<li><b>ResetPasswordForm / ResetPasswordSubmit</b> — reset hesla přes token</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>profile.go</h3>
+<ul>
+<li><b>ProfilePage</b> — stránka profilu s tipy a statistikami</li>
+<li><b>ProfileUpdate</b> — uložení jména, emailu, jazyka</li>
+<li><b>ProfilePassword</b> — změna hesla</li>
+<li><b>ProfileNotifications</b> — nastavení email notifikací</li>
+<li><b>ProfilePushSubscribe/Unsubscribe/Test/Delete</b> — push notifikace</li>
+<li><b>ProfileAvatarUpload / ProfileAvatarDelete</b></li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>profile_ui.go</h3>
+<ul>
+<li><b>ProfileAppearance / Save / Reset</b> — výběr barev, fontů, tématu</li>
+<li><b>BuildUICSS</b> — sestaví CSS z uživatelských preferencí</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>extra.go</h3>
+<ul>
+<li><b>ExtraView</b> — stránka s bonusovými otázkami</li>
+<li><b>ExtraSaveAjax</b> — uložení odpovědi (AJAX)</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>archive.go</h3>
+<ul>
+<li><b>ArchiveIndex</b> — přehled všech archivovaných soutěží</li>
+<li><b>ArchiveCompetition</b> — detail archivované soutěže s výsledky</li>
+<li><b>ArchiveHallOfFame</b> — historická tabulka prvních tří míst</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>stats.go</h3>
+<ul>
+<li><b>StatsDetail / StatsExtended</b> — detailní statistiky uživatele</li>
+<li><b>StatsVs</b> — srovnání dvou hráčů head-to-head</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>achievements.go</h3>
+<ul>
+<li><b>AchievementsPage</b> — stránka s achievementy uživatele</li>
+<li><b>checkCompAchievement / computeAllCompAchievements</b> — výpočet odznáčků</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>match_distribution.go</h3>
+<ul>
+<li><b>MatchTipDistribution</b> — rozložení tipů na zápas (kolik hráčů tiplo co)</li>
+<li><b>RoundSummary / StatsPerRound</b> — souhrn kola</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>feedback.go</h3>
+<ul>
+<li><b>FeedbackPage / FeedbackSubmit</b> — uživatel pošle feedback</li>
+<li><b>AdminFeedbackPage / AdminFeedbackMarkRead/AllRead</b> — admin čte feedbacky</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>pages.go</h3>
+<ul>
+<li><b>InfoPage</b> — informační stránka</li>
+<li><b>PravidlaPage</b> — pravidla</li>
+<li><b>AdminPravidlaEditForm / Submit / Reset</b> — editace pravidel v adminu</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>admin_user_merge.go</h3>
+<ul>
+<li><b>AdminUserMerge</b> — přesune tipy z jednoho účtu na druhý, smaže zdrojový</li>
+</ul>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Komunikace ─────────────────────────────────────────────── */}}
+<div class="cm-section">
+<h2>Komunikace &amp; notifikace</h2>
+<div class="cm-grid">
+
+<div class="cm-card">
+<h3>chat.go + chat_hub.go</h3>
+<ul>
+<li><b>ChatPage</b> — stránka chatu</li>
+<li><b>ChatWS</b> — WebSocket handler</li>
+<li><b>ChatHub.Run</b> — event loop pro WebSocket zprávy</li>
+<li><b>pollNewMessages</b> — polling nových zpráv z DB</li>
+</ul>
+</div>
+
+<div class="cm-card">
+<h3>notify.go</h3>
+<ul>
+<li><b>sendMatchNotificationForID</b> — odešle email o zápase všem odběratelům</li>
+<li><b>notifyBuildEmailHTML</b> — sestaví HTML email s informacemi o zápase</li>
+</ul>
+</div>
+
+</div>
+</div>

@@ -128,3 +128,14 @@ func AdminPravidlaReset(w http.ResponseWriter, r *http.Request) {
 	middleware.SetFlash(w, r, "ok", "Pravidla obnovena na výchozí obsah.")
 	http.Redirect(w, r, "/pravidla", http.StatusSeeOther)
 }
+
+// GET /admin/code-map
+func AdminCodeMap(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin := RequireAdmin(w, r)
+		if admin == nil {
+			return
+		}
+		RenderTemplate(w, r, tmpl, "admin/code_map.html", TemplateData{"User": admin})
+	}
+}
