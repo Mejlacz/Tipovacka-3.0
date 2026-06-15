@@ -68,6 +68,7 @@ func migrateSchema() {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx ON chat_messages(created_at DESC)`,
+		`ALTER TABLE matches ALTER COLUMN round_id DROP NOT NULL`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
