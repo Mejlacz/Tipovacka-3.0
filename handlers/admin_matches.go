@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -72,12 +73,32 @@ func AdminMatchesList(tmpl *template.Template) http.HandlerFunc {
 		}
 		teamRows.Close()
 
+		// Varování o duplicitním zápasu (přichází přes query params z POST handleru)
+		var dupWarn map[string]interface{}
+		if dupHomeStr := r.URL.Query().Get("dup_home"); dupHomeStr != "" {
+			homeID, _ := strconv.Atoi(dupHomeStr)
+			awayID, _ := strconv.Atoi(r.URL.Query().Get("dup_away"))
+			var homeName, awayName string
+			_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(display_name, name) FROM teams WHERE id=$1`, homeID).Scan(&homeName)
+			_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(display_name, name) FROM teams WHERE id=$1`, awayID).Scan(&awayName)
+			tipCount, _ := strconv.Atoi(r.URL.Query().Get("dup_tips"))
+			dupWarn = map[string]interface{}{
+				"HomeID":   homeID,
+				"AwayID":   awayID,
+				"DateStr":  r.URL.Query().Get("dup_date"),
+				"Tips":     tipCount,
+				"HomeName": homeName,
+				"AwayName": awayName,
+			}
+		}
+
 		RenderTemplate(w, r, tmpl, "matches.html", TemplateData{
 			"User":    admin,
 			"Comp":    comp,
 			"Matches": matches,
 			"Teams":   teams,
 			"Flash":   middleware.GetFlash(w, r),
+			"DupWarn": dupWarn,
 		})
 	}
 }
@@ -110,7 +131,45 @@ func AdminMatchCreate(w http.ResponseWriter, r *http.Request) {
 			matchDate = &t
 		}
 	}
-	if _, err := db.Pool.Exec(context.Background(),
+
+	ctx := context.Background()
+
+	// Kontrola duplicitního zápasu (stejné týmy, stejný den, stejná soutěž)
+	if r.FormValue("force") != "1" {
+		var dupID, tipCount int
+		var dupErr error
+		if matchDate != nil {
+			dupErr = db.Pool.QueryRow(ctx,
+				`SELECT m.id, COUNT(t.id)
+				   FROM matches m
+				   LEFT JOIN tips t ON t.match_id = m.id
+				  WHERE m.competition_id=$1 AND m.home_team_id=$2 AND m.away_team_id=$3
+				    AND m.match_date::date = $4::date
+				  GROUP BY m.id LIMIT 1`,
+				compID, homeTeamID, awayTeamID, matchDate).Scan(&dupID, &tipCount)
+		} else {
+			dupErr = db.Pool.QueryRow(ctx,
+				`SELECT m.id, COUNT(t.id)
+				   FROM matches m
+				   LEFT JOIN tips t ON t.match_id = m.id
+				  WHERE m.competition_id=$1 AND m.home_team_id=$2 AND m.away_team_id=$3
+				    AND m.match_date IS NULL
+				  GROUP BY m.id LIMIT 1`,
+				compID, homeTeamID, awayTeamID).Scan(&dupID, &tipCount)
+		}
+		if dupErr == nil && dupID > 0 {
+			q := url.Values{}
+			q.Set("dup_home", strconv.Itoa(homeTeamID))
+			q.Set("dup_away", strconv.Itoa(awayTeamID))
+			q.Set("dup_date", matchDateStr)
+			q.Set("dup_tips", strconv.Itoa(tipCount))
+			q.Set("dup_existing", strconv.Itoa(dupID))
+			http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches?"+q.Encode(), http.StatusSeeOther)
+			return
+		}
+	}
+
+	if _, err := db.Pool.Exec(ctx,
 		`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, is_finished)
 		 VALUES ($1,$2,$3,$4,false)`,
 		compID, homeTeamID, awayTeamID, matchDate); err != nil {

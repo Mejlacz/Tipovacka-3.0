@@ -30,6 +30,32 @@
     </form>
 </div>
 
+{{/* ── Varování o duplicitním zápasu ── */}}
+{{if .DupWarn}}
+{{$d := .DupWarn}}
+<div style="background:#431407;border:1px solid #ea580c;border-radius:8px;padding:.8rem 1rem;margin-bottom:1rem">
+    <div style="font-weight:600;color:#fb923c;margin-bottom:.4rem">⚠️ Zápas již existuje</div>
+    <div style="font-size:.88rem;color:var(--text-d);margin-bottom:.6rem">
+        {{index $d "HomeName"}} vs {{index $d "AwayName"}}
+        {{if index $d "DateStr"}} — {{index $d "DateStr"}}{{end}}
+        {{if gt (index $d "Tips") 0}}
+        <br><span style="color:#fca5a5">Na tento zápas již vsadilo <strong>{{index $d "Tips"}}</strong> hráčů.</span>
+        {{end}}
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <form method="post" action="/admin/competitions/{{.Comp.ID}}/matches/new" style="display:inline">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+            <input type="hidden" name="home_team_id" value="{{index $d "HomeID"}}">
+            <input type="hidden" name="away_team_id" value="{{index $d "AwayID"}}">
+            <input type="hidden" name="match_date" value="{{index $d "DateStr"}}">
+            <input type="hidden" name="force" value="1">
+            <button type="submit" class="btn btn-sm btn-danger">Přidat stejně</button>
+        </form>
+        <a href="/admin/competitions/{{.Comp.ID}}/matches" class="btn btn-sm btn-secondary">Zrušit</a>
+    </div>
+</div>
+{{end}}
+
 {{/* ── Přidat zápas ── */}}
 <form method="post" action="/admin/competitions/{{.Comp.ID}}/matches/new"
       style="display:flex;gap:.5rem;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap">
