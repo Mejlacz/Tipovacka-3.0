@@ -364,6 +364,9 @@ func StatsDetail(tmpl *template.Template) http.HandlerFunc {
 			if userCols.IsInactive {
 				blockedFilter += " AND COALESCE(u.is_inactive,false)=false"
 			}
+			if userCols.IsHidden && !canSeeHidden(user) {
+				blockedFilter += " AND COALESCE(u.is_hidden,false)=false"
+			}
 			cuRows, _ := db.Pool.Query(ctx,
 				`SELECT DISTINCT u.id, u.username
 				   FROM users u
@@ -570,6 +573,9 @@ func StatsExtended(tmpl *template.Template) http.HandlerFunc {
 			}
 			if userCols.IsInactive {
 				blockedFilter += " AND COALESCE(u.is_inactive,false)=false"
+			}
+			if userCols.IsHidden && !canSeeHidden(currentUser) {
+				blockedFilter += " AND COALESCE(u.is_hidden,false)=false"
 			}
 			cuRows, _ := db.Pool.Query(ctx,
 				`SELECT DISTINCT u.id, u.username

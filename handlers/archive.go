@@ -155,6 +155,11 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 			}
 			cachedRows.Close()
 
+			hiddenFilter := " AND COALESCE(is_hidden,false)=false"
+			if canSeeHidden(user) {
+				hiddenFilter = ""
+			}
+
 			if hasCached {
 				userIDs := make([]int, len(cached))
 				for i, cr := range cached {
@@ -163,7 +168,7 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 				usersByID := map[int]*models.User{}
 				if len(userIDs) > 0 {
 					urows, _ := db.Pool.Query(ctx,
-						`SELECT id, username FROM users WHERE id = ANY($1)`, userIDs)
+						`SELECT id, username FROM users WHERE id = ANY($1)`+hiddenFilter, userIDs)
 					for urows.Next() {
 						u := &models.User{}
 						_ = urows.Scan(&u.ID, &u.Username)
@@ -195,7 +200,7 @@ func ArchiveCompetition(tmpl *template.Template) http.HandlerFunc {
 				usersByID := map[int]*models.User{}
 				if len(userIDs) > 0 {
 					urows, _ := db.Pool.Query(ctx,
-						`SELECT id, username FROM users WHERE id = ANY($1)`, userIDs)
+						`SELECT id, username FROM users WHERE id = ANY($1)`+hiddenFilter, userIDs)
 					for urows.Next() {
 						u := &models.User{}
 						_ = urows.Scan(&u.ID, &u.Username)

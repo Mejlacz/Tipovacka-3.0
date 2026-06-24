@@ -613,9 +613,13 @@ func LeaderboardChartData(tmpl *template.Template) http.HandlerFunc {
 		trows.Close()
 
 		// Jména uživatelů
+		hiddenCond := " AND COALESCE(is_hidden,false)=false"
+		if canSeeHidden(u) {
+			hiddenCond = ""
+		}
 		unames := map[int]string{}
 		unameRows, _ := db.Pool.Query(ctx,
-			`SELECT id, username FROM users WHERE COALESCE(is_blocked,false)=false AND COALESCE(is_inactive,false)=false`)
+			`SELECT id, username FROM users WHERE COALESCE(is_blocked,false)=false AND COALESCE(is_inactive,false)=false`+hiddenCond)
 		for unameRows.Next() {
 			var uid int
 			var uname string
