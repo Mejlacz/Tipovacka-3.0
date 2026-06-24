@@ -220,7 +220,7 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
             {{$tipData := printf "🎯 Přesnost: %s\n✅ Přesné: %d\n☑️ Vítěz: %d\n❌ Minul: %d\n📊 Tipy: %s" $accStr $row.Exact $row.Winner $row.Miss $row.TipRatio}}
             <span class="player-tip" data-tip="{{$tipData}}" style="cursor:pointer"
                   {{if not $isMe}}data-vs-url="/stats/{{$.SelectedCompetitionID}}/vs/{{$row.User.ID}}"
-                  data-stats-url="/stats/{{$.SelectedCompetitionID}}/extended?user_id={{$row.User.ID}}"{{end}}>{{if $isMe}}<span style="display:inline-block;background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(16,185,129,.35);border-radius:20px;padding:.1rem .55rem;font-size:.78rem;font-weight:700">{{$row.User.Username}}</span>{{else}}{{$row.User.Username}}{{end}}</span>
+                  data-stats-url="/stats/{{$.SelectedCompetitionID}}/extended?user_id={{$row.User.ID}}"{{end}}>{{if $isMe}}<span style="display:inline-block;background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(16,185,129,.35);border-radius:20px;padding:.1rem .55rem;font-size:.78rem;font-weight:700">{{$row.User.Username}}</span>{{else}}{{$row.User.Username}}{{end}}</span>{{if $row.User.IsHidden}}<span title="Schovaný hráč" style="font-size:.75rem;opacity:.6;margin-left:.2rem;cursor:default">👻</span>{{end}}
             {{if ge $row.Streak 3}}<span title="{{$row.Streak}}× přesný tip v řadě" style="font-size:.7rem;margin-left:.25rem;cursor:default">🔥{{$row.Streak}}</span>{{end}}
             {{if and $.User.IsAdmin (not $isMe)}}
             <button class="user-remove-tips-btn"
