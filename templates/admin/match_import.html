@@ -9,12 +9,12 @@
 
 <div style="max-width:700px">
     <p style="color:var(--muted-d);font-size:.88rem;margin-bottom:1.25rem">
-        Vlož budoucí zápasy — každý řádek ve tvaru
-        <code>Domácí - Hosté&nbsp;&nbsp;DD.MM. HH:MM</code>.
+        Vlož budoucí zápasy textem, nebo nahraj soubor z Excelu (<code>.xlsx</code>) či <code>.csv</code>.
         Zápasy se vytvoří bez skóre, uživatelé na ně mohou tipovat.
     </p>
 
-    <form method="post" action="/admin/matches/import/parse" style="display:flex;flex-direction:column;gap:1rem">
+    <form method="post" action="/admin/matches/import/parse" enctype="multipart/form-data"
+          style="display:flex;flex-direction:column;gap:1rem">
         <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
 
         <div>
@@ -27,11 +27,32 @@
             </select>
         </div>
 
+        {{/* ── Import ze souboru ── */}}
+        <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:.9rem 1rem">
+            <label style="font-size:.85rem;font-weight:700;display:block;margin-bottom:.35rem">
+                📥 Nahrát soubor (Excel / CSV)
+            </label>
+            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+                <input type="file" name="import_file" accept=".xlsx,.csv"
+                       style="font-size:.85rem;color:var(--text-d)" />
+                <a href="/admin/matches/import/template" class="btn btn-secondary btn-sm" style="white-space:nowrap">
+                    ⬇️ Stáhnout vzor (.xlsx)
+                </a>
+            </div>
+            <div style="font-size:.78rem;color:var(--muted-d);margin-top:.45rem;display:flex;flex-direction:column;gap:.2rem">
+                <span>Stáhni si vzor, doplň zápasy a nahraj zpět. Sloupce: <code>Datum | Domácí | Hosté | Čas</code>
+                      (pořadí je libovolné, hlavička se automaticky přeskočí).</span>
+                <span>Příklad řádku: <code>15.5.2026&nbsp;&nbsp;Arsenal&nbsp;&nbsp;Chelsea&nbsp;&nbsp;18:00</code></span>
+            </div>
+        </div>
+
+        <div style="text-align:center;color:var(--muted-d);font-size:.8rem;font-weight:600">— nebo vlož text —</div>
+
         <div>
             <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">
                 Zápasy k importu
             </label>
-            <textarea name="text" rows="14" required
+            <textarea name="text" rows="14"
                 placeholder="Arsenal - Chelsea  15.5. 18:00&#10;2. 5. 2026  Liberec  Slavia  18:00&#10;3. 5. 2026  Plzeň - Hradec Kr.  15:30&#10;Bayern München - Borussia Dortmund  17.5.2026 18:30"
                 style="width:100%;font-family:monospace;font-size:.85rem;resize:vertical;
                        background:var(--bg2);border:1px solid var(--border-d);border-radius:6px;

@@ -15,16 +15,21 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/xuri/excelize/v2"
 
 	"tipovacka/db"
 	"tipovacka/middleware"
@@ -291,6 +296,78 @@ func parseMILine(line string, currentYear int, knownTeams []string) importMatchP
 	}
 }
 
+// ── čtení nahraného souboru (XLSX / CSV) ──────────────────────────────────────
+
+// miTimeSecRe: HH:MM:SS → pro normalizaci na HH:MM (Excel buňky času často mají sekundy)
+var miTimeSecRe = regexp.MustCompile(`^(\d{1,2}):(\d{2}):\d{2}$`)
+
+// readImportFileRows načte řádky z nahraného XLSX nebo CSV souboru.
+// XLSX: první list. CSV: autodetekce oddělovače (',' nebo ';').
+func readImportFileRows(file io.Reader, filename string) ([][]string, error) {
+	lower := strings.ToLower(strings.TrimSpace(filename))
+	switch {
+	case strings.HasSuffix(lower, ".xlsx"):
+		f, err := excelize.OpenReader(file)
+		if err != nil {
+			return nil, fmt.Errorf("nelze otevřít XLSX soubor: %w", err)
+		}
+		defer f.Close()
+		sheets := f.GetSheetList()
+		if len(sheets) == 0 {
+			return nil, fmt.Errorf("soubor neobsahuje žádný list")
+		}
+		return f.GetRows(sheets[0])
+	case strings.HasSuffix(lower, ".csv"):
+		data, err := io.ReadAll(file)
+		if err != nil {
+			return nil, err
+		}
+		// Detekce oddělovače — český Excel exportuje CSV se středníkem
+		delim := ','
+		if bytes.Count(data, []byte(";")) > bytes.Count(data, []byte(",")) {
+			delim = ';'
+		}
+		rd := csv.NewReader(bytes.NewReader(data))
+		rd.Comma = delim
+		rd.FieldsPerRecord = -1
+		rd.LazyQuotes = true
+		return rd.ReadAll()
+	default:
+		return nil, fmt.Errorf("nepodporovaný formát — použij .xlsx nebo .csv")
+	}
+}
+
+// xlsxRowsToText převede řádky tabulky na text pro řádkový parser.
+// Buňky jednoho řádku spojí tabulátorem, vynechá prázdné a hlavičkové řádky
+// (řádek bez jediné číslice = hlavička jako "Datum / Domácí / Hosté / Čas").
+func xlsxRowsToText(rows [][]string) string {
+	var sb strings.Builder
+	for _, row := range rows {
+		var cells []string
+		hasDigit := false
+		for _, c := range row {
+			c = strings.TrimSpace(c)
+			if c == "" {
+				continue
+			}
+			// Normalizuj čas HH:MM:SS → HH:MM
+			if m := miTimeSecRe.FindStringSubmatch(c); m != nil {
+				c = m[1] + ":" + m[2]
+			}
+			if !hasDigit && strings.ContainsAny(c, "0123456789") {
+				hasDigit = true
+			}
+			cells = append(cells, c)
+		}
+		if len(cells) == 0 || !hasDigit {
+			continue // prázdný nebo hlavičkový řádek
+		}
+		sb.WriteString(strings.Join(cells, "\t"))
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
 // parseMatchImportText parsuje celý vložený text.
 func parseMatchImportText(text string, knownTeams []string) []importMatchParsed {
 	currentYear := time.Now().In(pragueLocation).Year()
@@ -378,6 +455,46 @@ func loadActiveRounds(ctx context.Context) []ocrCompItem {
 	return loadActiveComps(ctx)
 }
 
+// ── GET /admin/matches/import/template ─ stažení vzorového XLSX ───────────────
+
+func AdminMatchImportTemplate(w http.ResponseWriter, r *http.Request) {
+	if admin := RequireAdmin(w, r); admin == nil {
+		return
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+	sheet := f.GetSheetName(0)
+
+	headers := []string{"Datum", "Domácí", "Hosté", "Čas"}
+	for i, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		_ = f.SetCellValue(sheet, cell, h)
+	}
+	// Ukázkové řádky — admin je přepíše svými zápasy
+	examples := [][]string{
+		{"15.5.2026", "Arsenal", "Chelsea", "18:00"},
+		{"16.5.2026", "Baník Ostrava", "Sigma Olomouc", "15:30"},
+	}
+	for ri, row := range examples {
+		for ci, val := range row {
+			cell, _ := excelize.CoordinatesToCellName(ci+1, ri+2)
+			_ = f.SetCellValue(sheet, cell, val)
+		}
+	}
+	// Tučná hlavička + šířky sloupců
+	if style, err := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}}); err == nil {
+		_ = f.SetCellStyle(sheet, "A1", "D1", style)
+	}
+	_ = f.SetColWidth(sheet, "A", "A", 14)
+	_ = f.SetColWidth(sheet, "B", "C", 22)
+	_ = f.SetColWidth(sheet, "D", "D", 10)
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", `attachment; filename="vzor_import_zapasu.xlsx"`)
+	_ = f.Write(w)
+}
+
 // ── GET /admin/matches/import ─────────────────────────────────────────────────
 
 func AdminMatchImportForm(tmpl *template.Template) http.HandlerFunc {
@@ -402,10 +519,6 @@ func AdminMatchImportParse(tmpl *template.Template) http.HandlerFunc {
 		if admin == nil {
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			return
-		}
 
 		ctx := context.Background()
 		comps := loadActiveComps(ctx)
@@ -418,15 +531,41 @@ func AdminMatchImportParse(tmpl *template.Template) http.HandlerFunc {
 			})
 		}
 
+		// Podpora textu (paste) i nahrání souboru (multipart)
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			if err := r.ParseMultipartForm(16 << 20); err != nil {
+				showError("Nelze načíst formulář: " + err.Error())
+				return
+			}
+		} else if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+
 		compID, _ := strconv.Atoi(r.FormValue("competition_id"))
 		text := strings.TrimSpace(r.FormValue("text"))
+
+		// Pokud byl nahrán soubor (.xlsx/.csv), má přednost před textem
+		if file, header, ferr := r.FormFile("import_file"); ferr == nil {
+			defer file.Close()
+			fileRows, rerr := readImportFileRows(file, header.Filename)
+			if rerr != nil {
+				showError("Chyba souboru: " + rerr.Error())
+				return
+			}
+			text = strings.TrimSpace(xlsxRowsToText(fileRows))
+			if text == "" {
+				showError("V souboru se nenašly žádné zápasy. Zkontroluj, že obsahuje sloupce s datem, časem a názvy týmů.")
+				return
+			}
+		}
 
 		if compID == 0 {
 			showError("Vyber soutěž.")
 			return
 		}
 		if text == "" {
-			showError("Vložte text se zápasy.")
+			showError("Vlož zápasy textem nebo nahraj soubor (.xlsx / .csv).")
 			return
 		}
 

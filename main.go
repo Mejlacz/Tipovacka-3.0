@@ -325,6 +325,7 @@ func main() {
 
 	// Admin hromadný import budoucích zápasů
 	r.Get("/admin/matches/import", handlers.AdminMatchImportForm(tmpl))
+	r.Get("/admin/matches/import/template", handlers.AdminMatchImportTemplate)
 	r.Post("/admin/matches/import/parse", handlers.AdminMatchImportParse(tmpl))
 	r.Post("/admin/matches/import/confirm", handlers.AdminMatchImportConfirm)
 	r.Post("/admin/matches/import/cancel", handlers.AdminMatchImportCancel)
