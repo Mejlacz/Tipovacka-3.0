@@ -53,6 +53,8 @@
     <div style="display:flex;gap:.75rem;flex-wrap:wrap">
         <form method="post" action="/admin/matches/import/confirm" style="margin:0">
             <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+            <input type="hidden" name="competition_id" value="{{.CompID}}" />
+            <textarea name="text" hidden>{{.Text}}</textarea>
             <button type="submit" class="btn btn-primary">✅ Potvrdit import zápasů</button>
         </form>
         <form method="post" action="/admin/matches/import/cancel" style="margin:0">

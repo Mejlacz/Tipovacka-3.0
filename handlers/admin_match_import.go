@@ -638,13 +638,16 @@ func AdminMatchImportParse(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		miSetSession(w, r, parsed, compID)
-
+		// Pozn.: data NEukládáme do session (cookie store má limit ~4 KB a
+		// velký rozpis by přetekl → confirm by nedostal nic). Místo toho
+		// pošleme původní text + compID skrytými poli a na confirm znovu
+		// naparsujeme.
 		RenderTemplate(w, r, tmpl, "admin/match_import_preview.html", TemplateData{
 			"User":     admin,
 			"Parsed":   parsed,
 			"CompID":   compID,
 			"CompName": compName,
+			"Text":     text,
 		})
 	}
 }
@@ -657,15 +660,28 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsed, compID := miGetSession(r)
-	miClearSession(w, r)
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
+		return
+	}
+	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
+	text := strings.TrimSpace(r.FormValue("text"))
 
-	if len(parsed) == 0 || compID == 0 {
+	if text == "" || compID == 0 {
+		middleware.SetFlash(w, r, "error", "Chybí data k importu — zkus to prosím znovu.")
 		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
 		return
 	}
 
 	ctx := context.Background()
+
+	// Znovu naparsuj (stejně jako v náhledu) — bez round-tripu přes cookie
+	knownTeams := loadCompTeams(ctx, compID)
+	parsed := parseMatchImportText(text, knownTeams)
+	if len(parsed) == 0 {
+		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
+		return
+	}
 
 	sport := "football"
 	_ = db.Pool.QueryRow(ctx,
