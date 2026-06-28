@@ -668,6 +668,8 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 	text := strings.TrimSpace(r.FormValue("text"))
 
 	if text == "" || compID == 0 {
+		LogAction(&admin.ID, admin.Username, "match_import", "competition", nil,
+			"Import zápasů NEPROVEDEN — chybí data (prázdný text nebo nevybraná soutěž)", nil, nil)
 		middleware.SetFlash(w, r, "error", "Chybí data k importu — zkus to prosím znovu.")
 		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
 		return
@@ -675,10 +677,16 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 
+	var compName string
+	_ = db.Pool.QueryRow(ctx, `SELECT name FROM competitions WHERE id=$1`, compID).Scan(&compName)
+
 	// Znovu naparsuj (stejně jako v náhledu) — bez round-tripu přes cookie
 	knownTeams := loadCompTeams(ctx, compID)
 	parsed := parseMatchImportText(text, knownTeams)
 	if len(parsed) == 0 {
+		LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+			"Import zápasů NEPROVEDEN — nerozpoznán žádný zápas (soutěž "+compName+")", nil, nil)
+		middleware.SetFlash(w, r, "error", "Nepodařilo se rozpoznat žádné zápasy.")
 		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
 		return
 	}
@@ -691,17 +699,23 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 	for _, m := range parsed {
 		if m.ParseError != "" {
 			errCount++
+			LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+				"Import zápasu PŘESKOČEN (chyba parsování): '"+m.RawLine+"' — "+m.ParseError, nil, nil)
 			continue
 		}
 
 		homeID, _ := upsertTeamByName(ctx, m.HomeTeam, sport)
 		if homeID == 0 {
 			errCount++
+			LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+				"Import zápasu CHYBA — nepodařilo se vytvořit/najít domácí tým '"+m.HomeTeam+"'", nil, nil)
 			continue
 		}
 		awayID, _ := upsertTeamByName(ctx, m.AwayTeam, sport)
 		if awayID == 0 {
 			errCount++
+			LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+				"Import zápasu CHYBA — nepodařilo se vytvořit/najít hostující tým '"+m.AwayTeam+"'", nil, nil)
 			continue
 		}
 
@@ -724,6 +738,8 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			skipped++
+			LogAction(&admin.ID, admin.Username, "match_import", "match", &existingID,
+				"Import zápasu PŘESKOČEN (duplicita): "+m.HomeTeam+" vs "+m.AwayTeam+" ("+m.DateStr+")", nil, nil)
 			continue
 		}
 
@@ -734,16 +750,28 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 				matchDate = &t
 			}
 		}
-		_, err := db.Pool.Exec(ctx,
+		var newID int
+		err := db.Pool.QueryRow(ctx,
 			`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, is_finished)
-			 VALUES ($1,$2,$3,$4,false)`,
-			compID, homeID, awayID, matchDate)
+			 VALUES ($1,$2,$3,$4,false) RETURNING id`,
+			compID, homeID, awayID, matchDate).Scan(&newID)
 		if err != nil {
 			errCount++
+			LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+				"Import zápasu CHYBA při zápisu do DB: "+m.HomeTeam+" vs "+m.AwayTeam+" ("+m.DateStr+") — "+err.Error(), nil, nil)
 			continue
 		}
 		created++
+		newVal := fmt.Sprintf(`{"competition_id":%d,"home_team_id":%d,"away_team_id":%d,"date":%q}`,
+			compID, homeID, awayID, m.DateStr)
+		LogAction(&admin.ID, admin.Username, "match_import", "match", &newID,
+			"Import zápasu: "+m.HomeTeam+" vs "+m.AwayTeam+" ("+m.DateStr+", soutěž "+compName+")", nil, &newVal)
 	}
+
+	// Souhrnný záznam celého importu
+	summary := fmt.Sprintf("Import zápasů do soutěže %s: %d vytvořeno, %d přeskočeno (duplicity), %d chyb (z %d řádků)",
+		compName, created, skipped, errCount, len(parsed))
+	LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID, summary, nil, nil)
 
 	msg := fmt.Sprintf("Import dokončen: <b>%d</b> nových zápasů", created)
 	if skipped > 0 {

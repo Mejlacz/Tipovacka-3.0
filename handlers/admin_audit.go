@@ -29,7 +29,7 @@ func historyCategory(action string) string {
 	case "tip_save", "extra_save", "admin_set_tip", "admin_set_extra_answer":
 		return "tipy"
 	case "match_score", "match_score_clear", "match_create", "match_add_quick",
-		"match_edit", "match_delete", "match_date_change", "auto_fetch_results", "api_update_results":
+		"match_edit", "match_delete", "match_date_change", "match_import", "auto_fetch_results", "api_update_results":
 		return "zapasy"
 	case "round_create", "round_edit", "round_delete", "round_toggle":
 		return "kola"
@@ -65,6 +65,7 @@ var histActionIcon = map[string]string{
 	"match_edit":             "✏️",
 	"match_delete":           "🗑️",
 	"match_date_change":      "🗓️",
+	"match_import":           "📥",
 	"auto_fetch_results":     "🤖",
 	"api_update_results":     "🔄",
 	"round_create":           "📋",
@@ -94,7 +95,7 @@ var histActionIcon = map[string]string{
 // histCatActions mapuje kategorii → slice akcí (sdíleno mezi History a AuditLog).
 var histCatActions = map[string][]string{
 	"tipy":      {"tip_save", "extra_save", "admin_set_tip", "admin_set_extra_answer"},
-	"zapasy":    {"match_score", "match_score_clear", "match_create", "match_add_quick", "match_edit", "match_delete", "match_date_change", "auto_fetch_results", "api_update_results"},
+	"zapasy":    {"match_score", "match_score_clear", "match_create", "match_add_quick", "match_edit", "match_delete", "match_date_change", "match_import", "auto_fetch_results", "api_update_results"},
 	"kola":      {"round_create", "round_edit", "round_delete", "round_toggle"},
 	"uzivatele": {"user_create", "user_role", "user_delete", "user_approve", "user_block", "user_unblock", "user_toggle_admin", "user_toggle_owner", "user_inactive", "user_import", "merge_user"},
 	"tymy":      {"team_merge", "team_delete"},
