@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -316,7 +317,57 @@ func readImportFileRows(file io.Reader, filename string) ([][]string, error) {
 		if len(sheets) == 0 {
 			return nil, fmt.Errorf("soubor neobsahuje žádný list")
 		}
-		return f.GetRows(sheets[0])
+		// Vyber list s nejvíc tabulkovými řádky (≥2 neprázdné buňky) —
+		// soubor může mít víc listů a ten datový nemusí být první.
+		best, bestScore := sheets[0], -1
+		for _, s := range sheets {
+			rr, _ := f.GetRows(s)
+			score := 0
+			for _, row := range rr {
+				nonEmpty := 0
+				for _, c := range row {
+					if strings.TrimSpace(c) != "" {
+						nonEmpty++
+					}
+				}
+				if nonEmpty >= 2 {
+					score++
+				}
+			}
+			if score > bestScore {
+				best, bestScore = s, score
+			}
+		}
+		rows, err := f.GetRows(best)
+		if err != nil {
+			return nil, err
+		}
+		// Datum bývá uložené jako Excel "serial" číslo a zobrazí se podle
+		// locale (např. americky 06-30-26) → nejednoznačné. Přepiš takové
+		// buňky z RAW hodnoty na jednoznačné DD.MM.YYYY. Časy (03:00) a
+		// názvy týmů zůstávají z formátovaného výstupu beze změny.
+		rawRows, _ := f.GetRows(best, excelize.Options{RawCellValue: true})
+		for i := range rows {
+			for j := range rows[i] {
+				if i >= len(rawRows) || j >= len(rawRows[i]) {
+					continue
+				}
+				v, perr := strconv.ParseFloat(strings.TrimSpace(rawRows[i][j]), 64)
+				if perr != nil || v < 20000 || v >= 90000 {
+					continue // není to datumový serial
+				}
+				tm, terr := excelize.ExcelDateToTime(v, false)
+				if terr != nil {
+					continue
+				}
+				if v != math.Floor(v) {
+					rows[i][j] = tm.Format("02.01.2006 15:04")
+				} else {
+					rows[i][j] = tm.Format("02.01.2006")
+				}
+			}
+		}
+		return rows, nil
 	case strings.HasSuffix(lower, ".csv"):
 		data, err := io.ReadAll(file)
 		if err != nil {
