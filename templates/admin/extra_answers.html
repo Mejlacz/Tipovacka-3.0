@@ -433,7 +433,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     setTimeout(function() { btn.disabled = false; btn.textContent = origText; btn.style.background = ''; }, 2000);
                 } else {
                     btn.disabled = false; btn.textContent = origText;
-                    alert('Chyba: ' + (data.error || 'neznámá'));
+                    var msg = data.error === 'no_correct_answer'
+                        ? 'Nejdřív klikni na "✓ Správná" u správné odpovědi — teprve pak lze uložit body.'
+                        : ('Chyba: ' + (data.error || 'neznámá'));
+                    alert(msg);
                 }
             })
             .catch(function() { btn.disabled = false; btn.textContent = origText; alert('Chyba spojení.'); });
