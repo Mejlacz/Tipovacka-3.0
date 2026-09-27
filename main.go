@@ -342,7 +342,7 @@ func main() {
 
 	// Admin platby
 	r.Get("/admin/payments", handlers.AdminPaymentOverview(tmpl))
-	r.Post("/admin/payments/{user_id}/toggle-paid", handlers.AdminPaymentToggle)
+	r.Post("/admin/payments/{comp_id}/{user_id}/toggle-paid", handlers.AdminPaymentToggle)
 
 	// Admin audit
 	r.Get("/admin/history", handlers.AdminHistory(tmpl))

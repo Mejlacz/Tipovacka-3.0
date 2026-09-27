@@ -1,102 +1,111 @@
 <div class="page-header">
-    <h1>💰 Přehled plateb a účasti</h1>
+    <h1>💰 Přehled plateb</h1>
     <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
 </div>
 
 <style>
-.pay-table { width:100%; border-collapse:collapse; font-size:.87rem }
-.pay-table th { padding:.45rem .6rem; text-align:left; font-size:.75rem; font-weight:700;
-                text-transform:uppercase; letter-spacing:.04em; color:var(--muted-d);
-                background:var(--bg2); border-bottom:2px solid var(--border-d) }
-.pay-table td { padding:.4rem .6rem; border-bottom:1px solid rgba(255,255,255,.05); vertical-align:middle }
-.pay-table tr:hover td { background:rgba(255,255,255,.025) }
-.tip-yes { color:#34d399; font-weight:700; font-size:.82rem }
-.tip-no  { color:var(--muted-d); font-size:.82rem }
-.pay-badge-yes { display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .55rem;border-radius:20px;
-                 background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);font-size:.8rem;font-weight:700 }
-.pay-badge-no  { display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .55rem;border-radius:20px;
-                 background:rgba(156,163,175,.1);color:var(--muted-d);border:1px solid var(--border-d);font-size:.8rem }
-.toggle-paid { background:none;border:none;cursor:pointer;padding:.15rem .3rem;border-radius:4px;
-               font-size:.95rem;transition:opacity .15s }
+.pay-section       { margin-bottom:2rem }
+.pay-section-title { font-size:1rem;font-weight:700;color:#e2e8f0;margin:0 0 .6rem }
+.pay-group-label   { font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+                     color:var(--muted-d);margin:.9rem 0 .35rem;padding-bottom:.2rem;
+                     border-bottom:1px solid var(--border-d) }
+.pay-list          { display:flex;flex-direction:column;gap:.3rem }
+.pay-row           { display:flex;align-items:center;justify-content:space-between;
+                     padding:.35rem .65rem;border-radius:7px;background:var(--bg2);
+                     border:1px solid var(--border-d) }
+.pay-row:hover     { background:var(--bg3) }
+.pay-name          { font-size:.88rem;font-weight:600;color:var(--text-d) }
+.pay-ghost         { font-size:.7rem;opacity:.55;margin-left:.25rem;cursor:default }
+.pay-badge-yes     { display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .5rem;
+                     border-radius:20px;background:rgba(52,211,153,.15);color:#34d399;
+                     border:1px solid rgba(52,211,153,.3);font-size:.78rem;font-weight:700 }
+.pay-badge-no      { display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .5rem;
+                     border-radius:20px;background:rgba(156,163,175,.1);color:var(--muted-d);
+                     border:1px solid var(--border-d);font-size:.78rem }
+.toggle-paid       { background:none;border:none;cursor:pointer;padding:.1rem .25rem;
+                     border-radius:4px;transition:opacity .15s }
 .toggle-paid:hover { opacity:.7 }
+.pay-empty         { font-size:.82rem;color:var(--muted-d);padding:.3rem .65rem }
 </style>
 
-<div style="overflow-x:auto;margin-top:1rem">
-<table class="pay-table">
-    <thead>
-        <tr>
-            <th>Hráč</th>
-            {{range .Competitions}}
-            <th style="text-align:center">{{.Name}}</th>
-            {{end}}
-            <th style="text-align:center">Zaplaceno</th>
-        </tr>
-    </thead>
-    <tbody>
-    {{range .Rows}}
-    {{$row := .}}
-    <tr id="row-{{.UserID}}">
-        <td style="font-weight:600">{{.Username}}</td>
-        {{range $.Competitions}}
-        <td style="text-align:center">
-            {{if index $row.Tipped .ID}}
-            <span class="tip-yes">✓</span>
-            {{else}}
-            <span class="tip-no">—</span>
-            {{end}}
-        </td>
-        {{end}}
-        <td style="text-align:center">
-            <button class="toggle-paid"
-                    data-user-id="{{.UserID}}"
-                    data-paid="{{if .Paid}}1{{else}}0{{end}}"
-                    title="Přepnout stav platby"
-                    onclick="togglePaid(this)">
-                {{if .Paid}}
-                <span class="pay-badge-yes">✅ Zaplaceno</span>
-                {{else}}
-                <span class="pay-badge-no">⬜ Nezaplaceno</span>
-                {{end}}
-            </button>
-        </td>
-    </tr>
-    {{end}}
-    </tbody>
-</table>
-</div>
+{{range .Sections}}
+{{$sec := .}}
+<div class="pay-section">
+    <div class="pay-section-title">{{.Name}}</div>
 
-{{if not .Rows}}
+    {{if .Unpaid}}
+    <div class="pay-group-label">Nezaplaceno ({{len .Unpaid}})</div>
+    <div class="pay-list">
+    {{range .Unpaid}}
+        <div class="pay-row">
+            <span class="pay-name">
+                {{.Username}}{{if .IsHidden}}<span class="pay-ghost" title="Schovaný hráč">👻</span>{{end}}
+            </span>
+            <button class="toggle-paid"
+                    data-comp-id="{{$sec.ID}}"
+                    data-user-id="{{.UserID}}"
+                    data-paid="0"
+                    onclick="togglePaid(this)">
+                <span class="pay-badge-no">⬜ Nezaplaceno</span>
+            </button>
+        </div>
+    {{end}}
+    </div>
+    {{else}}
+    <div class="pay-empty">Všichni zaplatili ✓</div>
+    {{end}}
+
+    {{if .Paid}}
+    <div class="pay-group-label">Zaplaceno ({{len .Paid}})</div>
+    <div class="pay-list">
+    {{range .Paid}}
+        <div class="pay-row">
+            <span class="pay-name">
+                {{.Username}}{{if .IsHidden}}<span class="pay-ghost" title="Schovaný hráč">👻</span>{{end}}
+            </span>
+            <button class="toggle-paid"
+                    data-comp-id="{{$sec.ID}}"
+                    data-user-id="{{.UserID}}"
+                    data-paid="1"
+                    onclick="togglePaid(this)">
+                <span class="pay-badge-yes">✅ Zaplaceno</span>
+            </button>
+        </div>
+    {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+{{if not .Sections}}
 <p style="color:var(--muted-d);margin-top:1rem">Žádní hráči nenalezeni.</p>
 {{end}}
 
-<div style="font-size:.78rem;color:var(--muted-d);margin-top:1rem">
-    Zobrazeni hráči, kteří mají alespoň jeden tip v některé ze sledovaných soutěží.
-    Kliknutím na stav platby přepínáš zaplaceno / nezaplaceno.
+<div style="font-size:.78rem;color:var(--muted-d);margin-top:.5rem">
+    Kliknutím na tlačítko přepínáš stav platby — hráč se přesune mezi sekcemi po obnovení stránky.
 </div>
 
 <script>
 var _payCsrf = '{{.CSRFToken}}';
 function togglePaid(btn) {
-    var uid = btn.dataset.userId;
-    var wasPaid = btn.dataset.paid === '1';
+    var compID = btn.dataset.compId;
+    var uid    = btn.dataset.userId;
     btn.style.opacity = '.4';
-    fetch('/admin/payments/' + uid + '/toggle-paid', {
+    btn.disabled = true;
+    fetch('/admin/payments/' + compID + '/' + uid + '/toggle-paid', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: '_csrf=' + encodeURIComponent(_payCsrf)
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-        btn.style.opacity = '';
         if (d.ok) {
-            btn.dataset.paid = d.paid ? '1' : '0';
-            btn.innerHTML = d.paid
-                ? '<span class="pay-badge-yes">✅ Zaplaceno</span>'
-                : '<span class="pay-badge-no">⬜ Nezaplaceno</span>';
+            window.location.reload();
         } else {
+            btn.style.opacity = ''; btn.disabled = false;
             alert('Chyba: ' + (d.error || 'neznámá'));
         }
     })
-    .catch(function() { btn.style.opacity = ''; alert('Chyba spojení.'); });
+    .catch(function() { btn.style.opacity = ''; btn.disabled = false; alert('Chyba spojení.'); });
 }
 </script>
