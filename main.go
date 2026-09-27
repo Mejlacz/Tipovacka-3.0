@@ -348,6 +348,8 @@ func main() {
 	r.Post("/admin/payments/{comp_id}/{user_id}/toggle-exclude", handlers.AdminPaymentExclude)
 	r.Post("/admin/payments/{comp_id}/set-reminder-date", handlers.AdminPaymentSetReminderDate)
 	r.Post("/admin/payments/{comp_id}/send-reminder", handlers.AdminPaymentSendReminder)
+	r.Post("/admin/payments/{comp_id}/save-settings", handlers.AdminPaymentSaveSettings)
+	r.Post("/admin/payments/{comp_id}/upload-qr/{num}", handlers.AdminPaymentUploadQR)
 	r.Get("/api/payment-reminder", handlers.AdminPaymentReminderAPI)
 
 	// Admin audit

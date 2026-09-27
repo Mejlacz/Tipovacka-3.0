@@ -2,10 +2,14 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -45,11 +49,55 @@ type CompPaymentDetail struct {
 	Paid         []PaymentUser
 	Excluded     []PaymentUser
 	ReminderDate string // YYYY-MM-DD, prázdné = neaktivní
+	Settings     PaymentSettings
+}
+
+// PaymentSettings obsahuje platební/bankovní údaje soutěže.
+type PaymentSettings struct {
+	BankAccount    string `json:"bank_account"`
+	BankName       string `json:"bank_name"`
+	VariableSymbol string `json:"variable_symbol"`
+	Amount         string `json:"amount"`
+	Note           string `json:"note"`
+	QR1URL         string `json:"-"`
+	QR2URL         string `json:"-"`
 }
 
 // payReminderKey vrátí klíč pro app_config pro datum připomenutí platby.
 func payReminderKey(compID int64) string {
 	return fmt.Sprintf("pay_reminder_%d", compID)
+}
+
+// paySettingsKey vrátí klíč pro app_config pro platební nastavení soutěže.
+func paySettingsKey(compID int64) string {
+	return fmt.Sprintf("pay_settings_%d", compID)
+}
+
+// payQRPath vrátí cestu na disku k QR kódu (num=1 nebo 2).
+func payQRPath(compID int64, num int) string {
+	return filepath.Join("static", "uploads", "qr", fmt.Sprintf("%d_%d.png", compID, num))
+}
+
+// payQRURL vrátí URL cestu k QR kódu (num=1 nebo 2).
+func payQRURL(compID int64, num int) string {
+	return fmt.Sprintf("/static/uploads/qr/%d_%d.png", compID, num)
+}
+
+// loadPaymentSettings načte platební nastavení a QR kódy z app_config + disku.
+func loadPaymentSettings(ctx context.Context, compID int64) PaymentSettings {
+	var s PaymentSettings
+	var raw string
+	_ = db.Pool.QueryRow(ctx, `SELECT value FROM app_config WHERE key=$1`, paySettingsKey(compID)).Scan(&raw)
+	if raw != "" {
+		_ = json.Unmarshal([]byte(raw), &s)
+	}
+	if _, err := os.Stat(payQRPath(compID, 1)); err == nil {
+		s.QR1URL = payQRURL(compID, 1)
+	}
+	if _, err := os.Stat(payQRPath(compID, 2)); err == nil {
+		s.QR2URL = payQRURL(compID, 2)
+	}
+	return s
 }
 
 // GET /admin/payments
@@ -203,6 +251,8 @@ func AdminPaymentDetail(tmpl *template.Template) http.HandlerFunc {
 		_ = db.Pool.QueryRow(ctx,
 			`SELECT value FROM app_config WHERE key=$1`, payReminderKey(compID)).Scan(&detail.ReminderDate)
 
+		detail.Settings = loadPaymentSettings(ctx, compID)
+
 		RenderTemplate(w, r, tmpl, "admin/payment_detail.html", TemplateData{
 			"User":   admin,
 			"Detail": detail,
@@ -232,6 +282,102 @@ func AdminPaymentSetReminderDate(w http.ResponseWriter, r *http.Request) {
 			 ON CONFLICT (key) DO UPDATE SET value=$2`, key, date)
 	}
 	http.Redirect(w, r, "/admin/payments/"+strconv.FormatInt(compID, 10), http.StatusSeeOther)
+}
+
+// POST /admin/payments/{comp_id}/save-settings — uloží platební nastavení (AJAX)
+func AdminPaymentSaveSettings(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "forbidden"})
+		return
+	}
+	compID, err := strconv.ParseInt(r.PathValue("comp_id"), 10, 64)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad_id"})
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad_form"})
+		return
+	}
+	s := PaymentSettings{
+		BankAccount:    strings.TrimSpace(r.FormValue("bank_account")),
+		BankName:       strings.TrimSpace(r.FormValue("bank_name")),
+		VariableSymbol: strings.TrimSpace(r.FormValue("variable_symbol")),
+		Amount:         strings.TrimSpace(r.FormValue("amount")),
+		Note:           strings.TrimSpace(r.FormValue("note")),
+	}
+	data, _ := json.Marshal(s)
+	ctx := context.Background()
+	_, _ = db.Pool.Exec(ctx,
+		`INSERT INTO app_config (key, value) VALUES ($1,$2)
+		 ON CONFLICT (key) DO UPDATE SET value=$2`,
+		paySettingsKey(compID), string(data))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+// POST /admin/payments/{comp_id}/upload-qr/{num} — nahraje QR kód (AJAX, multipart)
+func AdminPaymentUploadQR(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "forbidden"})
+		return
+	}
+	compID, err := strconv.ParseInt(r.PathValue("comp_id"), 10, 64)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad_id"})
+		return
+	}
+	num, err := strconv.Atoi(r.PathValue("num"))
+	if err != nil || (num != 1 && num != 2) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad_num"})
+		return
+	}
+
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad_upload"})
+		return
+	}
+	file, _, err := r.FormFile("qr")
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "no_file"})
+		return
+	}
+	defer file.Close()
+
+	destDir := filepath.Join("static", "uploads", "qr")
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "mkdir"})
+		return
+	}
+
+	destPath := payQRPath(compID, num)
+	out, err := os.Create(destPath)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "create_file"})
+		return
+	}
+	defer out.Close()
+	if _, err = io.Copy(out, file); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "write_file"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "url": payQRURL(compID, num)})
 }
 
 // POST /admin/payments/{comp_id}/send-reminder — pošle email vybraným hráčům
@@ -287,6 +433,8 @@ func AdminPaymentSendReminder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	settings := loadPaymentSettings(ctx, compID)
+
 	sent, skipped := 0, 0
 	for uRows.Next() {
 		var uid int64
@@ -295,7 +443,7 @@ func AdminPaymentSendReminder(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		subject := "Tipovačka — připomínka platby za " + compName
-		body := paymentReminderEmailHTML(uname, compName)
+		body := paymentReminderEmailHTML(uname, compName, settings)
 		if e := sendEmailHTML(email, subject, body); e != nil {
 			skipped++
 		} else {
@@ -475,12 +623,70 @@ func AdminPaymentToggle(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "paid": newVal})
 }
 
-func paymentReminderEmailHTML(username, compName string) string {
+func paymentReminderEmailHTML(username, compName string, s PaymentSettings) string {
+	// Platební údaje
+	var payBlock string
+	hasDetails := s.BankAccount != "" || s.VariableSymbol != "" || s.Amount != ""
+	if hasDetails {
+		rows := ""
+		if s.BankAccount != "" {
+			rows += `<tr><td style="color:#64748b;padding-right:12px;white-space:nowrap">Číslo účtu:</td><td><strong>` + s.BankAccount + `</strong></td></tr>`
+		}
+		if s.BankName != "" {
+			rows += `<tr><td style="color:#64748b;padding-right:12px">Banka:</td><td>` + s.BankName + `</td></tr>`
+		}
+		if s.VariableSymbol != "" {
+			rows += `<tr><td style="color:#64748b;padding-right:12px;white-space:nowrap">Variabilní symbol:</td><td><strong>` + s.VariableSymbol + `</strong></td></tr>`
+		}
+		if s.Amount != "" {
+			rows += `<tr><td style="color:#64748b;padding-right:12px">Částka:</td><td><strong>` + s.Amount + ` Kč</strong></td></tr>`
+		}
+		if s.Note != "" {
+			rows += `<tr><td style="color:#64748b;padding-right:12px;vertical-align:top">Poznámka:</td><td>` + s.Note + `</td></tr>`
+		}
+		payBlock = `<div style="background:#f1f5f9;border-left:3px solid #1e40af;padding:12px 16px;border-radius:4px;margin:16px 0">
+<div style="font-weight:700;margin-bottom:8px;color:#1e40af">📋 Platební údaje</div>
+<table style="border-collapse:collapse;font-size:.92rem">` + rows + `</table></div>`
+	}
+
+	// QR kódy jako base64 data URI
+	type qrImg struct{ label, dataURI string }
+	var qrs []qrImg
+	for i, qrURL := range []string{s.QR1URL, s.QR2URL} {
+		if qrURL == "" {
+			continue
+		}
+		diskPath := strings.TrimPrefix(qrURL, "/")
+		data, err := os.ReadFile(diskPath)
+		if err != nil {
+			continue
+		}
+		dataURI := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
+		qrs = append(qrs, qrImg{
+			label:   fmt.Sprintf("QR kód %d", i+1),
+			dataURI: dataURI,
+		})
+	}
+	var qrBlock string
+	if len(qrs) > 0 {
+		imgs := ""
+		for _, q := range qrs {
+			imgs += `<div style="text-align:center;display:inline-block;margin:8px 16px">
+<div style="font-size:.78rem;color:#64748b;margin-bottom:4px">` + q.label + `</div>
+<img src="` + q.dataURI + `" style="max-width:180px;height:auto;display:block" alt="` + q.label + `">
+</div>`
+		}
+		qrBlock = `<div style="margin:16px 0;text-align:center">
+<div style="font-weight:600;margin-bottom:8px;font-size:.9rem">📱 QR kódy pro platbu</div>` + imgs + `</div>`
+	}
+
 	return `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:520px;margin:2rem auto;color:#1e293b">
 <h2 style="color:#1e40af">💰 Připomínka platby — Tipovačka</h2>
 <p>Ahoj <strong>` + username + `</strong>,</p>
-<p>připomínáme ti, že jsi ještě nezaplatil za soutěž <strong>` + compName + `</strong>.</p>
-<p>Prosím zašli platbu svému správci tipovačky co nejdříve.</p>
+<p>připomínáme ti, že jsi ještě nezaplatil za soutěž <strong>` + compName + `</strong>.</p>` +
+		payBlock +
+		qrBlock +
+		`<p>Prosím zašli platbu co nejdříve. Pokud máš dotazy, obrať se na správce tipovačky.</p>
 <p style="color:#64748b;font-size:.85rem">— Tipovačka 3.0</p>
 </body></html>`
 }
