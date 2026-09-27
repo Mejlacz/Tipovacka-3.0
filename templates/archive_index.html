@@ -1,41 +1,71 @@
+<style>
+.arch-section { margin-bottom:1.75rem }
+.arch-section-head { display:flex; align-items:center; gap:.5rem; margin-bottom:.65rem; padding-bottom:.4rem; border-bottom:1px solid var(--border-d) }
+.arch-section-label { font-size:.88rem; font-weight:700; color:var(--text-d) }
+.arch-section-count { font-size:.72rem; padding:.12rem .45rem; border-radius:99px; background:var(--bg2); border:1px solid var(--border-d); color:var(--muted-d); margin-left:auto }
+.arch-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:.55rem }
+.arch-card { background:var(--bg2); border:1px solid var(--border-d); border-radius:10px; padding:.7rem 1rem; text-decoration:none; display:flex; flex-direction:column; gap:.1rem; transition:.12s }
+.arch-card:hover { background:var(--bg3); border-color:rgba(99,102,241,.5) }
+.arch-card-name { font-size:.9rem; font-weight:600; color:var(--text-d) }
+.arch-card-season { font-size:.75rem; color:var(--muted-d) }
+</style>
+
 <div class="page-header">
     <h1>📦 {{tr .Lang "archive_title"}}</h1>
     <a href="/archive/hall-of-fame" class="btn btn-secondary btn-sm">{{tr .Lang "hof_link"}}</a>
 </div>
 
 {{if .Active}}
-<h2 style="font-size:1rem;color:var(--muted-d);margin-bottom:.5rem">{{tr .Lang "archive_active"}}</h2>
-<div class="card-list" style="margin-bottom:1.5rem">
-{{range .Active}}
-    <a class="card" href="/competition/{{.ID}}">
-        <div class="card-title">{{.Name}}</div>
-        <div class="card-sub">{{.Season}}</div>
-    </a>
-{{end}}
+<div class="arch-section">
+    <div class="arch-section-head">
+        <span>🏆</span>
+        <span class="arch-section-label">{{tr .Lang "archive_active"}}</span>
+        <span class="arch-section-count">{{len .Active}}</span>
+    </div>
+    <div class="arch-cards">
+    {{range .Active}}
+        <a class="arch-card" href="/competition/{{.ID}}">
+            <div class="arch-card-name">{{.Name}}</div>
+            <div class="arch-card-season">{{.Season}}</div>
+        </a>
+    {{end}}
+    </div>
 </div>
 {{end}}
 
 {{if .Football}}
-<h2 style="font-size:1rem;color:var(--muted-d);margin-bottom:.5rem">⚽ Fotbal — archiv</h2>
-<div class="card-list" style="margin-bottom:1.5rem">
-{{range .Football}}
-    <a class="card" href="/archive/competition/{{.ID}}">
-        <div class="card-title">{{.Name}}</div>
-        <div class="card-sub">{{.Season}}</div>
-    </a>
-{{end}}
+<div class="arch-section">
+    <div class="arch-section-head">
+        <span>⚽</span>
+        <span class="arch-section-label">Fotbal — archiv</span>
+        <span class="arch-section-count">{{len .Football}}</span>
+    </div>
+    <div class="arch-cards">
+    {{range .Football}}
+        <a class="arch-card" href="/archive/competition/{{.ID}}">
+            <div class="arch-card-name">{{.Name}}</div>
+            <div class="arch-card-season">{{.Season}}</div>
+        </a>
+    {{end}}
+    </div>
 </div>
 {{end}}
 
 {{if .Hockey}}
-<h2 style="font-size:1rem;color:var(--muted-d);margin-bottom:.5rem">🏒 Hokej — archiv</h2>
-<div class="card-list" style="margin-bottom:1.5rem">
-{{range .Hockey}}
-    <a class="card" href="/archive/competition/{{.ID}}">
-        <div class="card-title">{{.Name}}</div>
-        <div class="card-sub">{{.Season}}</div>
-    </a>
-{{end}}
+<div class="arch-section">
+    <div class="arch-section-head">
+        <span>🏒</span>
+        <span class="arch-section-label">Hokej — archiv</span>
+        <span class="arch-section-count">{{len .Hockey}}</span>
+    </div>
+    <div class="arch-cards">
+    {{range .Hockey}}
+        <a class="arch-card" href="/archive/competition/{{.ID}}">
+            <div class="arch-card-name">{{.Name}}</div>
+            <div class="arch-card-season">{{.Season}}</div>
+        </a>
+    {{end}}
+    </div>
 </div>
 {{end}}
 
