@@ -6,26 +6,27 @@
 <style>
 .pay-cards { display:flex; flex-wrap:wrap; gap:1rem; margin-top:1rem }
 .pay-card  { background:var(--bg2); border:1px solid var(--border-d); border-radius:10px;
-             padding:1rem 1.25rem; min-width:210px; text-decoration:none; color:inherit;
-             display:flex; flex-direction:column; gap:.6rem; transition:border-color .15s }
+             padding:1rem 1.25rem; min-width:180px; text-decoration:none; color:inherit;
+             display:flex; flex-direction:column; gap:.5rem; transition:border-color .15s }
 .pay-card:hover { border-color:var(--accent) }
 .pay-card-name { font-size:1rem; font-weight:700; color:#e2e8f0 }
 .pay-ratio     { font-size:1.5rem; font-weight:800; color:#e2e8f0; letter-spacing:-.01em }
 .pay-ratio span { color:var(--muted-d); font-weight:400; font-size:1rem }
 .pay-bar-wrap  { height:6px; background:var(--bg3); border-radius:3px; overflow:hidden }
 .pay-bar-fill  { height:100%; background:#34d399; border-radius:3px }
-.pay-hint      { font-size:.75rem; color:var(--muted-d) }
+.all-paid      { color:#34d399 }
 </style>
 
 <div class="pay-cards">
 {{range .Cards}}
 <a href="/admin/payments/{{.ID}}" class="pay-card">
     <div class="pay-card-name">{{.Name}}</div>
-    <div class="pay-ratio">{{.Paid}}<span> / {{.Total}}</span></div>
+    <div class="pay-ratio {{if eq .Paid .Total}}all-paid{{end}}">
+        {{.Paid}}<span> / {{.Total}}</span>
+    </div>
     <div class="pay-bar-wrap">
         <div class="pay-bar-fill" style="width:{{.Pct}}%"></div>
     </div>
-    <div class="pay-hint">zaplatilo z celkového počtu hráčů</div>
 </a>
 {{end}}
 </div>
