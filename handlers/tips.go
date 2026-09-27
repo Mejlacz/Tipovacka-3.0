@@ -19,10 +19,11 @@ import (
 
 // IndexMatchCtx drží data pro jedno tipovatelné utkání na hlavní stránce.
 type IndexMatchCtx struct {
-	Match    *models.Match
-	Tip      *models.Tip
-	CompName string
-	CompID   int
+	Match     *models.Match
+	Tip       *models.Tip
+	CompName  string
+	CompID    int
+	CompSport string
 }
 
 func Index(tmpl *template.Template) http.HandlerFunc {
@@ -123,6 +124,7 @@ func Index(tmpl *template.Template) http.HandlerFunc {
 				if comp != nil {
 					ctx2.CompName = comp.Name
 					ctx2.CompID = comp.ID
+					ctx2.CompSport = comp.Sport
 				}
 				openMatches = append(openMatches, ctx2)
 			}

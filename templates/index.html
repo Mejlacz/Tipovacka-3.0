@@ -1,35 +1,130 @@
+<style>
+/* ── Save-all banner ───────────────────────────────── */
+.qt-save-banner {
+    display:flex; align-items:center; gap:.75rem;
+    background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.22);
+    border-radius:10px; padding:.55rem .9rem; margin-bottom:1rem;
+}
+.qt-save-banner-txt { flex:1; font-size:.82rem; color:var(--accent); font-weight:600 }
+#qt-flash { font-size:.8rem }
+#qt-save-all {
+    background:var(--accent); color:#fff; border:none;
+    border-radius:7px; padding:.35rem .9rem; font-size:.82rem;
+    font-weight:700; cursor:pointer; white-space:nowrap;
+}
+#qt-save-all:disabled { opacity:.6; cursor:default }
+
+/* ── Section header ────────────────────────────────── */
+.qt-section-hd {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:.6rem;
+}
+.qt-section-label {
+    font-size:.72rem; font-weight:700; color:var(--muted-d);
+    text-transform:uppercase; letter-spacing:.06em;
+}
+.qt-section-badge {
+    font-size:.7rem; font-weight:700;
+    background:rgba(245,158,11,.12); color:#f59e0b;
+    border:1px solid rgba(245,158,11,.22);
+    padding:.15rem .5rem; border-radius:99px;
+}
+
+/* ── Competition group header ──────────────────────── */
+.qt-comp-hd {
+    display:flex; align-items:center; gap:.5rem;
+    padding:.4rem 0 .25rem;
+    border-top:1px solid var(--border-d);
+    margin-top:.5rem; margin-bottom:.3rem;
+}
+.qt-comp-hd:first-of-type { border-top:none; margin-top:0 }
+.qt-sport-badge {
+    font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--muted-d); background:var(--bg3); border:1px solid var(--border-d);
+    padding:.18rem .5rem; border-radius:99px;
+}
+.qt-comp-name { font-size:.82rem; font-weight:700; color:var(--accent) }
+.qt-progress   { margin-left:auto; font-size:.7rem; color:var(--muted-d) }
+
+/* ── Quick-tip rows ────────────────────────────────── */
+.qt-row {
+    display:flex; align-items:center; gap:.5rem;
+    padding:.4rem .65rem;
+    background:var(--bg2); border:1px solid var(--border-d); border-radius:8px;
+    flex-wrap:wrap; transition:border-color .12s;
+}
+.qt-row:hover { border-color:var(--accent) }
+.qt-teams  { flex:1; font-size:.86rem; font-weight:600; min-width:150px }
+.qt-date   { font-size:.73rem; color:var(--muted-d); white-space:nowrap }
+.qt-inputs { display:flex; align-items:center; gap:.3rem; margin-left:auto }
+.qt-score  {
+    width:2.8rem; text-align:center; padding:.25rem .15rem;
+    background:var(--bg3); border:1px solid var(--border-d); border-radius:6px;
+    color:inherit; font-size:.95rem; font-weight:700;
+    -moz-appearance:textfield;
+}
+.qt-score::-webkit-inner-spin-button,
+.qt-score::-webkit-outer-spin-button { -webkit-appearance:none; margin:0 }
+.qt-score:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(99,102,241,.15) }
+.qt-colon { font-weight:700; color:var(--muted-d) }
+.qt-btn {
+    border:none; border-radius:6px; cursor:pointer;
+    font-size:.82rem; padding:.26rem .55rem; line-height:1; transition:filter .12s;
+}
+.qt-btn-new  { background:var(--accent); color:#fff }
+.qt-btn-new:hover  { filter:brightness(1.15) }
+.qt-btn-edit { background:rgba(245,158,11,.15); color:#f59e0b; border:1px solid rgba(245,158,11,.28) }
+.qt-btn-edit:hover { background:rgba(245,158,11,.25) }
+
+/* ── Competition cards ─────────────────────────────── */
+.card-list { display:flex; flex-wrap:wrap; gap:.65rem; margin-top:.85rem }
+.card {
+    background:var(--bg2); border:1px solid var(--border-d); border-radius:10px;
+    padding:.75rem 1rem; flex:1; min-width:160px;
+    text-decoration:none; color:inherit;
+    display:flex; flex-direction:column; gap:.2rem; transition:.13s;
+}
+.card:hover { border-color:rgba(255,255,255,.16); background:var(--bg3) }
+.card-sport  { font-size:.66rem; font-weight:700; color:var(--muted-d); letter-spacing:.04em }
+.card-title  { font-size:.9rem; font-weight:700; color:var(--text-d) }
+.card-sub    { font-size:.75rem; color:var(--muted-d) }
+</style>
+
 <h1>{{tr .Lang "tips_title"}}</h1>
 
-{{/* ── Otevřená tipování ── */}}
 {{if .OpenMatches}}
 <div style="margin-bottom:1.5rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;flex-wrap:wrap;gap:.4rem">
-        <h2 style="font-size:.88rem;font-weight:700;color:var(--muted-d);margin:0;text-transform:uppercase;letter-spacing:.05em">
-            {{tr .Lang "tips_open_section"}}
-        </h2>
-        <div style="display:flex;align-items:center;gap:.5rem">
-            <span id="qt-flash" style="font-size:.8rem;display:none"></span>
-            <button id="qt-save-all" style="padding:.3rem .75rem;font-size:.82rem;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:7px;cursor:pointer;white-space:nowrap">
-                💾 {{tr .Lang "tips_save_all"}}
-            </button>
-        </div>
+
+    {{/* Save-all banner */}}
+    <div class="qt-save-banner">
+        <span class="qt-save-banner-txt">Máš otevřená tipování</span>
+        <span id="qt-flash"></span>
+        <button id="qt-save-all">💾 {{tr .Lang "tips_save_all"}}</button>
     </div>
-    <div style="display:flex;flex-direction:column;gap:.35rem">
+
+    <div class="qt-section-hd">
+        <span class="qt-section-label">{{tr .Lang "tips_open_section"}}</span>
+        <span class="qt-section-badge" id="qt-open-count"></span>
+    </div>
+
+    <div style="display:flex;flex-direction:column">
     {{$prevComp := ""}}
     {{range .OpenMatches}}
         {{if ne .CompName $prevComp}}
             {{if $prevComp}}</div>{{end}}
-            <div style="font-size:.72rem;font-weight:700;color:var(--accent);letter-spacing:.05em;padding:.5rem 0 .2rem;border-top:{{if $prevComp}}1px solid var(--border-d){{else}}none{{end}};margin-top:{{if $prevComp}}.4rem{{else}}0{{end}}">
-                {{trc $.Lang .CompName}}
+            <div class="qt-comp-hd" data-comp="{{.CompName}}">
+                {{if .CompSport}}<span class="qt-sport-badge">{{sportBadge .CompSport}}</span>{{end}}
+                <span class="qt-comp-name">{{trc $.Lang .CompName}}</span>
+                <span class="qt-progress" id="progress-{{.CompID}}"></span>
             </div>
             <div class="qt-group">
             {{$prevComp = .CompName}}
         {{end}}
-        <form method="post" action="/tip/submit" class="qt-row" data-match-id="{{.Match.ID}}">
+        <form method="post" action="/tip/submit" class="qt-row" data-match-id="{{.Match.ID}}" data-comp-id="{{.CompID}}">
             <input type="hidden" name="match_id" value="{{.Match.ID}}" />
             <span class="qt-teams">
                 {{coalesce .Match.HomeTeam.DisplayName .Match.HomeTeam.Name}}
-                <span style="color:var(--muted-d);margin:0 .25rem">vs</span>
+                <span style="color:var(--muted-d);margin:0 .2rem;font-weight:400">vs</span>
                 {{coalesce .Match.AwayTeam.DisplayName .Match.AwayTeam.Name}}
             </span>
             {{if .Match.MatchDate}}
@@ -51,20 +146,24 @@
     {{end}}
     </div>
 </div>
+</div>
 {{end}}
 
-{{/* ── Přehled soutěží ── */}}
 {{if .Competitions}}
+<div class="qt-section-hd" style="{{if .OpenMatches}}margin-top:1.25rem{{end}}">
+    <span class="qt-section-label" style="font-size:.72rem;font-weight:700;color:var(--muted-d);text-transform:uppercase;letter-spacing:.06em">Soutěže</span>
+</div>
 <div class="card-list">
 {{range .Competitions}}
     <a class="card" href="/competition/{{.ID}}">
-        <div class="card-title">{{trc $.Lang .Name}}</div>
-        <div class="card-sub">{{.Season}}</div>
+        {{if .Sport}}<span class="card-sport">{{sportBadge .Sport}}</span>{{end}}
+        <span class="card-title">{{trc $.Lang .Name}}</span>
+        <span class="card-sub">{{.Season}}</span>
     </a>
     {{if index $.ExtraOpenComps .ID}}
     <a href="/extra?competition_id={{.ID}}"
-       style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.4rem;margin-bottom:0.6rem;
-              padding:0.35rem 0.85rem;border-radius:8px;font-size:0.85rem;font-weight:600;
+       style="display:inline-flex;align-items:center;gap:.4rem;margin-top:.35rem;margin-bottom:.5rem;
+              padding:.35rem .85rem;border-radius:8px;font-size:.85rem;font-weight:600;
               text-decoration:none;background:var(--accent);color:#fff">
         {{tr $.Lang "tips_extra_btn"}} – {{trc $.Lang .Name}}
     </a>
@@ -74,42 +173,6 @@
 {{else}}
 <p class="empty">{{tr .Lang "tips_no_comps"}}</p>
 {{end}}
-
-<style>
-.qt-row {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    padding: .35rem .6rem;
-    background: var(--bg2);
-    border: 1px solid var(--border-d);
-    border-radius: 8px;
-    flex-wrap: wrap;
-}
-.qt-row:hover { border-color: var(--accent); }
-.qt-teams { flex: 1; font-size: .88rem; font-weight: 600; min-width: 150px; }
-.qt-date { font-size: .75rem; color: var(--muted-d); white-space: nowrap; }
-.qt-inputs { display: flex; align-items: center; gap: .3rem; margin-left: auto; }
-.qt-score {
-    width: 3rem; text-align: center; padding: .25rem .2rem;
-    background: var(--bg3); border: 1px solid var(--border-d); border-radius: 6px;
-    color: inherit; font-size: .95rem; font-weight: 700;
-    -moz-appearance: textfield;
-}
-.qt-score::-webkit-inner-spin-button,
-.qt-score::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.qt-score:focus { outline: none; border-color: var(--accent); }
-.qt-colon { font-weight: 700; color: var(--muted-d); }
-.qt-btn {
-    border: none; border-radius: 6px; cursor: pointer;
-    font-size: .85rem; padding: .28rem .6rem; line-height: 1;
-    transition: background .12s;
-}
-.qt-btn-new { background: var(--accent); color: #fff; }
-.qt-btn-new:hover { filter: brightness(1.15); }
-.qt-btn-edit { background: rgba(251,191,36,.18); color: #fbbf24; border: 1px solid rgba(251,191,36,.3); }
-.qt-btn-edit:hover { background: rgba(251,191,36,.3); }
-</style>
 
 <script>
 var LANG_QT = {
@@ -158,7 +221,29 @@ var LANG_QT = {
             });
     }
 
-    // Jednotlivé formuláře — AJAX místo full reload
+    // Progress počítadla X/Y per soutěž
+    (function() {
+        var byComp = {};
+        document.querySelectorAll('.qt-row[data-comp-id]').forEach(function(row) {
+            var cid = row.dataset.compId;
+            if (!byComp[cid]) byComp[cid] = { total: 0, tipped: 0 };
+            byComp[cid].total++;
+            if (row.querySelector('.qt-btn-edit')) byComp[cid].tipped++;
+        });
+        Object.keys(byComp).forEach(function(cid) {
+            var el = document.getElementById('progress-' + cid);
+            if (el) {
+                var b = byComp[cid];
+                el.textContent = b.tipped + ' / ' + b.total + ' zatipováno';
+            }
+        });
+        var countEl = document.getElementById('qt-open-count');
+        if (countEl) {
+            var total = document.querySelectorAll('.qt-row').length;
+            countEl.textContent = total + ' zápasů';
+        }
+    })();
+
     document.querySelectorAll('.qt-row').forEach(function(form) {
         var inputs = form.querySelectorAll('.qt-score');
         if (inputs.length < 2) return;
@@ -178,7 +263,6 @@ var LANG_QT = {
         });
     });
 
-    // Hromadné uložení
     var saveAllBtn = document.getElementById('qt-save-all');
     if (saveAllBtn) {
         saveAllBtn.addEventListener('click', function() {
@@ -186,10 +270,7 @@ var LANG_QT = {
                 var sc = f.querySelectorAll('.qt-score');
                 return sc.length >= 2 && sc[0].value !== '' && sc[1].value !== '';
             });
-            if (!forms.length) {
-                showFlash(LANG_QT.nothingToSave, 'warn');
-                return;
-            }
+            if (!forms.length) { showFlash(LANG_QT.nothingToSave, 'warn'); return; }
             saveAllBtn.disabled = true;
             saveAllBtn.textContent = LANG_QT.saving;
             var saved = 0, failed = 0, pending = forms.length;
@@ -200,11 +281,8 @@ var LANG_QT = {
                     if (pending === 0) {
                         saveAllBtn.disabled = false;
                         saveAllBtn.textContent = LANG_QT.saveAll;
-                        if (failed === 0) {
-                            showFlash('✅ ' + saved, 'ok');
-                        } else {
-                            showFlash('✅ ' + saved + ' ok, ❌ ' + failed + ' ' + LANG_QT.errors, 'err');
-                        }
+                        if (failed === 0) showFlash('✅ ' + saved, 'ok');
+                        else showFlash('✅ ' + saved + ' ok, ❌ ' + failed + ' ' + LANG_QT.errors, 'err');
                     }
                 });
             });

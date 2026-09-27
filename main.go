@@ -617,6 +617,43 @@ func templateFuncs() template.FuncMap {
 		},
 		// lower converts string to lowercase (for data-name search)
 		"lower": strings.ToLower,
+		// sportBadge maps a sport code to an emoji + name badge
+		"sportBadge": func(sport string) string {
+			switch strings.ToLower(sport) {
+			case "hockey", "hokej", "ice_hockey":
+				return "🏒 Hokej"
+			case "football", "fotbal", "soccer":
+				return "⚽ Fotbal"
+			case "basketball", "basketbal":
+				return "🏀 Basketbal"
+			case "tennis", "tenis":
+				return "🎾 Tenis"
+			default:
+				return sport
+			}
+		},
+		// initials extracts up to 2 uppercase initials from a team name
+		"initials": func(name string) string {
+			parts := strings.Fields(name)
+			if len(parts) == 0 {
+				return "?"
+			}
+			r0 := []rune(strings.ToUpper(parts[0]))
+			if len(r0) == 0 {
+				return "?"
+			}
+			if len(parts) == 1 {
+				if len(r0) >= 2 {
+					return string(r0[:2])
+				}
+				return string(r0[:1])
+			}
+			r1 := []rune(strings.ToUpper(parts[1]))
+			if len(r1) == 0 {
+				return string(r0[:1])
+			}
+			return string(r0[:1]) + string(r1[:1])
+		},
 		// fmtTime formats a *time.Time pointer using the given layout; returns "" for nil
 		"fmtTime": func(t *time.Time, layout string) string {
 			if t == nil {
