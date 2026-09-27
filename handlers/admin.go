@@ -327,16 +327,19 @@ func AdminCompetitionDelete(w http.ResponseWriter, r *http.Request) {
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM extra_questions WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM tips WHERE match_id IN (SELECT id FROM matches WHERE competition_id=$1)`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM matches WHERE competition_id=$1`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM rounds WHERE competition_id=$1`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_standings WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM notification_settings WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET competition_id=NULL WHERE competition_id=$1`, compID)
 		_, execErr := db.Pool.Exec(ctx, `DELETE FROM competitions WHERE id=$1`, compID)
 		if execErr != nil {
 			LogAction(&admin.ID, admin.Username, "comp_delete", "competition", &compID, "CHYBA mazání soutěže "+comp.Name+": "+execErr.Error(), &oldVal, nil)
+			middleware.SetFlash(w, r, "error", "Chyba při mazání: "+execErr.Error())
 		} else {
 			LogAction(&admin.ID, admin.Username, "comp_delete", "competition", &compID, "Soutěž smazána: "+comp.Name, &oldVal, nil)
+			middleware.SetFlash(w, r, "ok", "Soutěž <b>"+comp.Name+"</b> byla smazána.")
 		}
-		middleware.SetFlash(w, r, "ok", "Soutěž <b>"+comp.Name+"</b> byla smazána.")
 	}
 	http.Redirect(w, r, "/admin/competitions", http.StatusSeeOther)
 }
