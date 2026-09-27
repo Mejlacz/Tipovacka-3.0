@@ -33,10 +33,11 @@ type CompPaymentCard struct {
 }
 
 type CompPaymentDetail struct {
-	ID     int64
-	Name   string
-	Unpaid []PaymentUser
-	Paid   []PaymentUser
+	ID       int64
+	Name     string
+	Unpaid   []PaymentUser
+	Paid     []PaymentUser
+	Excluded []PaymentUser
 }
 
 // GET /admin/payments  — přehled soutěží s počty
@@ -53,15 +54,17 @@ func AdminPaymentOverview(tmpl *template.Template) http.HandlerFunc {
 			compIDs[i] = c.ID
 		}
 
-		// Počet hráčů v každé soutěži (unikátní tipující) — invisible hráči se nezapočítávají
+		// Počet hráčů v každé soutěži — invisible a excluded se nezapočítávají
 		totalRows, err := db.Pool.Query(ctx, `
 			SELECT m.competition_id, COUNT(DISTINCT u.id)
 			FROM users u
 			JOIN tips t ON t.user_id = u.id
 			JOIN matches m ON m.id = t.match_id
+			LEFT JOIN competition_payments cp ON cp.user_id = u.id AND cp.competition_id = m.competition_id
 			WHERE m.competition_id = ANY($1)
 			  AND COALESCE(u.is_inactive, false) = false
 			  AND COALESCE(u.is_hidden, false) = false
+			  AND COALESCE(cp.excluded, false) = false
 			GROUP BY m.competition_id
 		`, compIDs)
 		if err != nil {
@@ -76,10 +79,10 @@ func AdminPaymentOverview(tmpl *template.Template) http.HandlerFunc {
 		}
 		totalRows.Close()
 
-		// Počet zaplacených
+		// Počet zaplacených (excluded se nepočítají)
 		paidRows, _ := db.Pool.Query(ctx,
 			`SELECT competition_id, COUNT(*) FROM competition_payments
-			 WHERE competition_id = ANY($1) AND paid = true
+			 WHERE competition_id = ANY($1) AND paid = true AND excluded = false
 			 GROUP BY competition_id`, compIDs)
 		paidMap := map[int64]int{}
 		if paidRows != nil {
@@ -142,7 +145,7 @@ func AdminPaymentDetail(tmpl *template.Template) http.HandlerFunc {
 
 		ctx := context.Background()
 		rows, err := db.Pool.Query(ctx, `
-			SELECT DISTINCT u.id, u.username, COALESCE(cp.paid, false)
+			SELECT DISTINCT u.id, u.username, COALESCE(cp.paid, false), COALESCE(cp.excluded, false)
 			FROM users u
 			JOIN tips t ON t.user_id = u.id
 			JOIN matches m ON m.id = t.match_id
@@ -162,14 +165,17 @@ func AdminPaymentDetail(tmpl *template.Template) http.HandlerFunc {
 		for rows.Next() {
 			var uid int64
 			var uname string
-			var paid bool
-			if err := rows.Scan(&uid, &uname, &paid); err != nil {
+			var paid, excluded bool
+			if err := rows.Scan(&uid, &uname, &paid, &excluded); err != nil {
 				continue
 			}
 			u := PaymentUser{UserID: uid, Username: uname}
-			if paid {
+			switch {
+			case excluded:
+				detail.Excluded = append(detail.Excluded, u)
+			case paid:
 				detail.Paid = append(detail.Paid, u)
-			} else {
+			default:
 				detail.Unpaid = append(detail.Unpaid, u)
 			}
 		}
@@ -180,6 +186,39 @@ func AdminPaymentDetail(tmpl *template.Template) http.HandlerFunc {
 			"Detail": detail,
 		})
 	}
+}
+
+// POST /admin/payments/{comp_id}/{user_id}/toggle-exclude  (AJAX)
+func AdminPaymentExclude(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "forbidden"})
+		return
+	}
+	compID, err1 := strconv.ParseInt(r.PathValue("comp_id"), 10, 64)
+	uid, err2 := strconv.ParseInt(r.PathValue("user_id"), 10, 64)
+	if err1 != nil || err2 != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad_id"})
+		return
+	}
+
+	ctx := context.Background()
+	var cur bool
+	_ = db.Pool.QueryRow(ctx,
+		`SELECT excluded FROM competition_payments WHERE user_id=$1 AND competition_id=$2 LIMIT 1`,
+		uid, compID).Scan(&cur)
+
+	newVal := !cur
+	_, _ = db.Pool.Exec(ctx, `
+		INSERT INTO competition_payments (user_id, competition_id, excluded, updated_at)
+		VALUES ($1, $2, $3, now())
+		ON CONFLICT (user_id, competition_id) DO UPDATE SET excluded=$3, updated_at=now()
+	`, uid, compID, newVal)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "excluded": newVal})
 }
 
 // POST /admin/payments/{comp_id}/{user_id}/toggle-paid  (AJAX)

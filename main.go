@@ -69,6 +69,7 @@ func migrateSchema() {
 		)`,
 		`CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx ON chat_messages(created_at DESC)`,
 		`ALTER TABLE matches ALTER COLUMN round_id DROP NOT NULL`,
+		`ALTER TABLE competition_payments ADD COLUMN IF NOT EXISTS excluded BOOL NOT NULL DEFAULT false`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
@@ -344,6 +345,7 @@ func main() {
 	r.Get("/admin/payments", handlers.AdminPaymentOverview(tmpl))
 	r.Get("/admin/payments/{comp_id}", handlers.AdminPaymentDetail(tmpl))
 	r.Post("/admin/payments/{comp_id}/{user_id}/toggle-paid", handlers.AdminPaymentToggle)
+	r.Post("/admin/payments/{comp_id}/{user_id}/toggle-exclude", handlers.AdminPaymentExclude)
 
 	// Admin audit
 	r.Get("/admin/history", handlers.AdminHistory(tmpl))

@@ -8,11 +8,12 @@
                    color:var(--muted-d);margin:.9rem 0 .35rem;padding-bottom:.2rem;
                    border-bottom:1px solid var(--border-d) }
 .pay-list        { display:flex;flex-direction:column;gap:.3rem }
-.pay-row         { display:flex;align-items:center;justify-content:space-between;
+.pay-row         { display:flex;align-items:center;justify-content:space-between;gap:.5rem;
                    padding:.35rem .65rem;border-radius:7px;background:var(--bg2);
                    border:1px solid var(--border-d) }
 .pay-row:hover   { background:var(--bg3) }
-.pay-name        { font-size:.88rem;font-weight:600;color:var(--text-d) }
+.pay-name        { font-size:.88rem;font-weight:600;color:var(--text-d);flex:1;min-width:0 }
+.pay-actions     { display:flex;align-items:center;gap:.35rem;flex-shrink:0 }
 .pay-badge-yes   { display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .5rem;
                    border-radius:20px;background:rgba(52,211,153,.15);color:#34d399;
                    border:1px solid rgba(52,211,153,.3);font-size:.78rem;font-weight:700 }
@@ -22,7 +23,17 @@
 .toggle-paid     { background:none;border:none;cursor:pointer;padding:.1rem .25rem;
                    border-radius:4px;transition:opacity .15s }
 .toggle-paid:hover { opacity:.7 }
+.btn-exclude     { background:none;border:1px solid var(--border-d);cursor:pointer;
+                   padding:.15rem .4rem;border-radius:4px;font-size:.72rem;color:var(--muted-d);
+                   transition:all .15s;white-space:nowrap }
+.btn-exclude:hover { border-color:#ef4444;color:#ef4444 }
+.btn-include     { background:none;border:1px solid rgba(52,211,153,.3);cursor:pointer;
+                   padding:.15rem .4rem;border-radius:4px;font-size:.72rem;color:#34d399;
+                   transition:all .15s;white-space:nowrap }
+.btn-include:hover { opacity:.7 }
 .pay-empty       { font-size:.82rem;color:var(--muted-d);padding:.3rem .65rem }
+.excl-section    { margin-top:1.5rem;opacity:.6 }
+.excl-section:hover { opacity:1 }
 </style>
 
 {{if .Detail.Unpaid}}
@@ -31,18 +42,26 @@
 {{range .Detail.Unpaid}}
 <div class="pay-row">
     <span class="pay-name">{{.Username}}</span>
-    <button class="toggle-paid"
-            data-comp-id="{{$.Detail.ID}}"
-            data-user-id="{{.UserID}}"
-            data-paid="0"
-            onclick="togglePaid(this)">
-        <span class="pay-badge-no">⬜ Nezaplaceno</span>
-    </button>
+    <div class="pay-actions">
+        <button class="toggle-paid"
+                data-comp-id="{{$.Detail.ID}}"
+                data-user-id="{{.UserID}}"
+                onclick="togglePaid(this)">
+            <span class="pay-badge-no">⬜ Nezaplaceno</span>
+        </button>
+        <button class="btn-exclude"
+                data-comp-id="{{$.Detail.ID}}"
+                data-user-id="{{.UserID}}"
+                onclick="toggleExclude(this)"
+                title="Vyloučit z plateb pro tuto soutěž">
+            Vyloučit
+        </button>
+    </div>
 </div>
 {{end}}
 </div>
 {{else}}
-<div class="pay-empty" style="margin-top:.5rem">✓ Všichni zaplatili</div>
+<div class="pay-empty" style="margin-top:.5rem">✓ Všichni zaplatili (nebo jsou vyloučeni)</div>
 {{end}}
 
 {{if .Detail.Paid}}
@@ -51,25 +70,55 @@
 {{range .Detail.Paid}}
 <div class="pay-row">
     <span class="pay-name">{{.Username}}</span>
-    <button class="toggle-paid"
-            data-comp-id="{{$.Detail.ID}}"
-            data-user-id="{{.UserID}}"
-            data-paid="1"
-            onclick="togglePaid(this)">
-        <span class="pay-badge-yes">✅ Zaplaceno</span>
-    </button>
+    <div class="pay-actions">
+        <button class="toggle-paid"
+                data-comp-id="{{$.Detail.ID}}"
+                data-user-id="{{.UserID}}"
+                onclick="togglePaid(this)">
+            <span class="pay-badge-yes">✅ Zaplaceno</span>
+        </button>
+        <button class="btn-exclude"
+                data-comp-id="{{$.Detail.ID}}"
+                data-user-id="{{.UserID}}"
+                onclick="toggleExclude(this)"
+                title="Vyloučit z plateb pro tuto soutěž">
+            Vyloučit
+        </button>
+    </div>
 </div>
 {{end}}
 </div>
 {{end}}
 
+{{if .Detail.Excluded}}
+<div class="excl-section">
+    <div class="pay-group-label">Vyloučeno ({{len .Detail.Excluded}})</div>
+    <div class="pay-list">
+    {{range .Detail.Excluded}}
+    <div class="pay-row" style="opacity:.7">
+        <span class="pay-name" style="text-decoration:line-through;color:var(--muted-d)">{{.Username}}</span>
+        <div class="pay-actions">
+            <button class="btn-include"
+                    data-comp-id="{{$.Detail.ID}}"
+                    data-user-id="{{.UserID}}"
+                    onclick="toggleExclude(this)"
+                    title="Vrátit zpět do plateb">
+                ↩ Zařadit zpět
+            </button>
+        </div>
+    </div>
+    {{end}}
+    </div>
+</div>
+{{end}}
+
 <script>
 var _payCsrf = '{{.CSRFToken}}';
+
 function togglePaid(btn) {
     var compID = btn.dataset.compId;
     var uid    = btn.dataset.userId;
-    btn.style.opacity = '.4';
-    btn.disabled = true;
+    btn.style.opacity = '.4'; btn.disabled = true;
     fetch('/admin/payments/' + compID + '/' + uid + '/toggle-paid', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -77,12 +126,25 @@ function togglePaid(btn) {
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-        if (d.ok) {
-            window.location.reload();
-        } else {
-            btn.style.opacity = ''; btn.disabled = false;
-            alert('Chyba: ' + (d.error || 'neznámá'));
-        }
+        if (d.ok) { window.location.reload(); }
+        else { btn.style.opacity = ''; btn.disabled = false; alert('Chyba: ' + (d.error || 'neznámá')); }
+    })
+    .catch(function() { btn.style.opacity = ''; btn.disabled = false; alert('Chyba spojení.'); });
+}
+
+function toggleExclude(btn) {
+    var compID = btn.dataset.compId;
+    var uid    = btn.dataset.userId;
+    btn.style.opacity = '.4'; btn.disabled = true;
+    fetch('/admin/payments/' + compID + '/' + uid + '/toggle-exclude', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: '_csrf=' + encodeURIComponent(_payCsrf)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok) { window.location.reload(); }
+        else { btn.style.opacity = ''; btn.disabled = false; alert('Chyba: ' + (d.error || 'neznámá')); }
     })
     .catch(function() { btn.style.opacity = ''; btn.disabled = false; alert('Chyba spojení.'); });
 }
