@@ -340,6 +340,10 @@ func main() {
 	r.Post("/admin/api/import", handlers.AdminAPIImport)
 	r.Post("/admin/api/update-results", handlers.AdminAPIUpdateResults)
 
+	// Admin platby
+	r.Get("/admin/payments", handlers.AdminPaymentOverview(tmpl))
+	r.Post("/admin/payments/{user_id}/toggle-paid", handlers.AdminPaymentToggle)
+
 	// Admin audit
 	r.Get("/admin/history", handlers.AdminHistory(tmpl))
 	r.Get("/admin/audit", handlers.AdminAuditLog(tmpl))
