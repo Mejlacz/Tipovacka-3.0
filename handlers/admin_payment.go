@@ -22,7 +22,6 @@ var paymentCompetitions = []struct {
 type PaymentUser struct {
 	UserID   int64
 	Username string
-	IsHidden bool
 }
 
 type CompPaymentCard struct {
@@ -54,8 +53,7 @@ func AdminPaymentOverview(tmpl *template.Template) http.HandlerFunc {
 			compIDs[i] = c.ID
 		}
 
-		// Počet hráčů v každé soutěži (unikátní tipující)
-		type countRow struct{ compID int64; total int }
+		// Počet hráčů v každé soutěži (unikátní tipující) — invisible hráči se nezapočítávají
 		totalRows, err := db.Pool.Query(ctx, `
 			SELECT m.competition_id, COUNT(DISTINCT u.id)
 			FROM users u
@@ -63,9 +61,9 @@ func AdminPaymentOverview(tmpl *template.Template) http.HandlerFunc {
 			JOIN matches m ON m.id = t.match_id
 			WHERE m.competition_id = ANY($1)
 			  AND COALESCE(u.is_inactive, false) = false
-			  AND (NOT $2 OR COALESCE(u.is_hidden, false) = false)
+			  AND COALESCE(u.is_hidden, false) = false
 			GROUP BY m.competition_id
-		`, compIDs, !admin.IsOwner)
+		`, compIDs)
 		if err != nil {
 			http.Error(w, "DB error: "+err.Error(), 500)
 			return
@@ -144,8 +142,7 @@ func AdminPaymentDetail(tmpl *template.Template) http.HandlerFunc {
 
 		ctx := context.Background()
 		rows, err := db.Pool.Query(ctx, `
-			SELECT DISTINCT u.id, u.username, COALESCE(u.is_hidden, false),
-			       COALESCE(cp.paid, false)
+			SELECT DISTINCT u.id, u.username, COALESCE(cp.paid, false)
 			FROM users u
 			JOIN tips t ON t.user_id = u.id
 			JOIN matches m ON m.id = t.match_id
@@ -153,6 +150,7 @@ func AdminPaymentDetail(tmpl *template.Template) http.HandlerFunc {
 			       ON cp.user_id = u.id AND cp.competition_id = $1
 			WHERE m.competition_id = $1
 			  AND COALESCE(u.is_inactive, false) = false
+			  AND COALESCE(u.is_hidden, false) = false
 			ORDER BY u.username
 		`, compID)
 		if err != nil {
@@ -164,14 +162,11 @@ func AdminPaymentDetail(tmpl *template.Template) http.HandlerFunc {
 		for rows.Next() {
 			var uid int64
 			var uname string
-			var isHidden, paid bool
-			if err := rows.Scan(&uid, &uname, &isHidden, &paid); err != nil {
+			var paid bool
+			if err := rows.Scan(&uid, &uname, &paid); err != nil {
 				continue
 			}
-			if isHidden && !admin.IsOwner {
-				continue
-			}
-			u := PaymentUser{UserID: uid, Username: uname, IsHidden: isHidden}
+			u := PaymentUser{UserID: uid, Username: uname}
 			if paid {
 				detail.Paid = append(detail.Paid, u)
 			} else {

@@ -13,7 +13,6 @@
                    border:1px solid var(--border-d) }
 .pay-row:hover   { background:var(--bg3) }
 .pay-name        { font-size:.88rem;font-weight:600;color:var(--text-d) }
-.pay-ghost       { font-size:.7rem;opacity:.55;margin-left:.25rem;cursor:default }
 .pay-badge-yes   { display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .5rem;
                    border-radius:20px;background:rgba(52,211,153,.15);color:#34d399;
                    border:1px solid rgba(52,211,153,.3);font-size:.78rem;font-weight:700 }
@@ -31,9 +30,7 @@
 <div class="pay-list">
 {{range .Detail.Unpaid}}
 <div class="pay-row">
-    <span class="pay-name">
-        {{.Username}}{{if .IsHidden}}<span class="pay-ghost" title="Schovaný hráč">👻</span>{{end}}
-    </span>
+    <span class="pay-name">{{.Username}}</span>
     <button class="toggle-paid"
             data-comp-id="{{$.Detail.ID}}"
             data-user-id="{{.UserID}}"
@@ -53,9 +50,7 @@
 <div class="pay-list">
 {{range .Detail.Paid}}
 <div class="pay-row">
-    <span class="pay-name">
-        {{.Username}}{{if .IsHidden}}<span class="pay-ghost" title="Schovaný hráč">👻</span>{{end}}
-    </span>
+    <span class="pay-name">{{.Username}}</span>
     <button class="toggle-paid"
             data-comp-id="{{$.Detail.ID}}"
             data-user-id="{{.UserID}}"
