@@ -1,4 +1,21 @@
+<style>
+.auth-logo { display:flex; flex-direction:column; align-items:center; gap:.4rem; margin-bottom:1.25rem }
+.auth-logo-icon { width:48px; height:48px; background:linear-gradient(135deg,var(--accent) 0%,#818cf8 100%); border-radius:13px; display:flex; align-items:center; justify-content:center; font-size:1.6rem; box-shadow:0 6px 16px rgba(99,102,241,.3) }
+.auth-logo-name { font-size:.95rem; font-weight:700; color:var(--text-d) }
+.auth-logo-sub  { font-size:.7rem; color:var(--muted-d); margin-top:-2px }
+.auth-card h1   { font-size:1.1rem; margin-bottom:1.25rem; text-align:center }
+.form-group input:focus, .form-group select:focus { border-color:var(--accent) !important; box-shadow:0 0 0 3px rgba(99,102,241,.15) }
+.auth-divider   { display:flex; align-items:center; gap:.75rem; margin:.85rem 0; color:var(--muted-d); font-size:.75rem }
+.auth-divider::before,.auth-divider::after { content:''; flex:1; height:1px; background:var(--border-d) }
+</style>
+
 <div class="auth-card">
+    <div class="auth-logo">
+        <div class="auth-logo-icon">🏆</div>
+        <span class="auth-logo-name">Tipovačka 3.0</span>
+        <span class="auth-logo-sub">Tipovací liga</span>
+    </div>
+
     <h1>{{tr .Lang "reg_title"}}</h1>
 
     {{if .Error}}
@@ -20,9 +37,10 @@
             <input type="password" id="password" name="password" required autocomplete="new-password"
                    placeholder="{{tr .Lang "reg_password_ph"}}" minlength="8" />
         </div>
-        <button type="submit" class="btn btn-primary">{{tr .Lang "reg_submit"}}</button>
+        <button type="submit" class="btn btn-primary" style="width:100%">{{tr .Lang "reg_submit"}}</button>
     </form>
 
+    <div class="auth-divider">nebo</div>
     <p class="auth-switch">
         {{tr .Lang "reg_have_account"}} <a href="/login">{{tr .Lang "reg_login_link"}}</a>
     </p>
