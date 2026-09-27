@@ -318,7 +318,9 @@
         </div>
         <div class="pay-set-field full">
             <label class="pay-set-label" for="ps_note">Poznámka / zpráva pro příjemce</label>
-            <input type="text" id="ps_note" class="pay-set-input" placeholder="Za účast v tipovačce 2026" value="{{.Detail.Settings.Note}}">
+            <input type="text" id="ps_note" class="pay-set-input"
+                   placeholder="Za účast v tipovačce {{.Detail.Name}} NICK"
+                   value="{{if .Detail.Settings.Note}}{{.Detail.Settings.Note}}{{else}}Za účast v tipovačce {{.Detail.Name}} NICK{{end}}">
         </div>
     </div>
     <div class="pay-set-save">

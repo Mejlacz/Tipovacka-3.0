@@ -642,7 +642,8 @@ func paymentReminderEmailHTML(username, compName string, s PaymentSettings) stri
 			rows += `<tr><td style="color:#64748b;padding-right:12px">Částka:</td><td><strong>` + s.Amount + ` Kč</strong></td></tr>`
 		}
 		if s.Note != "" {
-			rows += `<tr><td style="color:#64748b;padding-right:12px;vertical-align:top">Poznámka:</td><td>` + s.Note + `</td></tr>`
+			note := strings.ReplaceAll(s.Note, "NICK", username)
+			rows += `<tr><td style="color:#64748b;padding-right:12px;vertical-align:top">Poznámka:</td><td>` + note + `</td></tr>`
 		}
 		payBlock = `<div style="background:#f1f5f9;border-left:3px solid #1e40af;padding:12px 16px;border-radius:4px;margin:16px 0">
 <div style="font-weight:700;margin-bottom:8px;color:#1e40af">📋 Platební údaje</div>
