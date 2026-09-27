@@ -13,12 +13,13 @@ import (
 )
 
 var paymentCompetitions = []struct {
-	ID   int64
-	Name string
+	ID         int64
+	Name       string
+	SportLabel string
 }{
-	{1172900132417011713, "MS hokej 2026"},
-	{1181336879584051202, "MS fotbal 2026"},
-	{1206995494455181314, "LM 2026/27"},
+	{1172900132417011713, "MS hokej 2026", "🏒 Hokej"},
+	{1181336879584051202, "MS fotbal 2026", "⚽ Fotbal"},
+	{1206995494455181314, "LM 2026/27", "⚽ Fotbal"},
 }
 
 type PaymentUser struct {
@@ -28,11 +29,13 @@ type PaymentUser struct {
 }
 
 type CompPaymentCard struct {
-	ID    int64
-	Name  string
-	Paid  int
-	Total int
-	Pct   int
+	ID         int64
+	Name       string
+	SportLabel string
+	Paid       int
+	Total      int
+	Pct        int
+	ArcOffset  float64 // stroke-dashoffset pro SVG arc (circumference=220)
 }
 
 type CompPaymentDetail struct {
@@ -103,20 +106,25 @@ func AdminPaymentOverview(tmpl *template.Template) http.HandlerFunc {
 			paidRows.Close()
 		}
 
+		const arcCircumference = 220.0
 		cards := make([]CompPaymentCard, 0, len(paymentCompetitions))
 		for _, c := range paymentCompetitions {
 			total := totalMap[c.ID]
 			paid := paidMap[c.ID]
 			pct := 0
+			arcOffset := 0.0
 			if total > 0 {
 				pct = paid * 100 / total
+				arcOffset = arcCircumference * float64(total-paid) / float64(total)
 			}
 			cards = append(cards, CompPaymentCard{
-				ID:    c.ID,
-				Name:  c.Name,
-				Paid:  paid,
-				Total: total,
-				Pct:   pct,
+				ID:         c.ID,
+				Name:       c.Name,
+				SportLabel: c.SportLabel,
+				Paid:       paid,
+				Total:      total,
+				Pct:        pct,
+				ArcOffset:  arcOffset,
 			})
 		}
 

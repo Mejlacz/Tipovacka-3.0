@@ -1,130 +1,221 @@
 <div class="page-header">
-    <h1>💰 {{.Detail.Name}}</h1>
-    <a href="/admin/payments" class="btn btn-secondary btn-sm">← Platby</a>
+    <a href="/admin/payments" class="btn btn-secondary btn-sm" style="margin-bottom:.5rem">← Platby</a>
 </div>
 
 <style>
-.pay-group-label { font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
-                   color:var(--muted-d);margin:.9rem 0 .35rem;padding-bottom:.2rem;
-                   border-bottom:1px solid var(--border-d) }
-.pay-list        { display:flex;flex-direction:column;gap:.3rem }
-.pay-row         { display:flex;align-items:center;justify-content:space-between;gap:.5rem;
-                   padding:.35rem .65rem;border-radius:7px;background:var(--bg2);
-                   border:1px solid var(--border-d) }
-.pay-row:hover   { background:var(--bg3) }
-.pay-row.selected { border-color:var(--accent);background:rgba(99,102,241,.08) }
-.pay-name        { font-size:.88rem;font-weight:600;color:var(--text-d);flex:1;min-width:0 }
-.pay-actions     { display:flex;align-items:center;gap:.35rem;flex-shrink:0 }
-.pay-badge-yes   { display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .5rem;
-                   border-radius:20px;background:rgba(52,211,153,.15);color:#34d399;
-                   border:1px solid rgba(52,211,153,.3);font-size:.78rem;font-weight:700 }
-.pay-badge-no    { display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .5rem;
-                   border-radius:20px;background:rgba(156,163,175,.1);color:var(--muted-d);
-                   border:1px solid var(--border-d);font-size:.78rem }
-.toggle-paid     { background:none;border:none;cursor:pointer;padding:.1rem .25rem;
-                   border-radius:4px;transition:opacity .15s }
-.toggle-paid:hover { opacity:.7 }
-.btn-exclude     { background:none;border:1px solid var(--border-d);cursor:pointer;
-                   padding:.15rem .4rem;border-radius:4px;font-size:.72rem;color:var(--muted-d);
-                   transition:all .15s;white-space:nowrap }
-.btn-exclude:hover { border-color:#ef4444;color:#ef4444 }
-.btn-include     { background:none;border:1px solid rgba(52,211,153,.3);cursor:pointer;
-                   padding:.15rem .4rem;border-radius:4px;font-size:.72rem;color:#34d399;
-                   transition:all .15s;white-space:nowrap }
-.btn-include:hover { opacity:.7 }
-.pay-empty       { font-size:.82rem;color:var(--muted-d);padding:.3rem .65rem }
-.excl-section    { margin-top:1.5rem;opacity:.65 }
-.excl-section:hover { opacity:1 }
-.pay-cb          { width:16px;height:16px;cursor:pointer;accent-color:var(--accent);flex-shrink:0 }
-.bulk-bar        { display:none;align-items:center;gap:.6rem;padding:.55rem .75rem;
-                   background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.25);
-                   border-radius:8px;margin-bottom:.6rem;font-size:.83rem;flex-wrap:wrap }
-.bulk-bar.visible { display:flex }
-.reminder-box    { margin-top:1.8rem;padding:.75rem 1rem;background:var(--bg2);
-                   border:1px solid var(--border-d);border-radius:8px;font-size:.83rem }
-.reminder-box h3 { font-size:.85rem;font-weight:700;color:#e2e8f0;margin:0 0 .5rem }
+/* ── Mini stats header ── */
+.pd-header        { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; flex-wrap:wrap }
+.pd-title         { font-size:1.15rem; font-weight:700; color:#e2e8f0 }
+.pd-sub           { font-size:.75rem; color:var(--muted-d); margin-top:.15rem }
+.pd-stats         { display:flex; gap:1rem; align-items:center; flex-shrink:0 }
+.pd-stat          { text-align:center }
+.pd-stat-num      { font-size:1.35rem; font-weight:800; font-variant-numeric:tabular-nums; line-height:1 }
+.pd-stat-lbl      { font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted-d); margin-top:.15rem }
+.pd-stat-div      { width:1px; height:28px; background:var(--border-d) }
+
+/* ── Bulk bar ── */
+.pay-bulk-bar     { display:none; align-items:center; gap:.6rem; padding:.6rem .85rem;
+                    background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.3);
+                    border-radius:9px; margin-bottom:.75rem; font-size:.83rem; flex-wrap:wrap }
+.pay-bulk-bar.visible { display:flex }
+.pay-bulk-ct      { color:var(--accent); font-weight:700; flex:1; min-width:60px }
+.btn-bulk-email   { display:inline-flex; align-items:center; gap:.3rem; background:var(--accent);
+                    color:#fff; border:none; border-radius:6px; padding:.35rem .75rem;
+                    font-size:.78rem; font-weight:600; cursor:pointer; font-family:inherit; transition:opacity .12s }
+.btn-bulk-email:hover { opacity:.85 }
+.btn-bulk-cancel  { background:none; border:1px solid var(--border-d); border-radius:6px;
+                    padding:.3rem .6rem; font-size:.78rem; color:var(--muted-d); cursor:pointer;
+                    font-family:inherit; transition:all .12s }
+.btn-bulk-cancel:hover { border-color:#f87171; color:#f87171 }
+
+/* ── Section headers ── */
+.pay-sec-hdr      { display:flex; align-items:center; justify-content:space-between; gap:.5rem;
+                    margin-top:1.1rem; margin-bottom:.4rem }
+.pay-sec-hdr:first-of-type { margin-top:0 }
+.pay-sec-left     { display:flex; align-items:center; gap:.5rem }
+.pay-sec-stripe   { width:3px; height:15px; border-radius:2px; flex-shrink:0 }
+.stripe-amber     { background:#f59e0b }
+.stripe-green     { background:#34d399 }
+.stripe-muted     { background:var(--muted-d) }
+.pay-sec-lbl      { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted-d) }
+.pay-cnt-pill     { font-size:.65rem; font-weight:700; padding:.1rem .45rem; border-radius:99px }
+.pill-amber       { background:rgba(245,158,11,.15); color:#f59e0b }
+.pill-green       { background:rgba(52,211,153,.15);  color:#34d399 }
+.pill-muted       { background:var(--bg3); color:var(--muted-d); border:1px solid var(--border-d) }
+
+.btn-sel-all      { font-size:.7rem; color:var(--muted-d); background:none; border:1px solid var(--border-d);
+                    border-radius:5px; padding:.15rem .45rem; cursor:pointer; font-family:inherit; transition:all .12s }
+.btn-sel-all:hover { color:#e2e8f0; border-color:rgba(99,102,241,.4) }
+
+/* ── Pay rows ── */
+.pay-list         { display:flex; flex-direction:column; gap:2px }
+.pay-row          { display:flex; align-items:center; gap:.55rem; padding:.5rem .75rem;
+                    border-radius:8px; background:var(--bg2); border:1px solid var(--border-d);
+                    transition:background .1s, border-color .1s }
+.pay-row:hover    { background:var(--bg3) }
+.pay-row.selected { border-color:rgba(99,102,241,.35); background:rgba(99,102,241,.08) }
+.pay-name         { font-size:.88rem; font-weight:600; color:var(--text-d); flex:1; min-width:0 }
+.pay-name.crossed { text-decoration:line-through; color:var(--muted-d) }
+.pay-cb           { width:15px; height:15px; accent-color:var(--accent); cursor:pointer; flex-shrink:0 }
+.pay-actions      { display:flex; align-items:center; gap:.4rem; flex-shrink:0 }
+
+.btn-tog          { display:inline-flex; align-items:center; gap:.25rem; padding:.2rem .55rem;
+                    border-radius:99px; font-size:.75rem; font-weight:700; cursor:pointer;
+                    border:none; font-family:inherit; transition:opacity .12s; white-space:nowrap }
+.btn-tog:hover    { opacity:.75 }
+.tog-no   { background:rgba(245,158,11,.15); color:#f59e0b; border:1px solid rgba(245,158,11,.25) }
+.tog-yes  { background:rgba(52,211,153,.15);  color:#34d399; border:1px solid rgba(52,211,153,.3)  }
+
+.btn-excl  { font-size:.72rem; color:var(--muted-d); background:none; border:1px solid var(--border-d);
+             border-radius:5px; padding:.18rem .45rem; cursor:pointer; font-family:inherit;
+             white-space:nowrap; transition:all .12s }
+.btn-excl:hover { border-color:#ef4444; color:#f87171 }
+.btn-incl  { font-size:.72rem; color:#34d399; background:none; border:1px solid rgba(52,211,153,.3);
+             border-radius:5px; padding:.18rem .45rem; cursor:pointer; font-family:inherit;
+             white-space:nowrap; transition:opacity .12s }
+.btn-incl:hover { opacity:.7 }
+
+.pay-empty { font-size:.82rem; color:#34d399; padding:.4rem .75rem;
+             background:rgba(52,211,153,.08); border:1px solid rgba(52,211,153,.2);
+             border-radius:8px; display:flex; align-items:center; gap:.4rem }
+
+.excl-section         { margin-top:.1rem; opacity:.65; transition:opacity .15s }
+.excl-section:hover   { opacity:1 }
+
+/* ── Reminder box ── */
+.reminder-box     { margin-top:1.5rem; padding:.9rem 1rem; background:var(--bg2);
+                    border:1px solid var(--border-d); border-radius:10px; font-size:.83rem }
+.reminder-top     { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.6rem }
+.reminder-title   { display:flex; align-items:center; gap:.4rem; font-size:.85rem; font-weight:700; color:#e2e8f0 }
+.rem-stat-chip    { font-size:.68rem; font-weight:700; padding:.18rem .55rem; border-radius:99px }
+.rem-active       { background:rgba(52,211,153,.15); color:#34d399; border:1px solid rgba(52,211,153,.3) }
+.rem-inactive     { background:var(--bg3); color:var(--muted-d); border:1px solid var(--border-d) }
+.reminder-form    { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap }
+.rem-label        { font-size:.78rem; color:var(--muted-d) }
+.reminder-box input[type=date] {
+    background:var(--bg3); border:1px solid var(--border-d); border-radius:6px;
+    color:var(--text-d); padding:.28rem .55rem; font-size:.8rem; font-family:inherit }
+.rem-hint         { font-size:.73rem; color:var(--muted-d); margin-top:.4rem }
 </style>
 
-{{/* ── Toolbar pro hromadný email (nezaplacení) ── */}}
-<div class="bulk-bar" id="bulk-bar">
-    <span id="bulk-count">0 vybráno</span>
-    <button class="btn btn-sm btn-primary" id="btn-send-email" onclick="sendBulkEmail()">📧 Poslat email</button>
-    <button class="btn btn-sm btn-secondary" onclick="selectAll(false)">Zrušit výběr</button>
+{{/* ── Mini stats header ── */}}
+<div class="pd-header">
+    <div>
+        <div class="pd-title">💰 {{.Detail.Name}}</div>
+        <div class="pd-sub">Správa plateb soutěže</div>
+    </div>
+    <div class="pd-stats">
+        <div class="pd-stat">
+            <div class="pd-stat-num" style="color:#34d399">{{len .Detail.Paid}}</div>
+            <div class="pd-stat-lbl">zaplaceno</div>
+        </div>
+        <div class="pd-stat-div"></div>
+        <div class="pd-stat">
+            <div class="pd-stat-num" style="color:#f59e0b">{{len .Detail.Unpaid}}</div>
+            <div class="pd-stat-lbl">čeká</div>
+        </div>
+        {{if .Detail.Excluded}}
+        <div class="pd-stat-div"></div>
+        <div class="pd-stat">
+            <div class="pd-stat-num" style="color:var(--muted-d)">{{len .Detail.Excluded}}</div>
+            <div class="pd-stat-lbl">vyloučen</div>
+        </div>
+        {{end}}
+    </div>
 </div>
 
+{{/* ── Bulk bar ── */}}
+<div class="pay-bulk-bar" id="bulk-bar">
+    <span class="pay-bulk-ct" id="bulk-count">0 vybráno</span>
+    <button class="btn-bulk-email" id="btn-send-email" onclick="sendBulkEmail()">✉ Poslat email</button>
+    <button class="btn-bulk-cancel" onclick="selectAll(false)">Zrušit výběr</button>
+</div>
+
+{{/* ── Nezaplaceno ── */}}
 {{if .Detail.Unpaid}}
-<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.1rem">
-    <div class="pay-group-label" style="margin:0;border:none">Nezaplaceno ({{len .Detail.Unpaid}})</div>
-    <button class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.15rem .4rem" onclick="selectAll(true)">Označit všechny</button>
+<div class="pay-sec-hdr">
+    <div class="pay-sec-left">
+        <div class="pay-sec-stripe stripe-amber"></div>
+        <span class="pay-sec-lbl">Nezaplaceno</span>
+        <span class="pay-cnt-pill pill-amber">{{len .Detail.Unpaid}}</span>
+    </div>
+    <button class="btn-sel-all" onclick="selectAll(true)">Označit všechny</button>
 </div>
 <div class="pay-list" id="unpaid-list">
 {{range .Detail.Unpaid}}
 <div class="pay-row" data-user-id="{{.UserID}}" data-email="{{.Email}}">
     <input type="checkbox" class="pay-cb pay-select" data-user-id="{{.UserID}}" onchange="onCheckChange()">
-    <span class="pay-name">{{.Username}}{{if not .Email}} <span style="font-size:.7rem;color:#f59e0b" title="Nemá email">⚠</span>{{end}}</span>
+    <span class="pay-name">{{.Username}}{{if not .Email}} <span style="font-size:.68rem;color:#f59e0b" title="Nemá email">⚠</span>{{end}}</span>
     <div class="pay-actions">
-        <button class="toggle-paid"
+        <button class="btn-tog tog-no"
                 data-comp-id="{{$.Detail.ID}}"
                 data-user-id="{{.UserID}}"
-                onclick="togglePaid(this)">
-            <span class="pay-badge-no">⬜ Nezaplaceno</span>
-        </button>
-        <button class="btn-exclude"
+                onclick="togglePaid(this)">⬜ Nezaplaceno</button>
+        <button class="btn-excl"
                 data-comp-id="{{$.Detail.ID}}"
                 data-user-id="{{.UserID}}"
-                onclick="toggleExclude(this)"
-                title="Vyloučit z plateb pro tuto soutěž">
-            Vyloučit
-        </button>
+                onclick="toggleExclude(this)">Vyloučit</button>
     </div>
 </div>
 {{end}}
 </div>
 {{else}}
-<div class="pay-empty" style="margin-top:.5rem">✓ Všichni zaplatili (nebo jsou vyloučeni)</div>
+<div class="pay-sec-hdr" style="margin-top:0">
+    <div class="pay-sec-left">
+        <div class="pay-sec-stripe stripe-green"></div>
+        <span class="pay-sec-lbl">Nezaplaceno</span>
+    </div>
+</div>
+<div class="pay-empty">✓ Všichni zaplatili nebo jsou vyloučeni</div>
 {{end}}
 
+{{/* ── Zaplaceno ── */}}
 {{if .Detail.Paid}}
-<div class="pay-group-label">Zaplaceno ({{len .Detail.Paid}})</div>
+<div class="pay-sec-hdr">
+    <div class="pay-sec-left">
+        <div class="pay-sec-stripe stripe-green"></div>
+        <span class="pay-sec-lbl">Zaplaceno</span>
+        <span class="pay-cnt-pill pill-green">{{len .Detail.Paid}}</span>
+    </div>
+</div>
 <div class="pay-list">
 {{range .Detail.Paid}}
 <div class="pay-row">
     <span class="pay-name">{{.Username}}</span>
     <div class="pay-actions">
-        <button class="toggle-paid"
+        <button class="btn-tog tog-yes"
                 data-comp-id="{{$.Detail.ID}}"
                 data-user-id="{{.UserID}}"
-                onclick="togglePaid(this)">
-            <span class="pay-badge-yes">✅ Zaplaceno</span>
-        </button>
-        <button class="btn-exclude"
+                onclick="togglePaid(this)">✅ Zaplaceno</button>
+        <button class="btn-excl"
                 data-comp-id="{{$.Detail.ID}}"
                 data-user-id="{{.UserID}}"
-                onclick="toggleExclude(this)"
-                title="Vyloučit z plateb pro tuto soutěž">
-            Vyloučit
-        </button>
+                onclick="toggleExclude(this)">Vyloučit</button>
     </div>
 </div>
 {{end}}
 </div>
 {{end}}
 
+{{/* ── Vyloučeno ── */}}
 {{if .Detail.Excluded}}
 <div class="excl-section">
-    <div class="pay-group-label">Vyloučeno ({{len .Detail.Excluded}})</div>
+    <div class="pay-sec-hdr">
+        <div class="pay-sec-left">
+            <div class="pay-sec-stripe stripe-muted"></div>
+            <span class="pay-sec-lbl">Vyloučeno</span>
+            <span class="pay-cnt-pill pill-muted">{{len .Detail.Excluded}}</span>
+        </div>
+    </div>
     <div class="pay-list">
     {{range .Detail.Excluded}}
-    <div class="pay-row" style="opacity:.7">
-        <span class="pay-name" style="text-decoration:line-through;color:var(--muted-d)">{{.Username}}</span>
+    <div class="pay-row">
+        <span class="pay-name crossed">{{.Username}}</span>
         <div class="pay-actions">
-            <button class="btn-include"
+            <button class="btn-incl"
                     data-comp-id="{{$.Detail.ID}}"
                     data-user-id="{{.UserID}}"
-                    onclick="toggleExclude(this)"
-                    title="Vrátit zpět do plateb">
-                ↩ Zařadit zpět
-            </button>
+                    onclick="toggleExclude(this)">↩ Zařadit zpět</button>
         </div>
     </div>
     {{end}}
@@ -134,23 +225,28 @@
 
 {{/* ── Nastavení data připomenutí ── */}}
 <div class="reminder-box">
-    <h3>📅 Připomínka po přihlášení</h3>
-    <form method="post" action="/admin/payments/{{.Detail.ID}}/set-reminder-date" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
-        <label style="font-size:.8rem;color:var(--muted-d)">Od data:</label>
-        <input type="date" name="reminder_date" value="{{.Detail.ReminderDate}}"
-               style="background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;
-                      color:var(--text-d);padding:.25rem .5rem;font-size:.82rem">
-        <button type="submit" class="btn btn-sm btn-secondary">Uložit</button>
+    <div class="reminder-top">
+        <div class="reminder-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            Připomínka po přihlášení
+        </div>
         {{if .Detail.ReminderDate}}
-        <span style="font-size:.75rem;color:#34d399">✓ Aktivní od {{.Detail.ReminderDate}}</span>
+        <span class="rem-stat-chip rem-active">Aktivní od {{.Detail.ReminderDate}}</span>
         {{else}}
-        <span style="font-size:.75rem;color:var(--muted-d)">Neaktivní — vymaž datum pro vypnutí</span>
+        <span class="rem-stat-chip rem-inactive">Neaktivní</span>
         {{end}}
-    </form>
-    <div style="font-size:.75rem;color:var(--muted-d);margin-top:.4rem">
-        Od nastaveného data se nezaplaceným hráčům zobrazí upozornění po přihlášení.
     </div>
+    <form method="post" action="/admin/payments/{{.Detail.ID}}/set-reminder-date">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        <div class="reminder-form">
+            <label class="rem-label" for="reminder_date_inp">Od data:</label>
+            <input type="date" id="reminder_date_inp" name="reminder_date" value="{{.Detail.ReminderDate}}">
+            <button type="submit" class="btn btn-sm btn-secondary">Uložit</button>
+        </div>
+    </form>
+    <div class="rem-hint">Od nastaveného data se nezaplaceným hráčům zobrazí upozornění po přihlášení. Smazání data připomínku deaktivuje.</div>
 </div>
 
 <script>
@@ -163,6 +259,10 @@ function onCheckChange() {
     var cnt = document.getElementById('bulk-count');
     cnt.textContent = cbs.length + ' vybráno';
     bar.classList.toggle('visible', cbs.length > 0);
+    document.querySelectorAll('#unpaid-list .pay-row').forEach(function(row) {
+        var cb = row.querySelector('.pay-select');
+        row.classList.toggle('selected', cb && cb.checked);
+    });
 }
 
 function selectAll(state) {
@@ -185,7 +285,7 @@ function sendBulkEmail() {
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-        btn.disabled = false; btn.textContent = '📧 Poslat email';
+        btn.disabled = false; btn.textContent = '✉ Poslat email';
         if (d.ok) {
             alert('Odesláno: ' + d.sent + ' emailů' + (d.skipped ? ', přeskočeno (bez emailu): ' + d.skipped : '') + '.');
             selectAll(false);
@@ -193,7 +293,7 @@ function sendBulkEmail() {
             alert('Chyba: ' + (d.error || 'neznámá'));
         }
     })
-    .catch(function() { btn.disabled = false; btn.textContent = '📧 Poslat email'; alert('Chyba spojení.'); });
+    .catch(function() { btn.disabled = false; btn.textContent = '✉ Poslat email'; alert('Chyba spojení.'); });
 }
 
 function togglePaid(btn) {
