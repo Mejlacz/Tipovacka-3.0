@@ -129,11 +129,9 @@
             <button class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.15rem .4rem"
                     onclick="openMerge({{.ID}},'{{.Name}}')" title="Sloučit s jiným týmem">⛓</button>
             {{if eq .MatchCount 0}}
-            <form style="display:inline" method="post" action="/admin/teams/{{.ID}}/delete"
-                  onsubmit="return confirm('Smazat tým {{.Name}}? Tato akce je nevratná.')">
-                <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
-                <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.15rem .4rem" title="Smazat">✕</button>
-            </form>
+            <button class="btn btn-sm btn-danger team-del-btn"
+                    data-tid="{{.ID}}" data-name="{{.Name}}"
+                    style="font-size:.72rem;padding:.15rem .4rem" title="Smazat">✕</button>
             {{else}}
             <button class="btn btn-sm btn-danger" style="font-size:.72rem;padding:.15rem .4rem;opacity:.35;cursor:not-allowed"
                     title="Nelze smazat — má {{.MatchCount}} zápasů (sloučit nejdřív)" disabled>✕</button>
@@ -371,11 +369,14 @@ window.teamsClearSelection = function(){
 window.teamsBulkDelete = function(){
     var cbs = document.querySelectorAll('.team-cb:checked');
     if(cbs.length === 0) return;
-    if(!confirm('Smazat ' + cbs.length + ' týmů? Tato akce je nevratná.')) return;
-
     var ids = [];
-    cbs.forEach(function(cb){ ids.push(cb.getAttribute('data-id')); }); // string — velká int64 ID
-
+    cbs.forEach(function(cb){ ids.push(cb.getAttribute('data-id')); });
+    _confirmSmazat({
+        title: '🗑 Smazat týmy',
+        name: ids.length + ' vybraných týmů',
+        warn: 'Tato akce je nevratná.',
+        btn: 'Smazat týmy'
+    }, function() {
     var cnt = document.getElementById('teams-bulk-count');
     function showMsg(text, isError) {
         if(cnt){ cnt.textContent = text; cnt.style.color = isError ? '#f87171' : '#34d399'; }
@@ -410,7 +411,25 @@ window.teamsBulkDelete = function(){
     .catch(function(e){
         showMsg('Chyba: ' + e.message, true);
     });
+    }); // _confirmSmazat
 };
+
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest && e.target.closest('.team-del-btn');
+    if (!btn) return;
+    _confirmSmazat({
+        title: '🗑 Smazat tým',
+        name: btn.dataset.name,
+        warn: 'Tato akce je nevratná.',
+        btn: 'Smazat tým'
+    }, function() {
+        var f = document.createElement('form'); f.method = 'post';
+        f.action = '/admin/teams/' + btn.dataset.tid + '/delete';
+        var c = document.createElement('input'); c.type = 'hidden'; c.name = '_csrf';
+        c.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+        f.appendChild(c); document.body.appendChild(f); f.submit();
+    });
+});
 
 })();
 </script>

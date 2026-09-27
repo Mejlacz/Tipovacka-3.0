@@ -173,10 +173,9 @@
             <form style="display:inline" method="post" action="/admin/users/{{.ID}}/send-welcome">
                 <button class="ubtn ubtn-welcome" title="Odeslat welcome email">📧</button>
             </form>
-            <form style="display:inline" method="post" action="/admin/users/{{.ID}}/delete"
-                  onsubmit="return confirm('Trvale smazat {{.Username}}?')">
-                <button class="ubtn ubtn-del" title="Smazat uživatele">✕</button>
-            </form>
+            <button class="ubtn ubtn-del user-del-btn"
+                    data-uid="{{.ID}}" data-name="{{.Username}}"
+                    title="Smazat uživatele">✕</button>
         </div>
     </td>
 </tr>
@@ -286,35 +285,61 @@ function bulkAction(action) {
         alert('Vyber alespoň jednoho uživatele (zaškrtni checkbox).');
         return;
     }
+    function doSubmit() {
+        var fd = new FormData();
+        fd.append('action', action);
+        ids.forEach(function(id) { fd.append('user_ids', id); });
+        if (action === 'set-role') {
+            var role = document.getElementById('bulk-role').value;
+            if (!role) { alert('Vyber roli.'); return; }
+            fd.append('role', role);
+        }
+        if (action === 'reset-password') {
+            fd.append('new_password', document.getElementById('bulk-pw').value);
+        }
+        var form = document.createElement('form');
+        form.method = 'post';
+        form.action = '/admin/users/bulk-action';
+        fd.forEach(function(val, key) {
+            var inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = key; inp.value = val;
+            form.appendChild(inp);
+        });
+        var csrfInp = document.createElement('input');
+        csrfInp.type = 'hidden'; csrfInp.name = '_csrf';
+        csrfInp.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+        form.appendChild(csrfInp);
+        document.body.appendChild(form);
+        form.submit();
+    }
     if (action === 'delete') {
-        if (!confirm('Trvale smazat ' + ids.length + ' uživatelů?')) return;
+        _confirmSmazat({
+            title: '🗑 Smazat uživatele',
+            name: ids.length + ' vybraných uživatelů',
+            warn: 'Tato akce je nevratná — smaže se ' + ids.length + ' účtů i jejich tipy.',
+            btn: 'Smazat uživatele'
+        }, doSubmit);
+        return;
     }
-    var fd = new FormData();
-    fd.append('action', action);
-    ids.forEach(function(id) { fd.append('user_ids', id); });
-    if (action === 'set-role') {
-        var role = document.getElementById('bulk-role').value;
-        if (!role) { alert('Vyber roli.'); return; }
-        fd.append('role', role);
-    }
-    if (action === 'reset-password') {
-        fd.append('new_password', document.getElementById('bulk-pw').value);
-    }
-    var form = document.createElement('form');
-    form.method = 'post';
-    form.action = '/admin/users/bulk-action';
-    fd.forEach(function(val, key) {
-        var inp = document.createElement('input');
-        inp.type = 'hidden'; inp.name = key; inp.value = val;
-        form.appendChild(inp);
-    });
-    var csrfInp = document.createElement('input');
-    csrfInp.type = 'hidden'; csrfInp.name = '_csrf';
-    csrfInp.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
-    form.appendChild(csrfInp);
-    document.body.appendChild(form);
-    form.submit();
+    doSubmit();
 }
+
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest && e.target.closest('.user-del-btn');
+    if (!btn) return;
+    _confirmSmazat({
+        title: '🗑 Smazat uživatele',
+        name: btn.dataset.name,
+        warn: 'Tato akce je nevratná — smaže se účet i všechny tipy uživatele.',
+        btn: 'Smazat uživatele'
+    }, function() {
+        var f = document.createElement('form'); f.method = 'post';
+        f.action = '/admin/users/' + btn.dataset.uid + '/delete';
+        var c = document.createElement('input'); c.type = 'hidden'; c.name = '_csrf';
+        c.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+        f.appendChild(c); document.body.appendChild(f); f.submit();
+    });
+});
 
 function openPwDialog(userId, username) {
     document.getElementById('pw-username').textContent = username;

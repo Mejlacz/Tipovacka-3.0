@@ -129,10 +129,9 @@
               {{if $q.IsClosed}}🔓 Otevřít{{else}}🔒 Uzavřít{{end}}
             </button>
           </form>
-          <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete" style="margin:0"
-                onsubmit="return confirm('Smazat otázku a všechny její odpovědi?')">
-            <button type="submit" class="btn btn-sm" style="font-size:.76rem;color:#ef4444">🗑</button>
-          </form>
+          <button type="button" class="btn btn-sm eq-del-btn"
+                  data-qid="{{$q.ID}}" data-name="{{$q.Text}}"
+                  style="font-size:.76rem;color:#ef4444">🗑</button>
         </div>
       </div>
 
@@ -716,6 +715,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (d.ok) { location.reload(); }
                     else { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba: ' + (d.error||'')); }
                 }).catch(function() { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba spojení.'); });
+            });
+        });
+    });
+
+    document.querySelectorAll('.eq-del-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            _confirmSmazat({
+                title: '🗑 Smazat otázku',
+                name: btn.dataset.name,
+                warn: 'Smaže se otázka i všechny její odpovědi.',
+                btn: 'Smazat otázku'
+            }, function() {
+                var f = document.createElement('form'); f.method = 'post';
+                f.action = '/admin/extra/questions/' + btn.dataset.qid + '/delete';
+                var c = document.createElement('input'); c.type = 'hidden'; c.name = '_csrf';
+                c.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+                f.appendChild(c); document.body.appendChild(f); f.submit();
             });
         });
     });
