@@ -342,6 +342,7 @@ func main() {
 
 	// Admin platby
 	r.Get("/admin/payments", handlers.AdminPaymentOverview(tmpl))
+	r.Get("/admin/payments/{comp_id}", handlers.AdminPaymentDetail(tmpl))
 	r.Post("/admin/payments/{comp_id}/{user_id}/toggle-paid", handlers.AdminPaymentToggle)
 
 	// Admin audit
