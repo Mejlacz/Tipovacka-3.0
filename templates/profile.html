@@ -1,3 +1,33 @@
+<style>
+.pf-sections { max-width:500px; display:flex; flex-direction:column; gap:1.25rem; }
+.pf-card { background:var(--bg2); border:1px solid var(--border-d); border-radius:12px; padding:1.25rem; }
+.pf-card-title { display:flex; align-items:center; gap:.5rem; font-size:.88rem; font-weight:700; color:var(--text-d); margin:0 0 1rem; }
+.pf-card-title .pf-icon { font-size:1rem; }
+
+/* Avatar hero */
+.pf-hero { display:flex; align-items:center; gap:1rem; margin-bottom:1rem; padding-bottom:1rem; border-bottom:1px solid var(--border-d); }
+.pf-avatar-ring { width:64px; height:64px; border-radius:50%; border:2px solid var(--border-d); overflow:hidden; flex-shrink:0; background:var(--bg3); display:flex; align-items:center; justify-content:center; }
+.pf-avatar-ring img { width:100%; height:100%; object-fit:cover; }
+.pf-avatar-initials { font-size:1.4rem; font-weight:800; color:var(--accent); }
+.pf-hero-name { font-size:1.1rem; font-weight:700; color:var(--text-d); line-height:1.2; }
+.pf-hero-role { font-size:.75rem; color:var(--muted-d); margin-top:.2rem; }
+
+/* Stat tiles */
+.pf-stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:.5rem; }
+.pf-stat-tile { background:var(--bg3); border:1px solid var(--border-d); border-radius:8px; padding:.6rem .75rem; text-align:center; }
+.pf-stat-val { font-size:1.4rem; font-weight:800; line-height:1.1; }
+.pf-stat-lbl { font-size:.7rem; color:var(--muted-d); margin-top:.15rem; }
+
+/* Push devices table */
+.pf-push-table { width:100%; border-collapse:collapse; font-size:.78rem; margin-top:.75rem; }
+.pf-push-table th { padding:.3rem .5rem; text-align:left; color:var(--muted-d); font-weight:600; font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid var(--border-d); }
+.pf-push-table td { padding:.35rem .5rem; border-bottom:1px solid var(--border-d); }
+
+/* Logout danger */
+.btn-logout { width:100%; padding:.6rem; border-radius:8px; border:1px solid rgba(239,68,68,.35); background:rgba(239,68,68,.07); color:#f87171; font-size:.9rem; font-weight:600; cursor:pointer; transition:.13s; }
+.btn-logout:hover { background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.55); }
+</style>
+
 <div class="page-header">
     <h1>{{tr .Lang "profile_title"}}</h1>
 </div>
@@ -7,71 +37,80 @@
     {{index .Flash "msg"}}
 </div>
 {{end}}
-{{if .Msg}}
-<div class="alert alert-success" style="margin-bottom:1rem">{{.Msg}}</div>
-{{end}}
-{{if .Error}}
-<div class="alert alert-error" style="margin-bottom:1rem">{{.Error}}</div>
-{{end}}
+{{if .Msg}}<div class="alert alert-success" style="margin-bottom:1rem">{{.Msg}}</div>{{end}}
+{{if .Error}}<div class="alert alert-error" style="margin-bottom:1rem">{{.Error}}</div>{{end}}
 
-<div style="max-width:500px;display:flex;flex-direction:column;gap:1.5rem">
+<div class="pf-sections">
 
-{{/* ── Profilová fotka ── */}}
-<section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 1rem;font-size:1rem">🖼️ {{tr .Lang "profile_bg"}}</h2>
-    {{if .User.BackgroundURL}}
-    <div style="margin-bottom:.75rem">
-        <img src="{{strVal .User.BackgroundURL}}" alt="{{tr .Lang "profile_bg_alt"}}"
-             style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--border-d)" />
+{{/* ── Avatar & základní info ── */}}
+<div class="pf-card">
+    {{/* Hero řádek: avatar + jméno */}}
+    <div class="pf-hero">
+        <div class="pf-avatar-ring">
+            {{if .User.BackgroundURL}}
+            <img src="{{strVal .User.BackgroundURL}}" alt="avatar" />
+            {{else}}
+            <span class="pf-avatar-initials">{{initials .User.Username}}</span>
+            {{end}}
+        </div>
+        <div>
+            <div class="pf-hero-name">{{.User.Username}}</div>
+            <div class="pf-hero-role">
+                {{if .User.IsOwner}}👑 Owner{{else if .User.IsAdmin}}🛡️ Admin{{else}}👤 Tipér{{end}}
+            </div>
+        </div>
     </div>
-    <form method="post" action="/profile/avatar/delete" style="display:inline;margin-bottom:.75rem">
+
+    {{/* Upload formulář */}}
+    <div class="pf-card-title"><span class="pf-icon">🖼️</span>{{tr .Lang "profile_bg"}}</div>
+    {{if .User.BackgroundURL}}
+    <form method="post" action="/profile/avatar/delete" style="margin-bottom:.75rem">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
         <button type="submit" class="btn btn-sm btn-danger"
                 onclick="return confirm('{{tr .Lang "profile_confirm_del"}}')">{{tr .Lang "profile_delete_avatar"}}</button>
     </form>
-    <div style="margin-top:.75rem">
     {{else}}
     <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">{{tr .Lang "profile_no_avatar"}}</p>
-    <div>
     {{end}}
-        <form method="post" action="/profile/avatar" enctype="multipart/form-data">
-            <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
-            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
-                <img id="avatar-preview" src="" alt=""
-                     style="display:none;width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--accent)" />
-                <div style="display:flex;flex-direction:column;gap:.4rem">
-                    <input type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp" required
-                           id="avatar-input" style="font-size:.82rem" />
-                    <button type="submit" class="btn btn-sm btn-primary" id="avatar-upload-btn" style="display:none">{{tr .Lang "profile_upload_avatar"}}</button>
-                </div>
+    <form method="post" action="/profile/avatar" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+        <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+            <img id="avatar-preview" src="" alt=""
+                 style="display:none;width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--accent)" />
+            <div style="display:flex;flex-direction:column;gap:.4rem">
+                <input type="file" name="avatar" accept=".jpg,.jpeg,.png,.webp" required
+                       id="avatar-input" style="font-size:.82rem" />
+                <button type="submit" class="btn btn-sm btn-primary" id="avatar-upload-btn" style="display:none">{{tr .Lang "profile_upload_avatar"}}</button>
             </div>
-            <p style="color:var(--muted-d);font-size:.78rem;margin:.4rem 0 0">{{tr .Lang "profile_avatar_hint"}}</p>
-        </form>
-        <script>
-        (function() {
-            var inp = document.getElementById('avatar-input');
-            var prev = document.getElementById('avatar-preview');
-            var btn = document.getElementById('avatar-upload-btn');
-            if (!inp) return;
-            inp.addEventListener('change', function() {
-                var file = inp.files && inp.files[0];
-                if (!file) { prev.style.display='none'; btn.style.display='none'; return; }
-                var reader = new FileReader();
-                reader.onload = function(e) {
-                    prev.src = e.target.result;
-                    prev.style.display = 'block';
-                    btn.style.display = 'inline-flex';
-                };
-                reader.readAsDataURL(file);
-            });
-        })();
-        </script>
-    </div>
-</section>
+        </div>
+        <p style="color:var(--muted-d);font-size:.78rem;margin:.4rem 0 0">{{tr .Lang "profile_avatar_hint"}}</p>
+    </form>
+    <script>
+    (function() {
+        var inp = document.getElementById('avatar-input');
+        var prev = document.getElementById('avatar-preview');
+        var btn = document.getElementById('avatar-upload-btn');
+        if (!inp) return;
+        inp.addEventListener('change', function() {
+            var file = inp.files && inp.files[0];
+            if (!file) { prev.style.display='none'; btn.style.display='none'; return; }
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                prev.src = e.target.result;
+                prev.style.display = 'block';
+                btn.style.display = 'inline-flex';
+            };
+            reader.readAsDataURL(file);
+        });
+    })();
+    </script>
+</div>
 
 {{/* ── Základní údaje ── */}}
-<section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 1rem;font-size:1rem">{{tr .Lang "profile_personal"}}</h2>
+<div class="pf-card">
+    <div class="pf-card-title"><span class="pf-icon">✏️</span>{{tr .Lang "profile_personal"}}</div>
     <form method="post" action="/profile/update">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
             <div class="form-group" style="margin-bottom:0">
                 <label>{{tr .Lang "profile_firstname"}}</label>
@@ -99,19 +138,20 @@
         </div>
         <button type="submit" class="btn btn-primary btn-sm">{{tr .Lang "profile_save"}}</button>
     </form>
-</section>
+</div>
 
-{{/* ── Vzhled rozhraní ── */}}
-<section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 .75rem;font-size:1rem">{{tr .Lang "profile_appearance_title"}}</h2>
+{{/* ── Vzhled ── */}}
+<div class="pf-card">
+    <div class="pf-card-title"><span class="pf-icon">🎨</span>{{tr .Lang "profile_appearance_title"}}</div>
     <p style="color:var(--muted-d);font-size:.85rem;margin:0 0 .75rem">{{tr .Lang "profile_appearance_desc"}}</p>
     <a href="/profile/appearance" class="btn btn-secondary btn-sm">{{tr .Lang "profile_appearance_btn"}}</a>
-</section>
+</div>
 
 {{/* ── Změna hesla ── */}}
-<section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 1rem;font-size:1rem">{{tr .Lang "profile_change_pwd"}}</h2>
+<div class="pf-card">
+    <div class="pf-card-title"><span class="pf-icon">🔑</span>{{tr .Lang "profile_change_pwd"}}</div>
     <form method="post" action="/profile/password">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
         <div class="form-group">
             <label>{{tr .Lang "profile_old_pwd"}}</label>
             <input type="password" name="old_password" required autocomplete="current-password" />
@@ -126,63 +166,65 @@
         </div>
         <button type="submit" class="btn btn-primary btn-sm">{{tr .Lang "profile_change_pwd_btn"}}</button>
     </form>
-</section>
+</div>
 
-{{/* ── Notifikace (zobrazit jen pokud má přístup) ── */}}
+{{/* ── Notifikace ── */}}
 {{if or .User.IsOwner .User.NotifyAccess}}
 {{if .ActiveCompetitions}}
-<section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 .5rem;font-size:1rem">{{tr .Lang "profile_notify"}}</h2>
+<div class="pf-card">
+    <div class="pf-card-title"><span class="pf-icon">🔔</span>{{tr .Lang "profile_notify"}}</div>
     <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">
         {{tr .Lang "profile_notify_desc"}} {{tr .Lang "profile_notify_before"}}
     </p>
     <form method="post" action="/profile/notifications">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
         <div style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:.75rem">
         {{range .ActiveCompetitions}}
         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
             <input type="checkbox" name="notify_comp" value="{{.ID}}"
                    {{if index $.NotifyCompIDs .ID}}checked{{end}}
-                   style="accent-color:#e74c3c" />
-            <span>{{.Name}} {{.Season}}</span>
+                   style="accent-color:var(--accent)" />
+            <span style="font-size:.88rem">{{.Name}} {{.Season}}</span>
         </label>
         {{end}}
         </div>
         <button type="submit" class="btn btn-primary btn-sm">{{tr .Lang "profile_save_settings"}}</button>
     </form>
-</section>
+</div>
 {{end}}
 {{end}}
 
 {{/* ── Push notifikace ── */}}
 {{if or .User.IsOwner .User.NotifyAccess}}
-<section id="push-section" style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 .5rem;font-size:1rem">{{tr .Lang "profile_push"}}</h2>
+<div class="pf-card" id="push-section">
+    <div class="pf-card-title"><span class="pf-icon">📱</span>{{tr .Lang "profile_push"}}</div>
     <p style="color:var(--muted-d);font-size:.82rem;margin:0 0 .75rem">
         {{tr .Lang "profile_push_devices_lbl"}} <strong>{{.PushDevices}}</strong> {{tr .Lang "profile_push_device_hint"}}
     </p>
     <div id="push-unsupported" style="display:none">
-        <p class="muted" style="font-size:.85rem">Push notifikace nejsou v tomto prohlížeči podporovány.</p>
+        <p style="font-size:.85rem;color:var(--muted-d)">Push notifikace nejsou v tomto prohlížeči podporovány.</p>
     </div>
     <div id="push-controls" style="display:none">
         <button id="push-btn" class="btn btn-primary btn-sm" onclick="togglePush()">…</button>
         <span id="push-status" style="font-size:.82rem;color:var(--muted-d);margin-left:.5rem"></span>
     </div>
     {{if .PushSubs}}
-    <table style="width:100%;border-collapse:collapse;margin-top:.75rem;font-size:.78rem">
-        <thead><tr style="background:var(--bg3)">
-            <th style="padding:.3rem .5rem;text-align:left">{{tr .Lang "profile_push_device_col"}}</th>
-            <th style="padding:.3rem .5rem;text-align:left">{{tr .Lang "profile_push_endpoint"}}</th>
-            <th style="padding:.3rem .5rem"></th>
+    <table class="pf-push-table">
+        <thead><tr>
+            <th>{{tr .Lang "profile_push_device_col"}}</th>
+            <th>{{tr .Lang "profile_push_endpoint"}}</th>
+            <th></th>
         </tr></thead>
         <tbody>
         {{range .PushSubs}}
         <tr>
-            <td style="padding:.3rem .5rem">📱</td>
-            <td style="padding:.3rem .5rem;color:var(--muted-d)">{{if gt (len .Endpoint) 50}}{{slice .Endpoint 0 50}}…{{else}}{{.Endpoint}}{{end}}</td>
-            <td style="padding:.3rem .5rem">
+            <td>📱</td>
+            <td style="color:var(--muted-d)">{{if gt (len .Endpoint) 50}}{{slice .Endpoint 0 50}}…{{else}}{{.Endpoint}}{{end}}</td>
+            <td>
                 <form method="post" action="/profile/push-delete/{{.ID}}" style="display:inline">
+                    <input type="hidden" name="_csrf" value="{{$.CSRFToken}}" />
                     <button type="submit" class="btn btn-sm btn-danger" style="padding:.1rem .4rem;font-size:.75rem"
-                            onclick="return confirm('{{tr .Lang "profile_push_rm_confirm"}}')">✕</button>
+                            onclick="return confirm('{{tr $.Lang "profile_push_rm_confirm"}}')">✕</button>
                 </form>
             </td>
         </tr>
@@ -190,46 +232,63 @@
         </tbody>
     </table>
     {{end}}
-</section>
+</div>
 {{end}}
 
 {{/* ── Statistiky ── */}}
 {{if .Stats}}
-<section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 1rem;font-size:1rem">{{tr .Lang "profile_my_stats"}}</h2>
+<div class="pf-card">
+    <div class="pf-card-title"><span class="pf-icon">📊</span>{{tr .Lang "profile_my_stats"}}</div>
     {{range .Stats}}
     <div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border-d)">
-        <div style="font-weight:700;margin-bottom:.4rem">{{.Comp.Name}} {{.Comp.Season}}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;font-size:.82rem;color:var(--muted-d)">
-            <span>{{tr $.Lang "profile_stat_exact"}} <strong style="color:#e2e8f0">{{.Exact}}</strong></span>
-            <span>{{tr $.Lang "profile_stat_winner"}} <strong style="color:#e2e8f0">{{.Winner}}</strong></span>
-            <span>{{tr $.Lang "profile_stat_miss"}} <strong style="color:#e2e8f0">{{.Miss}}</strong></span>
-            <span>{{tr $.Lang "profile_stat_tips"}} <strong style="color:#e2e8f0">{{.TipsGiven}}</strong> / {{.TotalFinished}}</span>
-            <span>{{tr $.Lang "profile_stat_tippts"}} <strong style="color:#e2e8f0">{{.TipPts}}</strong></span>
-            {{if .ExtraPts}}<span>{{tr $.Lang "profile_stat_extra"}} <strong style="color:#e2e8f0">{{.ExtraPts}}</strong></span>{{end}}
-            <span>{{tr $.Lang "profile_stat_total"}} <strong style="color:#fbbf24;font-size:1rem">{{.GrandTotal}}</strong></span>
+        <div style="font-weight:700;margin-bottom:.65rem;font-size:.9rem">{{.Comp.Name}} {{.Comp.Season}}</div>
+        <div class="pf-stat-grid">
+            <div class="pf-stat-tile">
+                <div class="pf-stat-val" style="color:#fbbf24">{{.GrandTotal}}</div>
+                <div class="pf-stat-lbl">{{tr $.Lang "profile_stat_total"}}</div>
+            </div>
+            <div class="pf-stat-tile">
+                <div class="pf-stat-val" style="color:#34d399">{{.Exact}}</div>
+                <div class="pf-stat-lbl">{{tr $.Lang "profile_stat_exact"}}</div>
+            </div>
+            <div class="pf-stat-tile">
+                <div class="pf-stat-val" style="color:#60a5fa">{{.Winner}}</div>
+                <div class="pf-stat-lbl">{{tr $.Lang "profile_stat_winner"}}</div>
+            </div>
+            <div class="pf-stat-tile">
+                <div class="pf-stat-val" style="color:#ef4444">{{.Miss}}</div>
+                <div class="pf-stat-lbl">{{tr $.Lang "profile_stat_miss"}}</div>
+            </div>
+            <div class="pf-stat-tile">
+                <div class="pf-stat-val" style="font-size:1rem">{{.TipsGiven}}/{{.TotalFinished}}</div>
+                <div class="pf-stat-lbl">{{tr $.Lang "profile_stat_tips"}}</div>
+            </div>
+            {{if .ExtraPts}}
+            <div class="pf-stat-tile">
+                <div class="pf-stat-val" style="color:#f0c040">{{.ExtraPts}}</div>
+                <div class="pf-stat-lbl">{{tr $.Lang "profile_stat_extra"}}</div>
+            </div>
+            {{end}}
         </div>
     </div>
     {{end}}
-</section>
+</div>
 {{end}}
 
 {{/* ── Odhlášení ── */}}
-<section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-    <h2 style="margin:0 0 .75rem;font-size:1rem">{{tr .Lang "profile_logout_title"}}</h2>
+<div class="pf-card">
+    <div class="pf-card-title"><span class="pf-icon">🚪</span>{{tr .Lang "profile_logout_title"}}</div>
     <form method="post" action="/logout">
-        <button type="submit"
-                style="width:100%;padding:.6rem;border-radius:8px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);color:#f87171;font-size:.95rem;font-weight:600;cursor:pointer">
-            {{tr .Lang "profile_logout_btn"}}
-        </button>
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}" />
+        <button type="submit" class="btn-logout">{{tr .Lang "profile_logout_btn"}}</button>
     </form>
-</section>
+</div>
 
 </div>
 
 <script>
 (function() {
-    var VAPID_PUBLIC = ''; // not exposing key in template for now — push handled server-side
+    var VAPID_PUBLIC = '';
     var btn  = document.getElementById('push-btn');
     var stat = document.getElementById('push-status');
     var ctrl = document.getElementById('push-controls');
@@ -257,7 +316,6 @@
                         updateBtn(reg);
                     });
                 } else {
-                    // Need VAPID public key from server to subscribe — redirect to server endpoint
                     fetch('/profile/push-subscribe', {method:'POST'}).then(function(r) { return r.json(); }).then(function(d) {
                         if (d.vapid_public) {
                             var appKey = urlBase64ToUint8Array(d.vapid_public);
@@ -274,9 +332,11 @@
     };
     function urlBase64ToUint8Array(base64String) {
         var padding = '='.repeat((4 - base64String.length % 4) % 4);
-        var base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-        var rawData = atob(base64);
-        return Uint8Array.from([...rawData].map(function(c) { return c.charCodeAt(0); }));
+        var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        var rawData = window.atob(base64);
+        var outputArray = new Uint8Array(rawData.length);
+        for (var i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+        return outputArray;
     }
-}());
+})();
 </script>
