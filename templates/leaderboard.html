@@ -31,11 +31,20 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
     <div class="lb-header-right">
         <form method="get" action="/leaderboard" class="filter-form" style="margin:0">
             <select name="competition_id" class="lb-comp-select" onchange="this.form.submit()">
-                {{range .Competitions}}
+                <optgroup label="Aktivní">
+                {{range .Competitions}}{{if .IsActive}}
                 <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
                     {{if .IsHidden}}🙈 {{end}}{{trc $.Lang .Name}} {{.Season}}
                 </option>
-                {{end}}
+                {{end}}{{end}}
+                </optgroup>
+                <optgroup label="Archiv">
+                {{range .Competitions}}{{if not .IsActive}}
+                <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
+                    {{trc $.Lang .Name}} {{.Season}}
+                </option>
+                {{end}}{{end}}
+                </optgroup>
             </select>
         </form>
         {{if and .User.IsAdmin .SelectedCompetitionID}}

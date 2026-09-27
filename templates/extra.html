@@ -9,11 +9,20 @@
             <form method="get" action="/extra" style="margin:0">
                 <select name="competition_id" onchange="this.form.submit()"
                         style="padding:0.3rem 0.6rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem">
-                    {{range .Competitions}}
+                    <optgroup label="Aktivní">
+                    {{range .Competitions}}{{if .IsActive}}
                     <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
                         {{trc $.Lang .Name}}{{if .Season}} {{.Season}}{{end}}
                     </option>
-                    {{end}}
+                    {{end}}{{end}}
+                    </optgroup>
+                    <optgroup label="Archiv">
+                    {{range .Competitions}}{{if not .IsActive}}
+                    <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
+                        {{trc $.Lang .Name}}{{if .Season}} {{.Season}}{{end}}
+                    </option>
+                    {{end}}{{end}}
+                    </optgroup>
                 </select>
             </form>
             {{end}}

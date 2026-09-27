@@ -13,15 +13,18 @@
 </div>
 
 {{/* Competition tabs */}}
-<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1.5rem">
+<div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:1.5rem">
     {{range .ActiveCompetitions}}
     <a href="/stats/{{.ID}}" class="btn btn-sm {{if eq .ID $.CompID}}btn-primary{{else}}btn-secondary{{end}}">
         {{.Name}}{{if .Season}} {{.Season}}{{end}}
     </a>
     {{end}}
+    {{if and .ActiveCompetitions .InactiveCompetitions}}
+    <span style="font-size:.72rem;color:var(--muted-d);padding:0 .15rem;align-self:center;white-space:nowrap">· Archiv</span>
+    {{end}}
     {{range .InactiveCompetitions}}
     <a href="/stats/{{.ID}}" class="btn btn-sm {{if eq .ID $.CompID}}btn-primary{{else}}btn-secondary{{end}}"
-       style="opacity:.7">{{.Name}}{{if .Season}} {{.Season}}{{end}}</a>
+       style="opacity:.6">{{.Name}}{{if .Season}} {{.Season}}{{end}}</a>
     {{end}}
 </div>
 
