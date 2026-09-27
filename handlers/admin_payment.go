@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"tipovacka/config"
 	"tipovacka/db"
 )
 
@@ -301,62 +300,104 @@ func AdminPaymentSendReminder(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "sent": sent, "skipped": skipped})
 }
 
-// GET /api/payment-reminder — vrátí seznam soutěží, kde aktuální uživatel nezaplatil a je aktivní připomenutí
+// GET /api/payment-reminder — vrátí soutěže kde aktuální uživatel nezaplatil a běží připomenutí.
+// Pouze aktivní soutěže (is_active=true); 2 DB dotazy celkem.
 func AdminPaymentReminderAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	empty := func() { json.NewEncoder(w).Encode(map[string]any{"reminders": []struct{}{}}) }
+
 	u := GetCurrentUser(r)
 	if u == nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"reminders": []string{}})
+		empty()
 		return
 	}
 
 	ctx := context.Background()
+	compIDs := make([]int64, len(paymentCompetitions))
+	for i, c := range paymentCompetitions {
+		compIDs[i] = c.ID
+	}
+
+	// Dotaz 1: aktivní soutěže z našeho seznamu s platným datem připomenutí
+	rows1, err := db.Pool.Query(ctx, `
+		SELECT c.id, c.name
+		FROM competitions c
+		JOIN app_config ac ON ac.key = 'pay_reminder_' || c.id::text
+		WHERE c.id = ANY($1)
+		  AND c.is_active = true
+		  AND ac.value != ''
+		  AND ac.value::date <= CURRENT_DATE
+	`, compIDs)
+	if err != nil {
+		empty()
+		return
+	}
+	type activeComp struct {
+		id   int64
+		name string
+	}
+	var active []activeComp
+	for rows1.Next() {
+		var ac activeComp
+		_ = rows1.Scan(&ac.id, &ac.name)
+		active = append(active, ac)
+	}
+	rows1.Close()
+
+	if len(active) == 0 {
+		empty()
+		return
+	}
+
+	activeIDs := make([]int64, len(active))
+	for i, ac := range active {
+		activeIDs[i] = ac.id
+	}
+
+	// Dotaz 2: stav uživatele (tipoval? zaplatil? vyloučen?) pro všechny aktivní soutěže najednou
+	rows2, err := db.Pool.Query(ctx, `
+		SELECT DISTINCT m.competition_id,
+		       COALESCE(cp.paid, false),
+		       COALESCE(cp.excluded, false)
+		FROM tips t
+		JOIN matches m ON m.id = t.match_id
+		LEFT JOIN competition_payments cp
+		       ON cp.user_id = t.user_id AND cp.competition_id = m.competition_id
+		WHERE t.user_id = $1
+		  AND m.competition_id = ANY($2)
+	`, u.ID, activeIDs)
+	if err != nil {
+		empty()
+		return
+	}
+	type userStatus struct{ paid, excluded bool }
+	statusMap := map[int64]userStatus{}
+	for rows2.Next() {
+		var cid int64
+		var paid, excluded bool
+		_ = rows2.Scan(&cid, &paid, &excluded)
+		statusMap[cid] = userStatus{paid: paid, excluded: excluded}
+	}
+	rows2.Close()
+
 	type reminder struct {
 		CompName string `json:"comp_name"`
 	}
 	var reminders []reminder
-
-	for _, c := range paymentCompetitions {
-		// Zkontroluj, zda je aktivní datum připomenutí
-		var dateStr string
-		if err := db.Pool.QueryRow(ctx,
-			`SELECT value FROM app_config WHERE key=$1`, payReminderKey(c.ID)).Scan(&dateStr); err != nil || dateStr == "" {
-			continue
-		}
-		// Datum musí být v minulosti nebo dnes
-		if db.Pool.QueryRow(ctx, `SELECT $1::date <= CURRENT_DATE`, dateStr).Scan(new(bool)) != nil {
-			continue
-		}
-		var isPast bool
-		if err := db.Pool.QueryRow(ctx, `SELECT $1::date <= CURRENT_DATE`, dateStr).Scan(&isPast); err != nil || !isPast {
-			continue
-		}
-		// Zkontroluj zda uživatel tipoval v soutěži
-		var tipped bool
-		_ = db.Pool.QueryRow(ctx, `
-			SELECT EXISTS(
-				SELECT 1 FROM tips t JOIN matches m ON m.id=t.match_id
-				WHERE t.user_id=$1 AND m.competition_id=$2
-			)`, u.ID, c.ID).Scan(&tipped)
+	for _, ac := range active {
+		st, tipped := statusMap[ac.id]
 		if !tipped {
+			continue // uživatel v této soutěži netipoval
+		}
+		if st.paid || st.excluded {
 			continue
 		}
-		// Zkontroluj zda zaplatil nebo je vyloučen
-		var paid, excluded bool
-		_ = db.Pool.QueryRow(ctx,
-			`SELECT COALESCE(paid,false), COALESCE(excluded,false)
-			 FROM competition_payments WHERE user_id=$1 AND competition_id=$2`,
-			u.ID, c.ID).Scan(&paid, &excluded)
-		if paid || excluded {
-			continue
-		}
-		reminders = append(reminders, reminder{CompName: c.Name})
+		reminders = append(reminders, reminder{CompName: ac.name})
 	}
 
 	if reminders == nil {
 		reminders = []reminder{}
 	}
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"reminders": reminders})
 }
 
@@ -427,7 +468,6 @@ func AdminPaymentToggle(w http.ResponseWriter, r *http.Request) {
 }
 
 func paymentReminderEmailHTML(username, compName string) string {
-	_ = config.SMTPEnabled // ensure import used
 	return `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:520px;margin:2rem auto;color:#1e293b">
 <h2 style="color:#1e40af">💰 Připomínka platby — Tipovačka</h2>
 <p>Ahoj <strong>` + username + `</strong>,</p>
