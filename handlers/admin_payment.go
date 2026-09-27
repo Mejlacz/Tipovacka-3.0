@@ -44,13 +44,13 @@ func AdminPaymentOverview(tmpl *template.Template) http.HandlerFunc {
 
 		// Kdo tipoval v těchto soutěžích
 		rows, err := db.Pool.Query(ctx, `
-			SELECT DISTINCT u.id, u.username, t.competition_id
+			SELECT DISTINCT u.id, u.username, m.competition_id
 			FROM users u
 			JOIN tips t ON t.user_id = u.id
 			JOIN matches m ON m.id = t.match_id
 			WHERE m.competition_id = ANY($1)
 			  AND COALESCE(u.is_inactive, false) = false
-			ORDER BY u.username, t.competition_id
+			ORDER BY u.username, m.competition_id
 		`, compIDs)
 		if err != nil {
 			http.Error(w, "DB error: "+err.Error(), 500)
