@@ -541,5 +541,42 @@ if ('serviceWorker' in navigator) {
     });
 })();
 </script>
+
+{{if .User}}
+<!-- Payment reminder modal -->
+<div id="pay-remind-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9990;align-items:center;justify-content:center">
+    <div style="background:var(--bg2);border:2px solid rgba(245,158,11,.4);border-radius:12px;padding:1.3rem 1.5rem;max-width:380px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,.6)">
+        <div style="font-weight:700;color:#fbbf24;font-size:1rem;margin-bottom:.5rem">💰 Nezaplacená účast</div>
+        <div id="pay-remind-body" style="font-size:.88rem;color:var(--text-d);margin-bottom:.9rem"></div>
+        <div style="display:flex;justify-content:flex-end">
+            <button onclick="document.getElementById('pay-remind-modal').style.display='none'"
+                    style="padding:.4rem 1.1rem;border-radius:6px;border:none;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;font-size:.88rem">
+                OK, beru na vědomí
+            </button>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var SESS_KEY = 'pay_remind_dismissed_{{.User.ID}}';
+    if (sessionStorage.getItem(SESS_KEY)) return;
+    fetch('/api/payment-reminder', {credentials:'same-origin'})
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+            if (!d || !d.reminders || !d.reminders.length) return;
+            var names = d.reminders.map(function(r) { return '<strong>' + r.comp_name + '</strong>'; });
+            document.getElementById('pay-remind-body').innerHTML =
+                'Ještě jsi nezaplatil za ' +
+                (names.length === 1 ? 'soutěž ' + names[0] : 'soutěže: ' + names.join(', ')) + '.';
+            var modal = document.getElementById('pay-remind-modal');
+            modal.style.display = 'flex';
+            modal.querySelector('button').addEventListener('click', function() {
+                sessionStorage.setItem(SESS_KEY, '1');
+            });
+        })
+        .catch(function() {});
+})();
+</script>
+{{end}}
 </body>
 </html>

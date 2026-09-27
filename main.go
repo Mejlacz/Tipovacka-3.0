@@ -346,6 +346,9 @@ func main() {
 	r.Get("/admin/payments/{comp_id}", handlers.AdminPaymentDetail(tmpl))
 	r.Post("/admin/payments/{comp_id}/{user_id}/toggle-paid", handlers.AdminPaymentToggle)
 	r.Post("/admin/payments/{comp_id}/{user_id}/toggle-exclude", handlers.AdminPaymentExclude)
+	r.Post("/admin/payments/{comp_id}/set-reminder-date", handlers.AdminPaymentSetReminderDate)
+	r.Post("/admin/payments/{comp_id}/send-reminder", handlers.AdminPaymentSendReminder)
+	r.Get("/api/payment-reminder", handlers.AdminPaymentReminderAPI)
 
 	// Admin audit
 	r.Get("/admin/history", handlers.AdminHistory(tmpl))

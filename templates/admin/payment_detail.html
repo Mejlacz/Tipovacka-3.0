@@ -12,6 +12,7 @@
                    padding:.35rem .65rem;border-radius:7px;background:var(--bg2);
                    border:1px solid var(--border-d) }
 .pay-row:hover   { background:var(--bg3) }
+.pay-row.selected { border-color:var(--accent);background:rgba(99,102,241,.08) }
 .pay-name        { font-size:.88rem;font-weight:600;color:var(--text-d);flex:1;min-width:0 }
 .pay-actions     { display:flex;align-items:center;gap:.35rem;flex-shrink:0 }
 .pay-badge-yes   { display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .5rem;
@@ -32,16 +33,35 @@
                    transition:all .15s;white-space:nowrap }
 .btn-include:hover { opacity:.7 }
 .pay-empty       { font-size:.82rem;color:var(--muted-d);padding:.3rem .65rem }
-.excl-section    { margin-top:1.5rem;opacity:.6 }
+.excl-section    { margin-top:1.5rem;opacity:.65 }
 .excl-section:hover { opacity:1 }
+.pay-cb          { width:16px;height:16px;cursor:pointer;accent-color:var(--accent);flex-shrink:0 }
+.bulk-bar        { display:none;align-items:center;gap:.6rem;padding:.55rem .75rem;
+                   background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.25);
+                   border-radius:8px;margin-bottom:.6rem;font-size:.83rem;flex-wrap:wrap }
+.bulk-bar.visible { display:flex }
+.reminder-box    { margin-top:1.8rem;padding:.75rem 1rem;background:var(--bg2);
+                   border:1px solid var(--border-d);border-radius:8px;font-size:.83rem }
+.reminder-box h3 { font-size:.85rem;font-weight:700;color:#e2e8f0;margin:0 0 .5rem }
 </style>
 
+{{/* ── Toolbar pro hromadný email (nezaplacení) ── */}}
+<div class="bulk-bar" id="bulk-bar">
+    <span id="bulk-count">0 vybráno</span>
+    <button class="btn btn-sm btn-primary" id="btn-send-email" onclick="sendBulkEmail()">📧 Poslat email</button>
+    <button class="btn btn-sm btn-secondary" onclick="selectAll(false)">Zrušit výběr</button>
+</div>
+
 {{if .Detail.Unpaid}}
-<div class="pay-group-label">Nezaplaceno ({{len .Detail.Unpaid}})</div>
-<div class="pay-list">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.1rem">
+    <div class="pay-group-label" style="margin:0;border:none">Nezaplaceno ({{len .Detail.Unpaid}})</div>
+    <button class="btn btn-sm btn-secondary" style="font-size:.72rem;padding:.15rem .4rem" onclick="selectAll(true)">Označit všechny</button>
+</div>
+<div class="pay-list" id="unpaid-list">
 {{range .Detail.Unpaid}}
-<div class="pay-row">
-    <span class="pay-name">{{.Username}}</span>
+<div class="pay-row" data-user-id="{{.UserID}}" data-email="{{.Email}}">
+    <input type="checkbox" class="pay-cb pay-select" data-user-id="{{.UserID}}" onchange="onCheckChange()">
+    <span class="pay-name">{{.Username}}{{if not .Email}} <span style="font-size:.7rem;color:#f59e0b" title="Nemá email">⚠</span>{{end}}</span>
     <div class="pay-actions">
         <button class="toggle-paid"
                 data-comp-id="{{$.Detail.ID}}"
@@ -112,8 +132,69 @@
 </div>
 {{end}}
 
+{{/* ── Nastavení data připomenutí ── */}}
+<div class="reminder-box">
+    <h3>📅 Připomínka po přihlášení</h3>
+    <form method="post" action="/admin/payments/{{.Detail.ID}}/set-reminder-date" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        <label style="font-size:.8rem;color:var(--muted-d)">Od data:</label>
+        <input type="date" name="reminder_date" value="{{.Detail.ReminderDate}}"
+               style="background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;
+                      color:var(--text-d);padding:.25rem .5rem;font-size:.82rem">
+        <button type="submit" class="btn btn-sm btn-secondary">Uložit</button>
+        {{if .Detail.ReminderDate}}
+        <span style="font-size:.75rem;color:#34d399">✓ Aktivní od {{.Detail.ReminderDate}}</span>
+        {{else}}
+        <span style="font-size:.75rem;color:var(--muted-d)">Neaktivní — vymaž datum pro vypnutí</span>
+        {{end}}
+    </form>
+    <div style="font-size:.75rem;color:var(--muted-d);margin-top:.4rem">
+        Od nastaveného data se nezaplaceným hráčům zobrazí upozornění po přihlášení.
+    </div>
+</div>
+
 <script>
 var _payCsrf = '{{.CSRFToken}}';
+var _compID  = '{{.Detail.ID}}';
+
+function onCheckChange() {
+    var cbs = document.querySelectorAll('.pay-select:checked');
+    var bar = document.getElementById('bulk-bar');
+    var cnt = document.getElementById('bulk-count');
+    cnt.textContent = cbs.length + ' vybráno';
+    bar.classList.toggle('visible', cbs.length > 0);
+}
+
+function selectAll(state) {
+    document.querySelectorAll('.pay-select').forEach(function(cb) { cb.checked = state; });
+    onCheckChange();
+}
+
+function sendBulkEmail() {
+    var cbs  = document.querySelectorAll('.pay-select:checked');
+    var uids = Array.from(cbs).map(function(cb) { return cb.dataset.userId; });
+    if (!uids.length) return;
+    var btn = document.getElementById('btn-send-email');
+    btn.disabled = true; btn.textContent = 'Odesílám…';
+    var body = uids.map(function(id) { return 'user_ids[]=' + encodeURIComponent(id); }).join('&');
+    body += '&_csrf=' + encodeURIComponent(_payCsrf);
+    fetch('/admin/payments/' + _compID + '/send-reminder', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        btn.disabled = false; btn.textContent = '📧 Poslat email';
+        if (d.ok) {
+            alert('Odesláno: ' + d.sent + ' emailů' + (d.skipped ? ', přeskočeno (bez emailu): ' + d.skipped : '') + '.');
+            selectAll(false);
+        } else {
+            alert('Chyba: ' + (d.error || 'neznámá'));
+        }
+    })
+    .catch(function() { btn.disabled = false; btn.textContent = '📧 Poslat email'; alert('Chyba spojení.'); });
+}
 
 function togglePaid(btn) {
     var compID = btn.dataset.compId;
