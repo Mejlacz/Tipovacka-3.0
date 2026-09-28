@@ -327,7 +327,22 @@
         <button class="btn btn-primary btn-sm" onclick="saveSettings()">Uložit údaje</button>
         <span class="settings-saved-msg" id="settings-saved-msg">✅ Uloženo</span>
     </div>
-    <div class="rem-hint" style="margin-top:.6rem">Tyto údaje se automaticky přiloží k emailu pro dlužníky.</div>
+    <div class="rem-hint" style="margin-top:.6rem">Platební údaje a QR kódy se přiloží k emailu automaticky.</div>
+</div>
+
+{{/* ── Text emailu ── */}}
+<div class="pay-set-box">
+    <div class="pay-set-title">✉️ Text emailu</div>
+    <div class="pay-set-field full">
+        <label class="pay-set-label" for="ps_email_text">Tělo zprávy</label>
+        <textarea id="ps_email_text" class="pay-set-input" rows="7"
+                  style="resize:vertical;line-height:1.55;font-size:.88rem">{{.Detail.Settings.EmailText}}</textarea>
+    </div>
+    <div class="pay-set-save" style="margin-top:.65rem">
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">Uložit</button>
+        <span class="settings-saved-msg" id="settings-saved-msg-2">✅ Uloženo</span>
+    </div>
+    <div class="rem-hint" style="margin-top:.5rem">Použij <code style="background:var(--bg3);padding:0 4px;border-radius:3px">NICK</code> jako zástupný symbol pro přezdívku hráče. Prázdné řádky oddělují odstavce. Za tímto textem se automaticky přidají platební údaje a QR kódy.</div>
 </div>
 
 {{/* ── QR kódy ── */}}
@@ -459,11 +474,13 @@ function switchTab(name, btn) {
 }
 
 function saveSettings() {
+    var emailTextEl = document.getElementById('ps_email_text');
     var body = 'bank_account=' + encodeURIComponent(document.getElementById('ps_bank_account').value)
         + '&bank_name='       + encodeURIComponent(document.getElementById('ps_bank_name').value)
         + '&variable_symbol=' + encodeURIComponent(document.getElementById('ps_vs').value)
         + '&amount='          + encodeURIComponent(document.getElementById('ps_amount').value)
         + '&note='            + encodeURIComponent(document.getElementById('ps_note').value)
+        + '&email_text='      + encodeURIComponent(emailTextEl ? emailTextEl.value : '')
         + '&_csrf='           + encodeURIComponent(_payCsrf);
     fetch('/admin/payments/' + _compID + '/save-settings', {
         method: 'POST',
@@ -472,10 +489,11 @@ function saveSettings() {
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-        var msg = document.getElementById('settings-saved-msg');
-        msg.style.display = d.ok ? 'inline' : 'none';
+        ['settings-saved-msg', 'settings-saved-msg-2'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) { el.style.display = d.ok ? 'inline' : 'none'; setTimeout(function() { el.style.display = 'none'; }, 3000); }
+        });
         if (!d.ok) alert('Chyba: ' + (d.error || 'neznámá'));
-        setTimeout(function() { msg.style.display = 'none'; }, 3000);
     })
     .catch(function() { alert('Chyba spojení.'); });
 }

@@ -59,8 +59,14 @@ type PaymentSettings struct {
 	VariableSymbol string `json:"variable_symbol"`
 	Amount         string `json:"amount"`
 	Note           string `json:"note"`
+	EmailText      string `json:"email_text"`
 	QR1URL         string `json:"-"`
 	QR2URL         string `json:"-"`
+}
+
+// defaultEmailText vrátí výchozí text emailu pro danou soutěž.
+func defaultEmailText(compName string) string {
+	return "Ahoj NICK,\n\npřipomínáme ti, že jsi ještě nezaplatil/a za soutěž " + compName + ".\n\nProsím zašli platbu co nejdříve. Pokud máš dotazy, obrať se na správce tipovačky."
 }
 
 // payReminderKey vrátí klíč pro app_config pro datum připomenutí platby.
@@ -252,6 +258,9 @@ func AdminPaymentDetail(tmpl *template.Template) http.HandlerFunc {
 			`SELECT value FROM app_config WHERE key=$1`, payReminderKey(compID)).Scan(&detail.ReminderDate)
 
 		detail.Settings = loadPaymentSettings(ctx, compID)
+		if detail.Settings.EmailText == "" {
+			detail.Settings.EmailText = defaultEmailText(compName)
+		}
 
 		RenderTemplate(w, r, tmpl, "admin/payment_detail.html", TemplateData{
 			"User":   admin,
@@ -309,6 +318,7 @@ func AdminPaymentSaveSettings(w http.ResponseWriter, r *http.Request) {
 		VariableSymbol: strings.TrimSpace(r.FormValue("variable_symbol")),
 		Amount:         strings.TrimSpace(r.FormValue("amount")),
 		Note:           strings.TrimSpace(r.FormValue("note")),
+		EmailText:      strings.TrimSpace(r.FormValue("email_text")),
 	}
 	data, _ := json.Marshal(s)
 	ctx := context.Background()
@@ -682,13 +692,28 @@ func paymentReminderEmailHTML(username, compName string, s PaymentSettings) stri
 <div style="font-weight:600;margin-bottom:8px;font-size:.9rem">📱 QR kódy pro platbu</div>` + imgs + `</div>`
 	}
 
+	// Hlavní text emailu — vlastní nebo výchozí
+	emailText := s.EmailText
+	if emailText == "" {
+		emailText = defaultEmailText(compName)
+	}
+	emailText = strings.ReplaceAll(emailText, "NICK", username)
+
+	// Převeď odřádkování na HTML odstavce
+	paragraphs := ""
+	for _, para := range strings.Split(strings.TrimSpace(emailText), "\n\n") {
+		para = strings.TrimSpace(para)
+		if para != "" {
+			line := strings.ReplaceAll(para, "\n", "<br>")
+			paragraphs += `<p>` + line + `</p>`
+		}
+	}
+
 	return `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:520px;margin:2rem auto;color:#1e293b">
-<h2 style="color:#1e40af">💰 Připomínka platby — Tipovačka</h2>
-<p>Ahoj <strong>` + username + `</strong>,</p>
-<p>připomínáme ti, že jsi ještě nezaplatil za soutěž <strong>` + compName + `</strong>.</p>` +
+<h2 style="color:#1e40af">💰 Připomínka platby — Tipovačka</h2>` +
+		paragraphs +
 		payBlock +
 		qrBlock +
-		`<p>Prosím zašli platbu co nejdříve. Pokud máš dotazy, obrať se na správce tipovačky.</p>
-<p style="color:#64748b;font-size:.85rem">— Tipovačka 3.0</p>
+		`<p style="color:#64748b;font-size:.85rem">— Tipovačka 3.0</p>
 </body></html>`
 }
