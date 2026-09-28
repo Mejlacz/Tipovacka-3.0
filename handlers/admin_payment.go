@@ -663,8 +663,9 @@ func paymentReminderEmailHTML(username, compName string, s PaymentSettings) stri
 			continue
 		}
 		dataURI := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
+		labels := []string{"S příspěvkem na provoz", "Bez příspěvku na provoz"}
 		qrs = append(qrs, qrImg{
-			label:   fmt.Sprintf("QR kód %d", i+1),
+			label:   labels[i],
 			dataURI: dataURI,
 		})
 	}

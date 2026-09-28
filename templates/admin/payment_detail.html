@@ -336,7 +336,7 @@
     <div class="qr-pair">
         {{/* QR 1 */}}
         <div class="qr-slot{{if .Detail.Settings.QR1URL}} has-img{{end}}" id="qr-slot-1">
-            <div class="qr-label">QR kód 1</div>
+            <div class="qr-label">S příspěvkem na provoz</div>
             {{if .Detail.Settings.QR1URL}}
             <img src="{{.Detail.Settings.QR1URL}}?t={{printf "%d" 0}}" id="qr-img-1" alt="QR 1">
             {{else}}
@@ -351,7 +351,7 @@
         </div>
         {{/* QR 2 */}}
         <div class="qr-slot{{if .Detail.Settings.QR2URL}} has-img{{end}}" id="qr-slot-2">
-            <div class="qr-label">QR kód 2</div>
+            <div class="qr-label">Bez příspěvku na provoz</div>
             {{if .Detail.Settings.QR2URL}}
             <img src="{{.Detail.Settings.QR2URL}}?t={{printf "%d" 0}}" id="qr-img-2" alt="QR 2">
             {{else}}
