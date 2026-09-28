@@ -309,8 +309,10 @@ func main() {
 	r.Post("/admin/teams/merge-bulk", handlers.AdminTeamMergeBulk)
 	r.Get("/admin/teams/assign", handlers.AdminTeamBulkAssign(tmpl))
 	r.Post("/admin/teams/assign", handlers.AdminTeamBulkAssignPost)
+	r.Get("/admin/teams/workspace", handlers.AdminTeamWorkspace(tmpl))
 	r.Get("/admin/competitions/{competition_id}/teams", handlers.AdminCompetitionTeamsForm(tmpl))
 	r.Post("/admin/competitions/{competition_id}/teams", handlers.AdminCompetitionTeamsSave)
+	r.Get("/admin/competitions/{competition_id}/teams.json", handlers.AdminCompetitionTeamsJSON)
 	r.Get("/admin/roster", handlers.AdminRosterMatrix(tmpl))
 	r.Post("/admin/roster/toggle", handlers.AdminRosterToggle)
 

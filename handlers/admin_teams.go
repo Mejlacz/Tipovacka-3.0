@@ -1329,3 +1329,107 @@ func AdminTeamBulkAssignPost(w http.ResponseWriter, r *http.Request) {
 	middleware.SetFlash(w, r, "ok", fmt.Sprintf("Hotovo: %d tymu zpracovano.", count))
 	http.Redirect(w, r, "/admin/teams/assign", http.StatusSeeOther)
 }
+
+// WorkspaceTeam je tým serializovaný do JS pro D&D workspace.
+type WorkspaceTeam struct {
+	ID          int64   `json:"id"`
+	Name        string  `json:"name"`
+	DisplayName string  `json:"dn"`
+	Sport       string  `json:"sport"`
+	Category    string  `json:"cat"`
+	LogoURL     string  `json:"logo"`
+	Alias       string  `json:"alias"`
+}
+
+// GET /admin/teams/workspace — centralizovaný D&D workspace pro přiřazování týmů do soutěží
+func AdminTeamWorkspace(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin := RequireAdmin(w, r)
+		if admin == nil {
+			return
+		}
+		ctx := context.Background()
+
+		// Všechny týmy
+		tRows, err := db.Pool.Query(ctx, `
+			SELECT id, name, COALESCE(display_name,''), sport,
+			       COALESCE(category,''), COALESCE(logo_url,''), COALESCE(alias,'')
+			FROM teams
+			ORDER BY sport, LOWER(COALESCE(NULLIF(display_name,''), name))`)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		var allTeams []WorkspaceTeam
+		for tRows.Next() {
+			var t WorkspaceTeam
+			if err := tRows.Scan(&t.ID, &t.Name, &t.DisplayName, &t.Sport, &t.Category, &t.LogoURL, &t.Alias); err == nil {
+				allTeams = append(allTeams, t)
+			}
+		}
+		tRows.Close()
+
+		// Všechny soutěže (aktivní nahoře, archiv dole)
+		type CompOpt struct {
+			ID     int64  `json:"id"`
+			Name   string `json:"name"`
+			Season string `json:"season"`
+			Sport  string `json:"sport"`
+			Active bool   `json:"active"`
+		}
+		cRows, _ := db.Pool.Query(ctx,
+			`SELECT id, name, COALESCE(season,''), COALESCE(sport,''), is_active
+			 FROM competitions ORDER BY is_active DESC, sort_order ASC NULLS LAST, id DESC`)
+		var comps []CompOpt
+		if cRows != nil {
+			for cRows.Next() {
+				var c CompOpt
+				_ = cRows.Scan(&c.ID, &c.Name, &c.Season, &c.Sport, &c.Active)
+				comps = append(comps, c)
+			}
+			cRows.Close()
+		}
+
+		teamsJSON, _ := json.Marshal(allTeams)
+		compsJSON, _ := json.Marshal(comps)
+
+		RenderTemplate(w, r, tmpl, "admin/team_workspace.html", TemplateData{
+			"User":      admin,
+			"TeamsJSON": template.JS(teamsJSON),
+			"CompsJSON": template.JS(compsJSON),
+		})
+	}
+}
+
+// GET /admin/competitions/{competition_id}/teams.json — JSON seznam team_ids v soutěži
+func AdminCompetitionTeamsJSON(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	_ = admin
+	compID, _ := strconv.ParseInt(r.PathValue("competition_id"), 10, 64)
+	if compID == 0 {
+		http.Error(w, "bad comp_id", 400)
+		return
+	}
+	rows, err := db.Pool.Query(context.Background(),
+		`SELECT team_id FROM competition_teams WHERE competition_id=$1`, compID)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		_ = rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if ids == nil {
+		ids = []int64{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"team_ids": ids})
+}

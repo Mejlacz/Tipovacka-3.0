@@ -1,0 +1,626 @@
+{{define "title"}}Workspace — Soupiska soutěže{{end}}
+<div class="page-header" style="margin-bottom:.75rem">
+    <h1 style="font-size:1.1rem">🏟 Workspace — přiřazování týmů</h1>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+        <a href="/admin/teams" class="btn btn-secondary btn-sm">← Týmy</a>
+        <a href="/admin/roster" class="btn btn-secondary btn-sm">🗂 Matice</a>
+    </div>
+</div>
+
+<p style="font-size:.78rem;color:var(--muted-d);margin:0 0 .75rem">
+    Vlevo všechny týmy, vpravo soupiska vybrané soutěže. Přetáhni tým do soupisky nebo ho odeber kliknutím na ×.
+</p>
+
+<style>
+.ws-layout {
+    display: grid;
+    grid-template-columns: 2fr 3fr;
+    gap: 1rem;
+    align-items: start;
+}
+@media (max-width: 680px) {
+    .ws-layout { grid-template-columns: 1fr; }
+}
+
+.ws-panel {
+    background: var(--bg2);
+    border: 1px solid var(--border-d);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.ws-head {
+    padding: .6rem .9rem;
+    border-bottom: 1px solid var(--border-d);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    background: var(--bg2);
+    flex-shrink: 0;
+}
+.ws-title { font-size: .88rem; font-weight: 700; white-space: nowrap; }
+.ws-count {
+    font-size: .7rem; padding: .1rem .5rem; border-radius: 99px;
+    background: var(--bg3); color: var(--muted-d); border: 1px solid var(--border-d); font-weight: 600;
+    flex-shrink: 0;
+}
+.ws-count.has { background: var(--bg3); color: var(--text-d); border-color: rgba(99,102,241,.4); }
+
+.ws-body {
+    padding: .55rem .75rem .75rem;
+    max-height: 75vh;
+    overflow-y: auto;
+}
+.ws-drop {
+    padding: .55rem .75rem .75rem;
+    max-height: 75vh;
+    overflow-y: auto;
+    min-height: 140px;
+    transition: background .12s;
+}
+.ws-drop.drag-over { background: rgba(99,102,241,.06); }
+
+.ws-search {
+    display: block; width: 100%; margin-bottom: .55rem;
+    background: var(--bg3); color: var(--text-d);
+    border: 1px solid var(--border-d); border-radius: 7px;
+    padding: .38rem .65rem; font-size: .84rem;
+    box-sizing: border-box;
+}
+.ws-search:focus { outline: none; border-color: rgba(99,102,241,.55); }
+
+/* Competition selector */
+.ws-comp-sel {
+    flex: 1; min-width: 0;
+    background: var(--bg3); color: var(--text-d);
+    border: 1px solid var(--border-d); border-radius: 7px;
+    padding: .3rem .55rem; font-size: .84rem; font-weight: 600;
+    cursor: pointer;
+}
+.ws-comp-sel:focus { outline: none; border-color: rgba(99,102,241,.55); }
+.ws-comp-sel option[disabled] { color: var(--muted-d); font-weight: 400; }
+
+/* Category sections */
+.ws-cat { margin-bottom: .3rem; }
+.ws-cat-head {
+    font-size: .68rem; font-weight: 700; color: var(--muted-d);
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: .5rem 0 .3rem; display: flex; align-items: center; gap: .4rem;
+}
+.ws-cat-head:first-child { padding-top: 0; }
+.ws-chips { display: flex; flex-wrap: wrap; gap: .35rem; min-height: 4px; }
+
+/* Team chip */
+.t-chip {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .28rem .55rem; border-radius: 7px;
+    background: var(--bg3); border: 1px solid var(--border-d);
+    font-size: .82rem; font-weight: 500; color: var(--text-d);
+    cursor: grab; user-select: none;
+    transition: background .1s, border-color .1s;
+    white-space: nowrap; max-width: 220px;
+}
+.t-chip:hover { background: var(--bg2); border-color: rgba(99,102,241,.5); }
+.t-chip.dragging { opacity: .3; pointer-events: none; }
+.t-chip.in-roster { background: rgba(99,102,241,.1); border-color: rgba(99,102,241,.45); }
+.t-chip.in-roster:hover { background: rgba(99,102,241,.16); border-color: rgba(99,102,241,.7); }
+.t-chip img { width: 1rem; height: 1rem; object-fit: contain; flex-shrink: 0; }
+.t-chip-flag { font-size: .72rem; opacity: .65; flex-shrink: 0; }
+.t-chip-name { overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.t-chip-x {
+    flex-shrink: 0; color: var(--muted-d); font-size: .85rem; line-height: 1;
+    padding: .05rem .15rem; border-radius: 3px; cursor: pointer; margin-left: .05rem;
+}
+.t-chip-x:hover { background: rgba(248,113,113,.2); color: #f87171; }
+
+/* Drop hint */
+.drop-hint {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: .4rem; padding: 2.5rem 1rem;
+    border: 1.5px dashed var(--border-d); border-radius: 10px;
+    color: var(--muted-d); font-size: .85rem; text-align: center;
+    transition: border-color .12s, color .12s;
+}
+.ws-drop.drag-over .drop-hint { border-color: rgba(99,102,241,.5); color: var(--accent); }
+.drop-hint-icon { font-size: 1.75rem; opacity: .45; }
+
+/* Loading state */
+.ws-loading {
+    display: flex; align-items: center; justify-content: center;
+    padding: 2rem; color: var(--muted-d); font-size: .85rem; gap: .5rem;
+}
+
+/* Status toast */
+#ws-status {
+    position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 200;
+    background: var(--bg3); border: 1px solid var(--border-d);
+    border-radius: 8px; padding: .45rem .9rem;
+    font-size: .82rem; color: var(--muted-d);
+    opacity: 0; pointer-events: none;
+    transition: opacity .18s;
+}
+#ws-status.visible { opacity: 1; }
+#ws-status.ok { border-color: rgba(52,211,153,.45); color: #34d399; }
+#ws-status.err { border-color: rgba(248,113,113,.45); color: #f87171; }
+
+/* Clear button */
+.btn-clear {
+    font-size: .72rem; padding: .2rem .6rem; border-radius: 6px;
+    border: 1px solid var(--border-d); background: none; color: var(--muted-d);
+    cursor: pointer; margin-left: auto; flex-shrink: 0;
+}
+.btn-clear:hover { border-color: rgba(248,113,113,.5); color: #f87171; }
+
+/* Sport filter pills */
+.sport-pills { display: flex; gap: .3rem; margin-left: auto; flex-shrink: 0; }
+.sport-pill {
+    font-size: .72rem; padding: .15rem .45rem; border-radius: 99px;
+    border: 1px solid var(--border-d); background: none; color: var(--muted-d);
+    cursor: pointer; line-height: 1.4;
+}
+.sport-pill.active { background: rgba(99,102,241,.15); color: #a5b4fc; border-color: rgba(99,102,241,.4); }
+</style>
+
+<div class="ws-layout">
+
+    {{/* ── LEVÝ PANEL: všechny týmy ── */}}
+    <div class="ws-panel" id="left-panel">
+        <div class="ws-head">
+            <span class="ws-title">📋 Všechny týmy</span>
+            <span class="ws-count" id="left-count">0</span>
+            <div class="sport-pills">
+                <button class="sport-pill active" data-sport="" onclick="setSport(this,'')">Vše</button>
+                <button class="sport-pill" data-sport="football" onclick="setSport(this,'football')">⚽</button>
+                <button class="sport-pill" data-sport="hockey" onclick="setSport(this,'hockey')">🏒</button>
+            </div>
+        </div>
+        <div class="ws-body" id="left-body">
+            <input class="ws-search" id="team-search" placeholder="🔍 Hledat tým…" autocomplete="off" oninput="filterLeft()">
+            <div id="left-cats"><!-- rendered by JS --></div>
+        </div>
+    </div>
+
+    {{/* ── PRAVÝ PANEL: soupiska soutěže ── */}}
+    <div class="ws-panel" id="right-panel">
+        <div class="ws-head">
+            <select class="ws-comp-sel" id="comp-sel" onchange="loadComp(this.value)">
+                <option value="" disabled selected>— vyber soutěž —</option>
+                <option value="" disabled>── Aktivní ──</option>
+                <option value="" disabled>── Archiv ──</option>
+            </select>
+            <span class="ws-count" id="right-count">0</span>
+            <button type="button" class="btn-clear" id="btn-clear" style="display:none" onclick="clearAll()">Vymazat vše</button>
+        </div>
+        <div class="ws-drop" id="drop-zone">
+            <div class="drop-hint" id="drop-hint">
+                <div class="drop-hint-icon">🏟</div>
+                <div>Nejdřív vyber soutěž nahoře</div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div id="ws-status"></div>
+
+<script>
+(function () {
+
+var TEAMS = {{.TeamsJSON}};
+var COMPS = {{.CompsJSON}};
+
+var currentCompID = 0;
+var rosterSet = new Set(); // team IDs v pravém panelu
+var draggedChip = null;
+var dragSrc = null;
+var statusTimer = null;
+var activeSport = '';
+
+/* ── Init ── */
+
+function init() {
+    buildCompDropdown();
+    buildLeftPanel();
+    setupDropZone();
+    syncState();
+}
+
+/* ── Competition dropdown ── */
+
+function buildCompDropdown() {
+    var sel = document.getElementById('comp-sel');
+    sel.innerHTML = '<option value="" disabled selected>— vyber soutěž —</option>';
+
+    var activeOpt = document.createElement('optgroup');
+    activeOpt.label = '🟢 Aktivní';
+    var archOpt = document.createElement('optgroup');
+    archOpt.label = '📦 Archiv';
+
+    COMPS.forEach(function (c) {
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        var sport = c.sport === 'hockey' ? ' 🏒' : c.sport === 'football' ? ' ⚽' : '';
+        opt.textContent = c.name + (c.season ? ' ' + c.season : '') + sport;
+        (c.active ? activeOpt : archOpt).appendChild(opt);
+    });
+
+    sel.appendChild(activeOpt);
+    sel.appendChild(archOpt);
+}
+
+/* ── Left panel ── */
+
+function buildLeftPanel() {
+    var container = document.getElementById('left-cats');
+    container.innerHTML = '';
+
+    // Group by sport+category
+    var groups = {};
+    var groupOrder = [];
+    TEAMS.forEach(function (t) {
+        if (activeSport && t.sport !== activeSport) return;
+        var key = t.sport + '||' + (t.cat || '');
+        if (!groups[key]) {
+            groups[key] = { sport: t.sport, cat: t.cat || '', teams: [] };
+            groupOrder.push(key);
+        }
+        groups[key].teams.push(t);
+    });
+
+    groupOrder.forEach(function (key) {
+        var g = groups[key];
+        var sec = document.createElement('div');
+        sec.className = 'ws-cat';
+        sec.dataset.groupKey = key;
+
+        var sportLabel = g.sport === 'football' ? '⚽ Fotbal' : g.sport === 'hockey' ? '🏒 Hokej' : g.sport;
+        var catLabel = g.cat ? g.cat : 'Bez kategorie';
+        var head = document.createElement('div');
+        head.className = 'ws-cat-head';
+        head.textContent = sportLabel + (g.cat ? ' — ' + g.cat : '');
+        sec.appendChild(head);
+
+        var chips = document.createElement('div');
+        chips.className = 'ws-chips';
+        chips.id = 'lchips-' + CSS.escape(key);
+        g.teams.forEach(function (t) {
+            if (!rosterSet.has(t.id)) {
+                chips.appendChild(makeChip(t, false));
+            }
+        });
+        sec.appendChild(chips);
+        container.appendChild(sec);
+    });
+
+    syncLeftCounts();
+}
+
+function makeChip(t, inRoster) {
+    var chip = document.createElement('div');
+    chip.className = 't-chip' + (inRoster ? ' in-roster' : '');
+    chip.draggable = true;
+    chip.dataset.tid = t.id;
+    chip.dataset.name = (t.dn || t.name).toLowerCase();
+    chip.dataset.sport = t.sport;
+    chip.dataset.cat = t.cat || '';
+
+    if (t.logo) {
+        var img = document.createElement('img');
+        img.src = t.logo;
+        img.alt = '';
+        chip.appendChild(img);
+    } else if (t.alias) {
+        var flag = document.createElement('span');
+        flag.className = 't-chip-flag';
+        flag.textContent = t.alias.toUpperCase();
+        chip.appendChild(flag);
+    }
+
+    var name = document.createElement('span');
+    name.className = 't-chip-name';
+    name.textContent = t.dn || t.name;
+    chip.appendChild(name);
+
+    if (inRoster) {
+        chip.appendChild(makeX(t.id));
+    }
+    return chip;
+}
+
+function makeX(tid) {
+    var x = document.createElement('span');
+    x.className = 't-chip-x';
+    x.dataset.tid = tid;
+    x.title = 'Odebrat ze soupisky';
+    x.textContent = '×';
+    return x;
+}
+
+/* ── Load competition teams ── */
+
+function loadComp(compID) {
+    if (!compID) return;
+    currentCompID = parseInt(compID, 10);
+    rosterSet.clear();
+
+    var dropZone = document.getElementById('drop-zone');
+    dropZone.innerHTML = '<div class="ws-loading">⏳ Načítám…</div>';
+    document.getElementById('btn-clear').style.display = 'none';
+
+    fetch('/admin/competitions/' + compID + '/teams.json')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            var ids = data.team_ids || [];
+            ids.forEach(function (id) { rosterSet.add(id); });
+            renderRoster();
+            rebuildLeft();
+        })
+        .catch(function () {
+            dropZone.innerHTML = '<div class="ws-loading" style="color:#f87171">Chyba načítání.</div>';
+        });
+}
+
+function renderRoster() {
+    var dropZone = document.getElementById('drop-zone');
+    dropZone.innerHTML = '';
+
+    // Group roster teams by sport+cat
+    var groups = {};
+    var groupOrder = [];
+    TEAMS.forEach(function (t) {
+        if (!rosterSet.has(t.id)) return;
+        var key = t.sport + '||' + (t.cat || '');
+        if (!groups[key]) {
+            groups[key] = { sport: t.sport, cat: t.cat || '', teams: [] };
+            groupOrder.push(key);
+        }
+        groups[key].teams.push(t);
+    });
+
+    groupOrder.forEach(function (key) {
+        var g = groups[key];
+        var sec = document.createElement('div');
+        sec.className = 'ws-cat right-cat';
+        sec.dataset.groupKey = key;
+
+        var head = document.createElement('div');
+        head.className = 'ws-cat-head';
+        var sportLabel = g.sport === 'football' ? '⚽ Fotbal' : g.sport === 'hockey' ? '🏒 Hokej' : g.sport;
+        head.textContent = sportLabel + (g.cat ? ' — ' + g.cat : '');
+        sec.appendChild(head);
+
+        var chips = document.createElement('div');
+        chips.className = 'ws-chips';
+        chips.id = 'rchips-' + CSS.escape(key);
+        g.teams.forEach(function (t) {
+            chips.appendChild(makeChip(t, true));
+        });
+        sec.appendChild(chips);
+        dropZone.appendChild(sec);
+    });
+
+    // drop hint at the end
+    var hint = document.createElement('div');
+    hint.className = 'drop-hint';
+    hint.id = 'drop-hint';
+    hint.innerHTML = '<div class="drop-hint-icon">🏟</div><div>Přetáhni sem tým ze seznamu vlevo</div>';
+    dropZone.appendChild(hint);
+
+    syncState();
+}
+
+function rebuildLeft() {
+    buildLeftPanel();
+    filterLeft();
+}
+
+/* ── Core actions ── */
+
+function addTeam(chip) {
+    var tid = parseInt(chip.dataset.tid, 10);
+    if (rosterSet.has(tid)) return;
+    rosterSet.add(tid);
+
+    var t = TEAMS.find(function (x) { return x.id === tid; });
+    if (!t) return;
+
+    chip.classList.add('in-roster');
+    if (!chip.querySelector('.t-chip-x')) {
+        chip.appendChild(makeX(tid));
+    }
+
+    var key = (t.sport || '') + '||' + (t.cat || '');
+    var rchips = document.getElementById('rchips-' + CSS.escape(key));
+    if (!rchips) {
+        var sec = document.createElement('div');
+        sec.className = 'ws-cat right-cat';
+        sec.dataset.groupKey = key;
+        var sportLabel = t.sport === 'football' ? '⚽ Fotbal' : t.sport === 'hockey' ? '🏒 Hokej' : (t.sport || '');
+        sec.innerHTML = '<div class="ws-cat-head">' + sportLabel + (t.cat ? ' — ' + t.cat : '') + '</div>' +
+                        '<div class="ws-chips" id="rchips-' + CSS.escape(key) + '"></div>';
+        var hint = document.getElementById('drop-hint');
+        document.getElementById('drop-zone').insertBefore(sec, hint);
+        rchips = document.getElementById('rchips-' + CSS.escape(key));
+    }
+    rchips.appendChild(chip);
+
+    syncState();
+    toggle(tid, true);
+}
+
+function removeTeam(chip) {
+    var tid = parseInt(chip.dataset.tid, 10);
+    if (!rosterSet.has(tid)) return;
+    rosterSet.delete(tid);
+
+    var t = TEAMS.find(function (x) { return x.id === tid; });
+    chip.classList.remove('in-roster');
+    var x = chip.querySelector('.t-chip-x');
+    if (x) x.remove();
+
+    // Return to left panel
+    if (t) {
+        var key = (t.sport || '') + '||' + (t.cat || '');
+        var lchips = document.getElementById('lchips-' + CSS.escape(key));
+        if (lchips) {
+            lchips.appendChild(chip);
+        } else {
+            document.getElementById('left-cats').appendChild(chip);
+        }
+    }
+
+    // Clean empty right sections
+    document.querySelectorAll('#drop-zone .right-cat').forEach(function (sec) {
+        if (sec.querySelector('.ws-chips').children.length === 0) sec.remove();
+    });
+
+    syncState();
+    toggle(tid, false);
+}
+
+window.clearAll = function () {
+    Array.from(document.getElementById('drop-zone').querySelectorAll('.t-chip')).forEach(removeTeam);
+};
+
+/* ── AJAX toggle ── */
+
+function toggle(teamId, checked) {
+    if (!currentCompID) return;
+    showStatus('…', '');
+    var body = 'team_id=' + encodeURIComponent(teamId)
+             + '&comp_id=' + encodeURIComponent(currentCompID)
+             + '&checked=' + (checked ? '1' : '0');
+    fetch('/admin/roster/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+        showStatus(data.ok ? (checked ? '✓ Přidáno' : '✓ Odebráno') : 'Chyba serveru', data.ok ? 'ok' : 'err');
+    })
+    .catch(function () { showStatus('Chyba připojení', 'err'); });
+}
+
+/* ── Drag & drop ── */
+
+document.addEventListener('dragstart', function (e) {
+    var chip = e.target.closest && e.target.closest('.t-chip');
+    if (!chip) return;
+    draggedChip = chip;
+    dragSrc = chip.closest('#right-panel') ? 'right' : 'left';
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', chip.dataset.tid);
+    requestAnimationFrame(function () { chip.classList.add('dragging'); });
+});
+
+document.addEventListener('dragend', function () {
+    if (draggedChip) draggedChip.classList.remove('dragging');
+    draggedChip = null; dragSrc = null;
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    document.getElementById('left-body').classList.remove('drag-over');
+});
+
+function setupDropZone() {
+    var dz = document.getElementById('drop-zone');
+    var lb = document.getElementById('left-body');
+
+    dz.addEventListener('dragover', function (e) {
+        if (dragSrc !== 'left' || !currentCompID) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+        dz.classList.add('drag-over');
+    });
+    dz.addEventListener('dragleave', function (e) {
+        if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag-over');
+    });
+    dz.addEventListener('drop', function (e) {
+        e.preventDefault(); dz.classList.remove('drag-over');
+        if (dragSrc !== 'left' || !draggedChip || !currentCompID) return;
+        addTeam(draggedChip);
+    });
+
+    lb.addEventListener('dragover', function (e) {
+        if (dragSrc !== 'right') return;
+        e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    });
+    lb.addEventListener('drop', function (e) {
+        e.preventDefault();
+        if (dragSrc !== 'right' || !draggedChip) return;
+        removeTeam(draggedChip);
+    });
+}
+
+/* ── Click × to remove ── */
+document.addEventListener('click', function (e) {
+    var x = e.target.closest && e.target.closest('.t-chip-x');
+    if (!x) return;
+    var chip = x.closest('.t-chip');
+    if (chip) removeTeam(chip);
+});
+
+/* ── Search ── */
+window.filterLeft = function () {
+    var q = document.getElementById('team-search').value.toLowerCase().trim();
+    document.querySelectorAll('#left-panel .t-chip').forEach(function (chip) {
+        chip.style.display = (!q || (chip.dataset.name || '').includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('#left-panel .ws-cat').forEach(function (sec) {
+        var any = Array.from(sec.querySelectorAll('.t-chip')).some(function (c) {
+            return c.style.display !== 'none';
+        });
+        sec.style.display = any ? '' : 'none';
+    });
+};
+
+/* ── Sport filter ── */
+window.setSport = function (btn, sport) {
+    activeSport = sport;
+    document.querySelectorAll('.sport-pill').forEach(function (b) {
+        b.classList.toggle('active', b === btn);
+    });
+    buildLeftPanel();
+    filterLeft();
+};
+
+/* ── Sync UI ── */
+function syncState() {
+    var leftCount = document.querySelectorAll('#left-panel .t-chip').length;
+    var rightCount = document.querySelectorAll('#drop-zone .t-chip').length;
+
+    var lBadge = document.getElementById('left-count');
+    var rBadge = document.getElementById('right-count');
+    lBadge.textContent = leftCount;
+    rBadge.textContent = rightCount;
+    lBadge.className = 'ws-count' + (leftCount > 0 ? ' has' : '');
+    rBadge.className = 'ws-count' + (rightCount > 0 ? ' has' : '');
+
+    var hint = document.getElementById('drop-hint');
+    if (hint) hint.style.display = rightCount > 0 ? 'none' : '';
+
+    document.getElementById('btn-clear').style.display = (rightCount > 0 && currentCompID) ? '' : 'none';
+}
+
+function syncLeftCounts() {
+    var total = document.querySelectorAll('#left-panel .t-chip').length;
+    var badge = document.getElementById('left-count');
+    badge.textContent = total;
+    badge.className = 'ws-count' + (total > 0 ? ' has' : '');
+
+    document.querySelectorAll('#left-panel .ws-cat').forEach(function (sec) {
+        sec.style.display = sec.querySelectorAll('.t-chip').length > 0 ? '' : 'none';
+    });
+}
+
+function showStatus(msg, type) {
+    var el = document.getElementById('ws-status');
+    el.textContent = msg;
+    el.className = 'visible' + (type ? ' ' + type : '');
+    clearTimeout(statusTimer);
+    if (type) statusTimer = setTimeout(function () { el.className = ''; }, 1800);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+}());
+</script>
