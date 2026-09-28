@@ -55,29 +55,18 @@ func AdminDashboard(tmpl *template.Template) http.HandlerFunc {
 		compRows.Close()
 
 		type compData struct {
-			Comp        *models.Competition
-			SportLabel  string
-			LastRound   *models.Round
-			RoundsCount int
+			Comp         *models.Competition
+			SportLabel   string
+			MatchesCount int
 		}
 		var compDataList []compData
 		for _, comp := range comps {
-			var lastRound *models.Round
-			rnd := &models.Round{}
-			err := db.Pool.QueryRow(ctx,
-				`SELECT id, competition_id, name, deadline, is_active FROM rounds
-				  WHERE competition_id = $1 ORDER BY id DESC LIMIT 1`, comp.ID).
-				Scan(&rnd.ID, &rnd.CompetitionID, &rnd.Name, &rnd.Deadline, &rnd.IsActive)
-			if err == nil {
-				lastRound = rnd
-			}
-			var count int
-			_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM rounds WHERE competition_id = $1`, comp.ID).Scan(&count)
+			var matchCount int
+			_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM matches WHERE competition_id = $1`, comp.ID).Scan(&matchCount)
 			compDataList = append(compDataList, compData{
-				Comp:        comp,
-				SportLabel:  getSportLabel(comp.Sport),
-				LastRound:   lastRound,
-				RoundsCount: count,
+				Comp:         comp,
+				SportLabel:   getSportLabel(comp.Sport),
+				MatchesCount: matchCount,
 			})
 		}
 
@@ -103,13 +92,11 @@ func AdminCompetitionsList(tmpl *template.Template) http.HandlerFunc {
 		ctx := context.Background()
 		rows, _ := db.Pool.Query(ctx,
 			`SELECT c.id, c.name, c.season, c.is_active, c.is_hidden, c.sport, c.sort_order,
-			        COUNT(DISTINCT r.id) AS rounds_count,
 			        COUNT(DISTINCT m.id) AS matches_count,
 			        COUNT(DISTINCT t.id) AS tips_count,
 			        COUNT(DISTINCT ct.team_id) AS teams_count
 			   FROM competitions c
-			   LEFT JOIN rounds r ON r.competition_id = c.id
-			   LEFT JOIN matches m ON m.round_id = r.id
+			   LEFT JOIN matches m ON m.competition_id = c.id
 			   LEFT JOIN tips t ON t.match_id = m.id
 			   LEFT JOIN competition_teams ct ON ct.competition_id = c.id
 			  GROUP BY c.id
@@ -118,7 +105,6 @@ func AdminCompetitionsList(tmpl *template.Template) http.HandlerFunc {
 		type cData struct {
 			Comp         *models.Competition
 			SportLabel   string
-			RoundsCount  int
 			MatchesCount int
 			TipsCount    int
 			TeamsCount   int
@@ -126,12 +112,12 @@ func AdminCompetitionsList(tmpl *template.Template) http.HandlerFunc {
 		var compData []cData
 		for rows.Next() {
 			c := &models.Competition{}
-			var rc, mc, tc, tmc int
+			var mc, tc, tmc int
 			_ = rows.Scan(&c.ID, &c.Name, &c.Season, &c.IsActive, &c.IsHidden, &c.Sport, &c.SortOrder,
-				&rc, &mc, &tc, &tmc)
+				&mc, &tc, &tmc)
 			compData = append(compData, cData{
 				Comp: c, SportLabel: getSportLabel(c.Sport),
-				RoundsCount: rc, MatchesCount: mc, TipsCount: tc, TeamsCount: tmc,
+				MatchesCount: mc, TipsCount: tc, TeamsCount: tmc,
 			})
 		}
 		rows.Close()
@@ -178,9 +164,15 @@ func AdminCompetitionCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var compID int
-	_ = db.Pool.QueryRow(context.Background(),
+	err := db.Pool.QueryRow(context.Background(),
 		`INSERT INTO competitions (name, season, sport, is_active) VALUES ($1, $2, $3, true) RETURNING id`,
 		name, season, sport).Scan(&compID)
+	if err != nil {
+		LogAction(&admin.ID, admin.Username, "comp_create", "competition", nil, "CHYBA vytvoření soutěže '"+name+"': "+err.Error(), nil, nil)
+	} else {
+		newVal := `{"name":"` + name + `","season":"` + season + `","sport":"` + sport + `"}`
+		LogAction(&admin.ID, admin.Username, "comp_create", "competition", &compID, "Soutěž vytvořena: "+name+" ("+season+")", nil, &newVal)
+	}
 	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/teams", http.StatusSeeOther)
 }
 
@@ -226,9 +218,15 @@ func AdminCompetitionEditSubmit(w http.ResponseWriter, r *http.Request) {
 	fdCode   := strings.ToUpper(strings.TrimSpace(r.FormValue("fd_code")))
 	isActive := r.FormValue("is_active") == "on"
 	isHidden := r.FormValue("is_hidden") == "on"
-	_, _ = db.Pool.Exec(context.Background(),
+	_, execErr := db.Pool.Exec(context.Background(),
 		`UPDATE competitions SET name=$1, season=$2, sport=$3, fd_code=$4, is_active=$5, is_hidden=$6 WHERE id=$7`,
 		name, season, sport, fdCode, isActive, isHidden, compID)
+	if execErr != nil {
+		LogAction(&admin.ID, admin.Username, "comp_edit", "competition", &compID, "CHYBA editace soutěže "+strconv.Itoa(compID)+": "+execErr.Error(), nil, nil)
+	} else {
+		newVal := `{"name":"` + name + `","season":"` + season + `","sport":"` + sport + `","is_active":` + strconv.FormatBool(isActive) + `}`
+		LogAction(&admin.ID, admin.Username, "comp_edit", "competition", &compID, "Soutěž upravena: "+name, nil, &newVal)
+	}
 	middleware.SetFlash(w, r, "ok", "Soutěž byla uložena.")
 	http.Redirect(w, r, "/admin/competitions", http.StatusSeeOther)
 }
@@ -248,14 +246,59 @@ func AdminCompetitionToggle(w http.ResponseWriter, r *http.Request) {
 		Scan(&comp.ID, &comp.Name, &comp.IsActive)
 	if err == nil {
 		newState := !comp.IsActive
-		_, _ = db.Pool.Exec(ctx, `UPDATE competitions SET is_active=$1 WHERE id=$2`, newState, compID)
+		_, execErr := db.Pool.Exec(ctx, `UPDATE competitions SET is_active=$1 WHERE id=$2`, newState, compID)
 		state := "Archivována"
 		if newState {
 			state = "Aktivována"
 		}
+		if execErr != nil {
+			LogAction(&admin.ID, admin.Username, "comp_toggle", "competition", &compID, "CHYBA toggle soutěže "+comp.Name+": "+execErr.Error(), nil, nil)
+		} else {
+			oldVal := `{"is_active":` + strconv.FormatBool(comp.IsActive) + `}`
+			newVal := `{"is_active":` + strconv.FormatBool(newState) + `}`
+			LogAction(&admin.ID, admin.Username, "comp_toggle", "competition", &compID, state+": "+comp.Name, &oldVal, &newVal)
+		}
 		middleware.SetFlash(w, r, "ok", state+": <b>"+comp.Name+"</b>")
 	}
 	http.Redirect(w, r, "/admin/competitions", http.StatusSeeOther)
+}
+
+// ─── POST /admin/competitions/{id}/set-deadline ──────────────────────────────
+
+func AdminCompetitionSetDeadline(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	compID, _ := strconv.Atoi(r.PathValue("competition_id"))
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	deadlineStr := r.FormValue("deadline")
+	ctx := context.Background()
+	if deadlineStr != "" {
+		t, err := time.ParseInLocation("2006-01-02T15:04", deadlineStr, pragueLocation)
+		if err == nil {
+			_, execErr := db.Pool.Exec(ctx, `UPDATE competitions SET deadline=$1 WHERE id=$2`, t, compID)
+			if execErr != nil {
+				LogAction(&admin.ID, admin.Username, "comp_deadline", "competition", &compID, "CHYBA nastavení deadline soutěže "+strconv.Itoa(compID)+": "+execErr.Error(), nil, nil)
+			} else {
+				newVal := `{"deadline":"` + deadlineStr + `"}`
+				LogAction(&admin.ID, admin.Username, "comp_deadline", "competition", &compID, "Deadline soutěže "+strconv.Itoa(compID)+" nastaven: "+deadlineStr, nil, &newVal)
+			}
+		} else {
+			LogAction(&admin.ID, admin.Username, "comp_deadline", "competition", &compID, "CHYBA parsování deadline '"+deadlineStr+"': "+err.Error(), nil, nil)
+		}
+	} else {
+		_, execErr := db.Pool.Exec(ctx, `UPDATE competitions SET deadline=NULL WHERE id=$1`, compID)
+		if execErr != nil {
+			LogAction(&admin.ID, admin.Username, "comp_deadline", "competition", &compID, "CHYBA mazání deadline soutěže "+strconv.Itoa(compID)+": "+execErr.Error(), nil, nil)
+		} else {
+			LogAction(&admin.ID, admin.Username, "comp_deadline", "competition", &compID, "Deadline soutěže "+strconv.Itoa(compID)+" smazán", nil, nil)
+		}
+	}
+	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
 }
 
 // ─── POST /admin/competitions/{id}/delete ────────────────────────────────────
@@ -273,21 +316,30 @@ func AdminCompetitionDelete(w http.ResponseWriter, r *http.Request) {
 		Scan(&comp.ID, &comp.Name, &comp.IsActive)
 	if err == nil {
 		if comp.IsActive {
+			LogAction(&admin.ID, admin.Username, "comp_delete", "competition", &compID, "Pokus o smazání aktivní soutěže: "+comp.Name+" — odmítnuto", nil, nil)
 			middleware.SetFlash(w, r, "error", "Aktivní soutěž nelze smazat — nejdřív ji archivuj.")
 			http.Redirect(w, r, "/admin/competitions", http.StatusSeeOther)
 			return
 		}
+		oldVal := `{"name":"` + comp.Name + `","id":` + strconv.Itoa(compID) + `}`
 		// Smaž v pořadí podle FK závislostí
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM extra_answers WHERE question_id IN (SELECT id FROM extra_questions WHERE competition_id=$1)`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM extra_questions WHERE competition_id=$1`, compID)
-		_, _ = db.Pool.Exec(ctx, `DELETE FROM tips WHERE match_id IN (SELECT m.id FROM matches m JOIN rounds r ON r.id=m.round_id WHERE r.competition_id=$1)`, compID)
-		_, _ = db.Pool.Exec(ctx, `DELETE FROM matches WHERE round_id IN (SELECT id FROM rounds WHERE competition_id=$1)`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM tips WHERE match_id IN (SELECT id FROM matches WHERE competition_id=$1)`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM matches WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM rounds WHERE competition_id=$1`, compID)
+		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_standings WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM competition_teams WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `DELETE FROM notification_settings WHERE competition_id=$1`, compID)
 		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET competition_id=NULL WHERE competition_id=$1`, compID)
-		_, _ = db.Pool.Exec(ctx, `DELETE FROM competitions WHERE id=$1`, compID)
-		middleware.SetFlash(w, r, "ok", "Soutěž <b>"+comp.Name+"</b> byla smazána.")
+		_, execErr := db.Pool.Exec(ctx, `DELETE FROM competitions WHERE id=$1`, compID)
+		if execErr != nil {
+			LogAction(&admin.ID, admin.Username, "comp_delete", "competition", &compID, "CHYBA mazání soutěže "+comp.Name+": "+execErr.Error(), &oldVal, nil)
+			middleware.SetFlash(w, r, "error", "Chyba při mazání: "+execErr.Error())
+		} else {
+			LogAction(&admin.ID, admin.Username, "comp_delete", "competition", &compID, "Soutěž smazána: "+comp.Name, &oldVal, nil)
+			middleware.SetFlash(w, r, "ok", "Soutěž <b>"+comp.Name+"</b> byla smazána.")
+		}
 	}
 	http.Redirect(w, r, "/admin/competitions", http.StatusSeeOther)
 }
@@ -535,9 +587,16 @@ func AdminUserBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID, _ := strconv.Atoi(r.PathValue("user_id"))
+	ctx := context.Background()
+	var username string
+	_ = db.Pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, userID).Scan(&username)
 	if userCols.IsBlocked {
-		_, _ = db.Pool.Exec(context.Background(),
-			`UPDATE users SET is_blocked=true WHERE id=$1`, userID)
+		_, execErr := db.Pool.Exec(ctx, `UPDATE users SET is_blocked=true WHERE id=$1`, userID)
+		if execErr != nil {
+			LogAction(&admin.ID, admin.Username, "user_block", "user", &userID, "CHYBA blokování "+username+": "+execErr.Error(), nil, nil)
+		} else {
+			LogAction(&admin.ID, admin.Username, "user_block", "user", &userID, "Uživatel "+username+" zablokován", nil, nil)
+		}
 	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
@@ -554,7 +613,12 @@ func AdminUserUnblock(w http.ResponseWriter, r *http.Request) {
 	var username string
 	_ = db.Pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, userID).Scan(&username)
 	if userCols.IsBlocked {
-		_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_blocked=false WHERE id=$1`, userID)
+		_, execErr := db.Pool.Exec(ctx, `UPDATE users SET is_blocked=false WHERE id=$1`, userID)
+		if execErr != nil {
+			LogAction(&admin.ID, admin.Username, "user_unblock", "user", &userID, "CHYBA odblokování "+username+": "+execErr.Error(), nil, nil)
+		} else {
+			LogAction(&admin.ID, admin.Username, "user_unblock", "user", &userID, "Uživatel "+username+" odblokován", nil, nil)
+		}
 	}
 	middleware.SetFlash(w, r, "ok", "Uživatel <b>"+username+"</b> byl aktivován.")
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
@@ -589,11 +653,21 @@ func AdminUserToggleAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newAdmin := !isAdmin
+	var username string
+	_ = db.Pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, userID).Scan(&username)
+	var execErr error
 	if userCols.IsOwner {
 		newOwner := isOwner && newAdmin
-		_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_admin=$1, is_owner=$2 WHERE id=$3`, newAdmin, newOwner, userID)
+		_, execErr = db.Pool.Exec(ctx, `UPDATE users SET is_admin=$1, is_owner=$2 WHERE id=$3`, newAdmin, newOwner, userID)
 	} else {
-		_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_admin=$1 WHERE id=$2`, newAdmin, userID)
+		_, execErr = db.Pool.Exec(ctx, `UPDATE users SET is_admin=$1 WHERE id=$2`, newAdmin, userID)
+	}
+	if execErr != nil {
+		LogAction(&admin.ID, admin.Username, "user_toggle_admin", "user", &userID, "CHYBA toggle admin "+username+": "+execErr.Error(), nil, nil)
+	} else {
+		oldVal := `{"is_admin":` + strconv.FormatBool(isAdmin) + `}`
+		newVal := `{"is_admin":` + strconv.FormatBool(newAdmin) + `}`
+		LogAction(&admin.ID, admin.Username, "user_toggle_admin", "user", &userID, "Admin role "+username+": "+strconv.FormatBool(isAdmin)+" → "+strconv.FormatBool(newAdmin), &oldVal, &newVal)
 	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
@@ -624,10 +698,20 @@ func AdminUserToggleOwner(w http.ResponseWriter, r *http.Request) {
 	_ = db.Pool.QueryRow(ctx, `SELECT is_owner FROM users WHERE id=$1`, userID).Scan(&isOwner)
 	newOwner := !isOwner
 	newAdmin := true // owner je vždy admin
+	var usernameOwner string
+	_ = db.Pool.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, userID).Scan(&usernameOwner)
+	var execErrOwner error
 	if userCols.IsAdmin {
-		_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_owner=$1, is_admin=$2 WHERE id=$3`, newOwner, newAdmin, userID)
+		_, execErrOwner = db.Pool.Exec(ctx, `UPDATE users SET is_owner=$1, is_admin=$2 WHERE id=$3`, newOwner, newAdmin, userID)
 	} else {
-		_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_owner=$1 WHERE id=$2`, newOwner, userID)
+		_, execErrOwner = db.Pool.Exec(ctx, `UPDATE users SET is_owner=$1 WHERE id=$2`, newOwner, userID)
+	}
+	if execErrOwner != nil {
+		LogAction(&admin.ID, admin.Username, "user_toggle_owner", "user", &userID, "CHYBA toggle owner "+usernameOwner+": "+execErrOwner.Error(), nil, nil)
+	} else {
+		oldVal := `{"is_owner":` + strconv.FormatBool(isOwner) + `}`
+		newVal := `{"is_owner":` + strconv.FormatBool(newOwner) + `}`
+		LogAction(&admin.ID, admin.Username, "user_toggle_owner", "user", &userID, "Owner role "+usernameOwner+": "+strconv.FormatBool(isOwner)+" → "+strconv.FormatBool(newOwner), &oldVal, &newVal)
 	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
@@ -645,9 +729,18 @@ func AdminUserToggleInactive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if userCols.IsInactive {
+		ctx := context.Background()
 		var cur bool
-		_ = db.Pool.QueryRow(context.Background(), `SELECT is_inactive FROM users WHERE id=$1`, userID).Scan(&cur)
-		_, _ = db.Pool.Exec(context.Background(), `UPDATE users SET is_inactive=$1 WHERE id=$2`, !cur, userID)
+		var usernameInactive string
+		_ = db.Pool.QueryRow(ctx, `SELECT is_inactive, username FROM users WHERE id=$1`, userID).Scan(&cur, &usernameInactive)
+		_, execErr := db.Pool.Exec(ctx, `UPDATE users SET is_inactive=$1 WHERE id=$2`, !cur, userID)
+		if execErr != nil {
+			LogAction(&admin.ID, admin.Username, "user_toggle_inactive", "user", &userID, "CHYBA toggle inactive "+usernameInactive+": "+execErr.Error(), nil, nil)
+		} else {
+			oldVal := `{"is_inactive":` + strconv.FormatBool(cur) + `}`
+			newVal := `{"is_inactive":` + strconv.FormatBool(!cur) + `}`
+			LogAction(&admin.ID, admin.Username, "user_toggle_inactive", "user", &userID, "Inactive "+usernameInactive+": "+strconv.FormatBool(cur)+" → "+strconv.FormatBool(!cur), &oldVal, &newVal)
+		}
 	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
@@ -671,8 +764,16 @@ func AdminUserToggleHidden(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	if userCols.IsHidden {
 		var current bool
-		_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(is_hidden, false) FROM users WHERE id=$1`, userID).Scan(&current)
-		_, _ = db.Pool.Exec(ctx, `UPDATE users SET is_hidden=$1 WHERE id=$2`, !current, userID)
+		var usernameHidden string
+		_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(is_hidden, false), username FROM users WHERE id=$1`, userID).Scan(&current, &usernameHidden)
+		_, execErr := db.Pool.Exec(ctx, `UPDATE users SET is_hidden=$1 WHERE id=$2`, !current, userID)
+		if execErr != nil {
+			LogAction(&admin.ID, admin.Username, "user_toggle_hidden", "user", &userID, "CHYBA toggle hidden "+usernameHidden+": "+execErr.Error(), nil, nil)
+		} else {
+			oldVal := `{"is_hidden":` + strconv.FormatBool(current) + `}`
+			newVal := `{"is_hidden":` + strconv.FormatBool(!current) + `}`
+			LogAction(&admin.ID, admin.Username, "user_toggle_hidden", "user", &userID, "Hidden "+usernameHidden+": "+strconv.FormatBool(current)+" → "+strconv.FormatBool(!current), &oldVal, &newVal)
+		}
 	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
@@ -731,7 +832,12 @@ func AdminUserResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	newPw := genPassword(10)
 	hash, _ := HashPassword(newPw)
-	_, _ = db.Pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, hash, userID)
+	_, execErr := db.Pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, hash, userID)
+	if execErr != nil {
+		LogAction(&admin.ID, admin.Username, "user_reset_password", "user", &userID, "CHYBA reset hesla "+username+": "+execErr.Error(), nil, nil)
+	} else {
+		LogAction(&admin.ID, admin.Username, "user_reset_password", "user", &userID, "Reset hesla pro "+username, nil, nil)
+	}
 	middleware.SetFlash(w, r, "info", "Nové heslo pro <b>"+username+"</b>: <code>"+newPw+"</code>")
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
@@ -759,12 +865,18 @@ func AdminUserSetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	newPw := strings.TrimSpace(r.FormValue("new_password"))
 	if newPw == "" {
+		LogAction(&admin.ID, admin.Username, "user_set_password", "user", &userID, "Pokus o nastavení prázdného hesla pro "+username+" — odmítnuto", nil, nil)
 		middleware.SetFlash(w, r, "err", "Heslo nesmí být prázdné.")
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
 	}
 	hash, _ := HashPassword(newPw)
-	_, _ = db.Pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, hash, userID)
+	_, execErr := db.Pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, hash, userID)
+	if execErr != nil {
+		LogAction(&admin.ID, admin.Username, "user_set_password", "user", &userID, "CHYBA nastavení hesla "+username+": "+execErr.Error(), nil, nil)
+	} else {
+		LogAction(&admin.ID, admin.Username, "user_set_password", "user", &userID, "Heslo nastaveno pro "+username, nil, nil)
+	}
 	middleware.SetFlash(w, r, "ok", "Heslo pro <b>"+username+"</b> bylo změněno.")
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
@@ -1025,11 +1137,26 @@ func AdminUserEditSubmit(tmpl *template.Template) http.HandlerFunc {
 			{Col: "first_name",  Val: PtrStr(firstName), Include: userCols.FirstName},
 			{Col: "last_name",   Val: PtrStr(lastName),  Include: userCols.LastName},
 		})
-		_, _ = db.Pool.Exec(ctx, usql, uvals...)
+		_, execErr := db.Pool.Exec(ctx, usql, uvals...)
+		if execErr != nil {
+			LogAction(&admin.ID, admin.Username, "user_edit", "user", &userID, "CHYBA editace uživatele "+username+": "+execErr.Error(), nil, nil)
+		} else {
+			newValMap, _ := json.Marshal(map[string]interface{}{
+				"username": username, "email": email, "role": role,
+				"is_hidden": isHidden, "is_approved": isApproved, "is_blocked": isBlocked,
+			})
+			newValStr := string(newValMap)
+			LogAction(&admin.ID, admin.Username, "user_edit", "user", &userID, "Editace uživatele: "+username, nil, &newValStr)
+		}
 
 		if newPw != "" {
 			hash, _ := HashPassword(newPw)
-			_, _ = db.Pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, hash, userID)
+			_, pwErr := db.Pool.Exec(ctx, `UPDATE users SET password_hash=$1 WHERE id=$2`, hash, userID)
+			if pwErr != nil {
+				LogAction(&admin.ID, admin.Username, "user_set_password", "user", &userID, "CHYBA změny hesla při editaci "+username+": "+pwErr.Error(), nil, nil)
+			} else {
+				LogAction(&admin.ID, admin.Username, "user_set_password", "user", &userID, "Heslo změněno při editaci "+username, nil, nil)
+			}
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
@@ -1187,8 +1314,10 @@ func AdminUserSendWelcome(w http.ResponseWriter, r *http.Request) {
 	subject := "Vítej v Tipovačce!"
 	body := "Ahoj " + username + ",\n\nvítej v Tipovačce!\nPřihlásit se můžeš zde: https://tipovacka-3.fly.dev/login\n\nPokud máš dotazy, odpověz na tento email.\n\nHodně štěstí!\nTipovačka"
 	if err := sendEmail(email, subject, body); err != nil {
+		LogAction(&admin.ID, admin.Username, "user_send_welcome", "user", &userID, "CHYBA odeslání welcome emailu "+username+" ("+email+"): "+err.Error(), nil, nil)
 		middleware.SetFlash(w, r, "err", "Chyba při odesílání emailu: "+err.Error())
 	} else {
+		LogAction(&admin.ID, admin.Username, "user_send_welcome", "user", &userID, "Welcome email odeslán: "+username+" → "+email, nil, nil)
 		middleware.SetFlash(w, r, "ok", "Welcome email odeslán na <b>"+email+"</b>.")
 	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)

@@ -1,4 +1,32 @@
+<style>
+.auth-tabs { display:flex; gap:3px; background:var(--bg2); border:1px solid var(--border-d); border-radius:12px; padding:4px; max-width:420px; margin:0 auto 1.25rem; }
+.auth-tab { flex:1; text-align:center; padding:.4rem .5rem; border-radius:8px; font-size:.8rem; font-weight:600; color:var(--muted-d); text-decoration:none; transition:.13s; white-space:nowrap; }
+.auth-tab:hover { color:var(--text-d) }
+.auth-tab.active { background:var(--bg3); color:var(--text-d); box-shadow:0 1px 3px rgba(0,0,0,.25) }
+.auth-logo { display:flex; flex-direction:column; align-items:center; gap:.4rem; margin-bottom:1.25rem }
+.auth-logo-icon { width:48px; height:48px; background:linear-gradient(135deg,var(--accent) 0%,#818cf8 100%); border-radius:13px; display:flex; align-items:center; justify-content:center; font-size:1.6rem; box-shadow:0 6px 16px rgba(99,102,241,.3) }
+.auth-logo-name { font-size:.95rem; font-weight:700; color:var(--text-d) }
+.auth-logo-sub  { font-size:.7rem; color:var(--muted-d); margin-top:-2px }
+.auth-card h1   { font-size:1.1rem; margin-bottom:1.25rem; text-align:center }
+.form-group input:focus, .form-group select:focus { border-color:var(--accent) !important; box-shadow:0 0 0 3px rgba(99,102,241,.15) }
+.auth-divider   { display:flex; align-items:center; gap:.75rem; margin:.85rem 0; color:var(--muted-d); font-size:.75rem }
+.auth-divider::before,.auth-divider::after { content:''; flex:1; height:1px; background:var(--border-d) }
+</style>
+
+<nav class="auth-tabs">
+    <a class="auth-tab active" href="/login">Přihlášení</a>
+    <a class="auth-tab" href="/register">Registrace</a>
+    <a class="auth-tab" href="/pending">Čekání</a>
+    <a class="auth-tab" href="/forgot-password">Zapomenuté heslo</a>
+</nav>
+
 <div class="auth-card">
+    <div class="auth-logo">
+        <div class="auth-logo-icon">🏆</div>
+        <span class="auth-logo-name">Tipovačka 3.0</span>
+        <span class="auth-logo-sub">Tipovací liga</span>
+    </div>
+
     <h1>{{tr .Lang "login_title"}}</h1>
 
     {{if .Flash}}
@@ -17,12 +45,13 @@
             <label for="password">{{tr .Lang "login_password"}}</label>
             <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••" />
         </div>
-        <button type="submit" class="btn btn-primary">{{tr .Lang "login_submit"}}</button>
+        <button type="submit" class="btn btn-primary" style="width:100%">{{tr .Lang "login_submit"}}</button>
     </form>
 
-    <p class="auth-switch" style="margin-top:.5rem">
-        <a href="/forgot-password" style="font-size:0.88rem;color:var(--muted-d)">{{tr .Lang "login_forgot"}}</a>
+    <p class="auth-switch" style="margin-top:.6rem">
+        <a href="/forgot-password" style="font-size:.82rem;color:var(--muted-d)">{{tr .Lang "login_forgot"}}</a>
     </p>
+    <div class="auth-divider">nebo</div>
     <p class="auth-switch">
         {{tr .Lang "login_no_account"}} <a href="/register">{{tr .Lang "login_register_link"}}</a>
     </p>

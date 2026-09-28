@@ -129,11 +129,29 @@
               {{if $q.IsClosed}}🔓 Otevřít{{else}}🔒 Uzavřít{{end}}
             </button>
           </form>
-          <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete" style="margin:0"
-                onsubmit="return confirm('Smazat otázku a všechny její odpovědi?')">
-            <button type="submit" class="btn btn-sm" style="font-size:.76rem;color:#ef4444">🗑</button>
-          </form>
+          <button type="button" class="btn btn-sm eq-del-btn"
+                  data-qid="{{$q.ID}}" data-name="{{$q.Text}}"
+                  style="font-size:.76rem;color:#ef4444">🗑</button>
         </div>
+      </div>
+
+      {{/* ── Průvodce kroky ── */}}
+      <div style="display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;margin-bottom:.9rem;
+                  padding:.5rem .75rem;background:var(--bg3);border-radius:8px;font-size:.78rem">
+        <span style="display:inline-flex;align-items:center;gap:.3rem;color:var(--muted-d)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:1.35rem;height:1.35rem;border-radius:50%;background:rgba(99,102,241,.25);color:#818cf8;font-weight:700;font-size:.72rem;flex-shrink:0">1</span>
+          Vyber checkboxy → Sloučit podobné
+        </span>
+        <span style="color:var(--muted-d);padding:0 .2rem">›</span>
+        <span style="display:inline-flex;align-items:center;gap:.3rem;color:var(--muted-d)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:1.35rem;height:1.35rem;border-radius:50%;background:rgba(99,102,241,.25);color:#818cf8;font-weight:700;font-size:.72rem;flex-shrink:0">2</span>
+          Klikni <strong style="color:#818cf8">✓ Správná</strong> u správné odpovědi
+        </span>
+        <span style="color:var(--muted-d);padding:0 .2rem">›</span>
+        <span style="display:inline-flex;align-items:center;gap:.3rem;color:var(--muted-d)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:1.35rem;height:1.35rem;border-radius:50%;background:rgba(99,102,241,.25);color:#818cf8;font-weight:700;font-size:.72rem;flex-shrink:0">3</span>
+          Zadej body → <strong style="color:var(--accent)">Uložit body</strong>
+        </span>
       </div>
 
       {{/* ── Správná odpověď + chips ── */}}
@@ -179,9 +197,10 @@
         <button type="button" class="btn-apply-pts"
                 data-q-id="{{$q.ID}}"
                 data-body-input="body_{{$q.ID}}"
-                style="padding:.35rem .7rem;border-radius:6px;border:none;
-                       background:var(--accent);color:#fff;cursor:pointer;font-size:.82rem;font-weight:700;white-space:nowrap"
-                title="Přenese zadané body do správných skupin a uloží">
+                data-has-correct="{{if $q.CorrectAnswer}}1{{else}}0{{end}}"
+                style="padding:.35rem .7rem;border-radius:6px;border:none;font-size:.82rem;font-weight:700;white-space:nowrap;
+                       {{if $q.CorrectAnswer}}background:var(--accent);color:#fff;cursor:pointer{{else}}background:rgba(156,163,175,.2);color:var(--muted-d);cursor:not-allowed{{end}}"
+                title="{{if $q.CorrectAnswer}}Přenese zadané body do správných skupin a uloží{{else}}Nejdřív klikni na ✓ Správná u správné odpovědi (krok 2){{end}}">
           ✓ Uložit body
         </button>
         <span style="font-size:.75rem;color:var(--muted-d)">více variant oddělit <code style="background:var(--bg3);padding:0 3px;border-radius:3px">|</code></span>
@@ -230,7 +249,7 @@
             <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:60px">Počet</th>
             <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:70px">Shoda</th>
             <th style="padding:.4rem .5rem;text-align:center;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-d);width:90px">Body</th>
-            <th style="padding:.4rem .5rem;width:120px"></th>
+            <th style="padding:.4rem .5rem;width:120px;font-size:.72rem;color:#818cf8;font-weight:600">② sem →</th>
           </tr>
         </thead>
         <tbody>
@@ -402,6 +421,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ── ✓ Uložit body: AJAX, bez scrollu nahoru ─────────────────────────────
     document.querySelectorAll('.btn-apply-pts').forEach(function(btn) {
         btn.addEventListener('click', function() {
+            if (btn.dataset.hasCorrect === '0') {
+                alert('Nejdřív klikni na "✓ Správná" u správné odpovědi v tabulce níže (krok 2).');
+                return;
+            }
             var qId     = btn.dataset.qId;
             var bodyInp = document.getElementById(btn.dataset.bodyInput);
             var pts     = bodyInp ? parseInt(bodyInp.value, 10) : NaN;
@@ -433,7 +456,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     setTimeout(function() { btn.disabled = false; btn.textContent = origText; btn.style.background = ''; }, 2000);
                 } else {
                     btn.disabled = false; btn.textContent = origText;
-                    alert('Chyba: ' + (data.error || 'neznámá'));
+                    var msg = data.error === 'no_correct_answer'
+                        ? 'Nejdřív klikni na "✓ Správná" u správné odpovědi — teprve pak lze uložit body.'
+                        : ('Chyba: ' + (data.error || 'neznámá'));
+                    alert(msg);
                 }
             })
             .catch(function() { btn.disabled = false; btn.textContent = origText; alert('Chyba spojení.'); });
@@ -536,6 +562,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     var ci = document.getElementById(correctInpId);
                     var newVal = data.correct_answer || answerText;
                     if (ci) ci.value = newVal;
+                    // Aktivuj tlačítko Uložit body
+                    var applyBtn = document.querySelector('.btn-apply-pts[data-q-id="' + qId + '"]');
+                    if (applyBtn) {
+                        applyBtn.dataset.hasCorrect = '1';
+                        applyBtn.style.background = 'var(--accent)';
+                        applyBtn.style.color = '#fff';
+                        applyBtn.style.cursor = 'pointer';
+                        applyBtn.title = 'Přenese zadané body do správných skupin a uloží';
+                    }
                     // Aktualizuj chips
                     renderChips(qId, newVal.split('|').map(function(v){return v.trim();}).filter(Boolean));
                     // Aktualizuj viditelný input správné skupiny
@@ -680,6 +715,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (d.ok) { location.reload(); }
                     else { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba: ' + (d.error||'')); }
                 }).catch(function() { btn.disabled = false; btn.textContent = '🔀 Sloučit'; alert('Chyba spojení.'); });
+            });
+        });
+    });
+
+    document.querySelectorAll('.eq-del-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            _confirmSmazat({
+                title: '🗑 Smazat otázku',
+                name: btn.dataset.name,
+                warn: 'Smaže se otázka i všechny její odpovědi.',
+                btn: 'Smazat otázku'
+            }, function() {
+                var f = document.createElement('form'); f.method = 'post';
+                f.action = '/admin/extra/questions/' + btn.dataset.qid + '/delete';
+                var c = document.createElement('input'); c.type = 'hidden'; c.name = '_csrf';
+                c.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+                f.appendChild(c); document.body.appendChild(f); f.submit();
             });
         });
     });

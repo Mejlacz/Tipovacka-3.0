@@ -20,6 +20,7 @@
 </script>
 {{end}}
 <style>
+.admin-nav { display:flex; flex-wrap:wrap; gap:.35rem; margin-bottom:1.25rem; background:var(--bg2); border:1px solid var(--border-d); border-radius:10px; padding:.65rem .75rem; }
 .comp-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; margin-top:1rem; }
 .comp-card { background:var(--bg2); border:1px solid var(--border-d); border-left:4px solid var(--border-d); border-radius:10px; padding:1rem 1.1rem; display:flex; flex-direction:column; gap:.6rem; }
 .comp-card-active { border-left-color:#34d399; }
@@ -34,7 +35,7 @@
     <h1>⚙️ Admin panel</h1>
     <a href="/admin/competitions/new" class="btn btn-primary">+ Nová soutěž</a>
 </div>
-<div class="admin-nav" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
+<div class="admin-nav">
     <a href="/admin/teams"       class="btn btn-secondary">Týmy</a>
     <a href="/admin/roster"      class="btn btn-secondary">🗂️ Roster</a>
     <a href="/admin/users"       class="btn btn-secondary">Uživatelé</a>
@@ -43,11 +44,14 @@
     <a href="/admin/unscored"    class="btn btn-secondary">Bez výsledku</a>
     <a href="/admin/results"     class="btn btn-secondary">📊 Výsledky</a>
     <a href="/admin/audit"       class="btn btn-secondary">Audit log</a>
+    <a href="/admin/payments"    class="btn btn-secondary">💰 Platby</a>
     <a href="/admin/ocr"          class="btn btn-secondary">📋 Import výsledků</a>
     <a href="/admin/io"          class="btn btn-secondary">📦 Import / Export</a>
     {{if .User.IsOwner}}<a href="/admin/groups" class="btn btn-secondary">👥 Skupiny</a>{{end}}
     {{if .User.IsOwner}}<a href="/admin/history" class="btn btn-secondary">Historie</a>{{end}}
     <a href="/admin/manual"           class="btn btn-secondary">Manuál</a>
+    <a href="/admin/code-map"         class="btn btn-secondary">🗺️ Mapa kódu</a>
+    <a href="/admin/error-map"        class="btn btn-secondary">🔍 Mapa chyb</a>
     <a href="/admin/health-dashboard" class="btn btn-secondary">🩺 Health</a>
     <a href="/admin/time"             class="btn btn-secondary">🕐 Čas</a>
 </div>
@@ -75,12 +79,11 @@
         <div class="comp-card-meta">
             <span>{{.SportLabel}}</span>
             <span>📅 {{.Comp.Season}}</span>
-            <span>📋 {{.RoundsCount}} kol</span>
-            {{if .LastRound}}<span style="color:var(--text-d);font-weight:500">🏁 {{.LastRound.Name}}</span>{{end}}
+            <span>⚽ {{.MatchesCount}} zápasů</span>
         </div>
         <div class="comp-card-actions">
             <a href="/admin/competitions/{{.Comp.ID}}/edit" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">Upravit</a>
-            <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">Kola</a>
+            <a href="/admin/competitions/{{.Comp.ID}}/matches" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">⚽ Zápasy</a>
             <a href="/admin/competitions/{{.Comp.ID}}/teams" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">👥 Týmy</a>
             <a href="/admin/extra/{{.Comp.ID}}/answers" class="btn btn-sm btn-secondary" style="font-size:.78rem;padding:.2rem .5rem">🎯 Extra</a>
             <form method="post" action="/admin/competitions/{{.Comp.ID}}/toggle">

@@ -54,10 +54,9 @@ func AdminTipsExportCSV(w http.ResponseWriter, r *http.Request) {
 		FROM tips t
 		JOIN users u ON u.id = t.user_id
 		JOIN matches m ON m.id = t.match_id
-		JOIN rounds ro ON ro.id = m.round_id
 		JOIN teams ht ON ht.id = m.home_team_id
 		JOIN teams at ON at.id = m.away_team_id
-		WHERE ro.competition_id = $1
+		WHERE m.competition_id = $1
 		ORDER BY m.match_date, t.user_id`, compID)
 	if err != nil {
 		http.Error(w, "DB error", 500)
@@ -155,19 +154,18 @@ func AdminGeneralExportCSV(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "matches":
-		wr.Write([]string{"id", "soutez", "kolo", "datum", "domaci", "hoste", "score_d", "score_h", "odehra"}) //nolint
-		q := `SELECT m.id, c.name, ro.name, m.match_date, ht.name, at.name,
+		wr.Write([]string{"id", "soutez", "datum", "domaci", "hoste", "score_d", "score_h", "odehra"}) //nolint
+		q := `SELECT m.id, c.name, m.match_date, ht.name, at.name,
 		             m.home_score, m.away_score, m.is_finished
 		      FROM matches m
-		      JOIN rounds ro ON ro.id = m.round_id
-		      JOIN competitions c ON c.id = ro.competition_id
+		      JOIN competitions c ON c.id = m.competition_id
 		      JOIN teams ht ON ht.id = m.home_team_id
 		      JOIN teams at ON at.id = m.away_team_id
 		      WHERE 1=1`
 		args := []interface{}{}
 		idx := 1
 		if compID > 0 {
-			q += fmt.Sprintf(" AND ro.competition_id=$%d", idx)
+			q += fmt.Sprintf(" AND m.competition_id=$%d", idx)
 			args = append(args, compID)
 			idx++
 		}
@@ -180,11 +178,11 @@ func AdminGeneralExportCSV(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		for rows.Next() {
 			var id int
-			var compName, roundName, homeTeam, awayTeam string
+			var compName, homeTeam, awayTeam string
 			var matchDate *time.Time
 			var homeScore, awayScore *int
 			var isFinished bool
-			_ = rows.Scan(&id, &compName, &roundName, &matchDate, &homeTeam, &awayTeam, &homeScore, &awayScore, &isFinished)
+			_ = rows.Scan(&id, &compName, &matchDate, &homeTeam, &awayTeam, &homeScore, &awayScore, &isFinished)
 			dateStr := ""
 			if matchDate != nil {
 				dateStr = matchDate.Format("02.01.2006 15:04")
@@ -200,27 +198,26 @@ func AdminGeneralExportCSV(w http.ResponseWriter, r *http.Request) {
 			if isFinished {
 				finished = "Ano"
 			}
-			wr.Write([]string{strconv.Itoa(id), compName, roundName, dateStr, homeTeam, awayTeam, scoreH, scoreA, finished}) //nolint
+			wr.Write([]string{strconv.Itoa(id), compName, dateStr, homeTeam, awayTeam, scoreH, scoreA, finished}) //nolint
 		}
 
 	case "tips":
-		wr.Write([]string{"tip_id", "uzivatel", "soutez", "kolo", "zapas", "tip_d", "tip_h", "result_d", "result_h", "body"}) //nolint
-		q := `SELECT t.id, u.username, c.name, ro.name,
+		wr.Write([]string{"tip_id", "uzivatel", "soutez", "zapas", "tip_d", "tip_h", "result_d", "result_h", "body"}) //nolint
+		q := `SELECT t.id, u.username, c.name,
 		             ht.name || ' – ' || at.name,
 		             t.home_score, t.away_score,
 		             m.home_score, m.away_score, t.points
 		      FROM tips t
 		      JOIN users u ON u.id = t.user_id
 		      JOIN matches m ON m.id = t.match_id
-		      JOIN rounds ro ON ro.id = m.round_id
-		      JOIN competitions c ON c.id = ro.competition_id
+		      JOIN competitions c ON c.id = m.competition_id
 		      JOIN teams ht ON ht.id = m.home_team_id
 		      JOIN teams at ON at.id = m.away_team_id
 		      WHERE 1=1`
 		args := []interface{}{}
 		idx := 1
 		if compID > 0 {
-			q += fmt.Sprintf(" AND ro.competition_id=$%d", idx)
+			q += fmt.Sprintf(" AND m.competition_id=$%d", idx)
 			args = append(args, compID)
 			idx++
 		}
@@ -233,10 +230,10 @@ func AdminGeneralExportCSV(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		for rows.Next() {
 			var tipID int
-			var username, compName, roundName, matchName string
+			var username, compName, matchName string
 			var tipH, tipA int
 			var resH, resA, points *int
-			_ = rows.Scan(&tipID, &username, &compName, &roundName, &matchName, &tipH, &tipA, &resH, &resA, &points)
+			_ = rows.Scan(&tipID, &username, &compName, &matchName, &tipH, &tipA, &resH, &resA, &points)
 			resHStr, resAStr, ptsStr := "", "", ""
 			if resH != nil {
 				resHStr = strconv.Itoa(*resH)
@@ -247,7 +244,7 @@ func AdminGeneralExportCSV(w http.ResponseWriter, r *http.Request) {
 			if points != nil {
 				ptsStr = strconv.Itoa(*points)
 			}
-			wr.Write([]string{strconv.Itoa(tipID), username, compName, roundName, matchName, strconv.Itoa(tipH), strconv.Itoa(tipA), resHStr, resAStr, ptsStr}) //nolint
+			wr.Write([]string{strconv.Itoa(tipID), username, compName, matchName, strconv.Itoa(tipH), strconv.Itoa(tipA), resHStr, resAStr, ptsStr}) //nolint
 		}
 
 	case "users":
@@ -292,11 +289,10 @@ func AdminGeneralExportCSV(w http.ResponseWriter, r *http.Request) {
 		      FROM tips t
 		      JOIN users u ON u.id = t.user_id
 		      JOIN matches m ON m.id = t.match_id
-		      JOIN rounds ro ON ro.id = m.round_id
 		      WHERE t.points IS NOT NULL`
 		args := []interface{}{}
 		if compID > 0 {
-			q += " AND ro.competition_id=$1"
+			q += " AND m.competition_id=$1"
 			args = append(args, compID)
 		}
 		rows, _ := db.Pool.Query(ctx, q, args...)
@@ -430,19 +426,18 @@ func AdminGeneralExportXLSX(w http.ResponseWriter, r *http.Request) {
 	case "matches":
 		sheet := "Zápasy"
 		_ = f.SetSheetName("Sheet1", sheet)
-		writeHeader(sheet, []string{"ID", "Soutěž", "Kolo", "Datum", "Domácí", "Hosté", "Skóre", "Odehrán"})
-		q := `SELECT m.id, c.name, ro.name, m.match_date, ht.name, at.name,
+		writeHeader(sheet, []string{"ID", "Soutěž", "Datum", "Domácí", "Hosté", "Skóre", "Odehrán"})
+		q := `SELECT m.id, c.name, m.match_date, ht.name, at.name,
 		             m.home_score, m.away_score, m.is_finished
 		      FROM matches m
-		      JOIN rounds ro ON ro.id = m.round_id
-		      JOIN competitions c ON c.id = ro.competition_id
+		      JOIN competitions c ON c.id = m.competition_id
 		      JOIN teams ht ON ht.id = m.home_team_id
 		      JOIN teams at ON at.id = m.away_team_id
 		      WHERE 1=1`
 		args := []interface{}{}
 		idx := 1
 		if compID > 0 {
-			q += fmt.Sprintf(" AND ro.competition_id=$%d", idx)
+			q += fmt.Sprintf(" AND m.competition_id=$%d", idx)
 			args = append(args, compID)
 			idx++
 		}
@@ -456,11 +451,11 @@ func AdminGeneralExportXLSX(w http.ResponseWriter, r *http.Request) {
 		rowIdx := 2
 		for rows.Next() {
 			var id int
-			var compName, roundName, homeTeam, awayTeam string
+			var compName, homeTeam, awayTeam string
 			var matchDate *time.Time
 			var homeScore, awayScore *int
 			var isFinished bool
-			_ = rows.Scan(&id, &compName, &roundName, &matchDate, &homeTeam, &awayTeam, &homeScore, &awayScore, &isFinished)
+			_ = rows.Scan(&id, &compName, &matchDate, &homeTeam, &awayTeam, &homeScore, &awayScore, &isFinished)
 			dateStr := ""
 			if matchDate != nil {
 				dateStr = matchDate.Format("02.01.2006 15:04")
@@ -473,30 +468,29 @@ func AdminGeneralExportXLSX(w http.ResponseWriter, r *http.Request) {
 			if isFinished {
 				finished = "Ano"
 			}
-			writeRow(sheet, rowIdx, []interface{}{id, compName, roundName, dateStr, homeTeam, awayTeam, score, finished})
+			writeRow(sheet, rowIdx, []interface{}{id, compName, dateStr, homeTeam, awayTeam, score, finished})
 			rowIdx++
 		}
 
 	case "tips":
 		sheet := "Tipy"
 		_ = f.SetSheetName("Sheet1", sheet)
-		writeHeader(sheet, []string{"ID tipu", "Uživatel", "Soutěž", "Kolo", "Zápas", "Tip D", "Tip H", "Výsledek D", "Výsledek H", "Body"})
-		q := `SELECT t.id, u.username, c.name, ro.name,
+		writeHeader(sheet, []string{"ID tipu", "Uživatel", "Soutěž", "Zápas", "Tip D", "Tip H", "Výsledek D", "Výsledek H", "Body"})
+		q := `SELECT t.id, u.username, c.name,
 		             ht.name || ' – ' || at.name,
 		             t.home_score, t.away_score,
 		             m.home_score, m.away_score, t.points
 		      FROM tips t
 		      JOIN users u ON u.id = t.user_id
 		      JOIN matches m ON m.id = t.match_id
-		      JOIN rounds ro ON ro.id = m.round_id
-		      JOIN competitions c ON c.id = ro.competition_id
+		      JOIN competitions c ON c.id = m.competition_id
 		      JOIN teams ht ON ht.id = m.home_team_id
 		      JOIN teams at ON at.id = m.away_team_id
 		      WHERE 1=1`
 		args := []interface{}{}
 		idx := 1
 		if compID > 0 {
-			q += fmt.Sprintf(" AND ro.competition_id=$%d", idx)
+			q += fmt.Sprintf(" AND m.competition_id=$%d", idx)
 			args = append(args, compID)
 			idx++
 		}
@@ -510,10 +504,10 @@ func AdminGeneralExportXLSX(w http.ResponseWriter, r *http.Request) {
 		rowIdx := 2
 		for rows.Next() {
 			var tipID int
-			var username, compName, roundName, matchName string
+			var username, compName, matchName string
 			var tipH, tipA int
 			var resH, resA, points *int
-			_ = rows.Scan(&tipID, &username, &compName, &roundName, &matchName, &tipH, &tipA, &resH, &resA, &points)
+			_ = rows.Scan(&tipID, &username, &compName, &matchName, &tipH, &tipA, &resH, &resA, &points)
 			resHVal, resAVal, ptsVal := interface{}(""), interface{}(""), interface{}("")
 			if resH != nil {
 				resHVal = *resH
@@ -524,7 +518,7 @@ func AdminGeneralExportXLSX(w http.ResponseWriter, r *http.Request) {
 			if points != nil {
 				ptsVal = *points
 			}
-			writeRow(sheet, rowIdx, []interface{}{tipID, username, compName, roundName, matchName, tipH, tipA, resHVal, resAVal, ptsVal})
+			writeRow(sheet, rowIdx, []interface{}{tipID, username, compName, matchName, tipH, tipA, resHVal, resAVal, ptsVal})
 			rowIdx++
 		}
 
@@ -576,11 +570,10 @@ func AdminGeneralExportXLSX(w http.ResponseWriter, r *http.Request) {
 		      FROM tips t
 		      JOIN users u ON u.id = t.user_id
 		      JOIN matches m ON m.id = t.match_id
-		      JOIN rounds ro ON ro.id = m.round_id
 		      WHERE t.points IS NOT NULL`
 		args := []interface{}{}
 		if compID > 0 {
-			q += " AND ro.competition_id=$1"
+			q += " AND m.competition_id=$1"
 			args = append(args, compID)
 		}
 		rows, _ := db.Pool.Query(ctx, q, args...)
@@ -790,10 +783,7 @@ func AdminTipsImportSubmit(tmpl *template.Template) http.HandlerFunc {
 			// Verify match belongs to this competition
 			var matchCompID int
 			err = db.Pool.QueryRow(ctx,
-				`SELECT c.id FROM competitions c
-				 JOIN rounds r ON r.competition_id=c.id
-				 JOIN matches m ON m.round_id=r.id
-				 WHERE m.id=$1`, matchID).Scan(&matchCompID)
+				`SELECT competition_id FROM matches WHERE id=$1`, matchID).Scan(&matchCompID)
 			if err != nil || matchCompID != compID {
 				res.Errors = append(res.Errors, fmt.Sprintf("řádek %d: zápas %d nepatří do soutěže", lineNum+2, matchID))
 				res.Skipped++

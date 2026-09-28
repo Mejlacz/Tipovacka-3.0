@@ -48,27 +48,14 @@ type TeamStat struct {
 }
 
 func computeStats(ctx context.Context, user *models.User, comp *models.Competition) *StatsData {
-	// Round IDs
-	var roundIDs []int
-	rRows, _ := db.Pool.Query(ctx, `SELECT id FROM rounds WHERE competition_id=$1`, comp.ID)
-	for rRows.Next() {
-		var rid int
-		_ = rRows.Scan(&rid)
-		roundIDs = append(roundIDs, rid)
-	}
-	rRows.Close()
-	if len(roundIDs) == 0 {
-		return nil
-	}
-
 	// Finished matches
 	type MatchInfo struct {
-		ID         int
-		HomeTeamID int
-		AwayTeamID int
+		ID           int
+		HomeTeamID   int
+		AwayTeamID   int
 		HomeTeamName string
 		AwayTeamName string
-		MatchDate  *time.Time
+		MatchDate    *time.Time
 	}
 	finishedByID := map[int]MatchInfo{}
 	mRows, _ := db.Pool.Query(ctx,
@@ -76,7 +63,7 @@ func computeStats(ctx context.Context, user *models.User, comp *models.Competiti
 		   FROM matches m
 		   JOIN teams ht ON ht.id = m.home_team_id
 		   JOIN teams at ON at.id = m.away_team_id
-		  WHERE m.round_id = ANY($1) AND m.is_finished=TRUE`, roundIDs)
+		  WHERE m.competition_id = $1 AND m.is_finished=TRUE`, comp.ID)
 	for mRows.Next() {
 		var mi MatchInfo
 		_ = mRows.Scan(&mi.ID, &mi.HomeTeamID, &mi.AwayTeamID, &mi.HomeTeamName, &mi.AwayTeamName, &mi.MatchDate)
@@ -368,18 +355,8 @@ func StatsDetail(tmpl *template.Template) http.HandlerFunc {
 		allCompRows.Close()
 
 		// Compare users — others who tipped in this competition
-		var roundIDs []int
-		rRows, _ := db.Pool.Query(ctx, `SELECT id FROM rounds WHERE competition_id=$1`, compID)
-		for rRows.Next() {
-			var rid int
-			_ = rRows.Scan(&rid)
-			roundIDs = append(roundIDs, rid)
-		}
-		rRows.Close()
-
 		var compareUsers []*models.User
-		if len(roundIDs) > 0 {
-			// Přidat filtry is_blocked a is_inactive jen pokud sloupce existují
+		{
 			blockedFilter := ""
 			if userCols.IsBlocked {
 				blockedFilter = " AND u.is_blocked=FALSE"
@@ -387,13 +364,16 @@ func StatsDetail(tmpl *template.Template) http.HandlerFunc {
 			if userCols.IsInactive {
 				blockedFilter += " AND COALESCE(u.is_inactive,false)=false"
 			}
+			if userCols.IsHidden && !canSeeHidden(user) {
+				blockedFilter += " AND COALESCE(u.is_hidden,false)=false"
+			}
 			cuRows, _ := db.Pool.Query(ctx,
 				`SELECT DISTINCT u.id, u.username
 				   FROM users u
 				   JOIN tips t ON t.user_id = u.id
 				   JOIN matches m ON m.id = t.match_id
-				  WHERE m.round_id = ANY($1) AND u.id != $2`+blockedFilter+`
-				  ORDER BY u.username`, roundIDs, user.ID)
+				  WHERE m.competition_id = $1 AND u.id != $2`+blockedFilter+`
+				  ORDER BY u.username`, compID, user.ID)
 			for cuRows.Next() {
 				u := &models.User{}
 				_ = cuRows.Scan(&u.ID, &u.Username)
@@ -469,8 +449,7 @@ func StatsExtended(tmpl *template.Template) http.HandlerFunc {
 			JOIN matches m ON m.id = t.match_id
 			JOIN teams ht ON ht.id = m.home_team_id
 			JOIN teams at ON at.id = m.away_team_id
-			JOIN rounds ro ON ro.id = m.round_id
-			WHERE ro.competition_id = $1 AND t.user_id = $2
+			WHERE m.competition_id = $1 AND t.user_id = $2
 			  AND m.is_finished = TRUE AND t.points IS NOT NULL
 			ORDER BY m.match_date`, compID, targetUser.ID)
 
@@ -595,29 +574,22 @@ func StatsExtended(tmpl *template.Template) http.HandlerFunc {
 			if userCols.IsInactive {
 				blockedFilter += " AND COALESCE(u.is_inactive,false)=false"
 			}
-			var roundIDs []int
-			rRows, _ := db.Pool.Query(ctx, `SELECT id FROM rounds WHERE competition_id=$1`, compID)
-			for rRows.Next() {
-				var rid int
-				_ = rRows.Scan(&rid)
-				roundIDs = append(roundIDs, rid)
+			if userCols.IsHidden && !canSeeHidden(currentUser) {
+				blockedFilter += " AND COALESCE(u.is_hidden,false)=false"
 			}
-			rRows.Close()
-			if len(roundIDs) > 0 {
-				cuRows, _ := db.Pool.Query(ctx,
-					`SELECT DISTINCT u.id, u.username
-					   FROM users u
-					   JOIN tips t ON t.user_id = u.id
-					   JOIN matches m ON m.id = t.match_id
-					  WHERE m.round_id = ANY($1)`+blockedFilter+`
-					  ORDER BY u.username`, roundIDs)
-				for cuRows.Next() {
-					u := &models.User{}
-					_ = cuRows.Scan(&u.ID, &u.Username)
-					compareUsers = append(compareUsers, u)
-				}
-				cuRows.Close()
+			cuRows, _ := db.Pool.Query(ctx,
+				`SELECT DISTINCT u.id, u.username
+				   FROM users u
+				   JOIN tips t ON t.user_id = u.id
+				   JOIN matches m ON m.id = t.match_id
+				  WHERE m.competition_id = $1`+blockedFilter+`
+				  ORDER BY u.username`, compID)
+			for cuRows.Next() {
+				u := &models.User{}
+				_ = cuRows.Scan(&u.ID, &u.Username)
+				compareUsers = append(compareUsers, u)
 			}
+			cuRows.Close()
 		}
 
 		// All competitions for nav
@@ -723,22 +695,13 @@ func StatsVs(tmpl *template.Template) http.HandlerFunc {
 		duel := Duel{}
 
 		if sMe != nil && sOther != nil {
-			var roundIDs []int
-			rRows, _ := db.Pool.Query(ctx, `SELECT id FROM rounds WHERE competition_id=$1`, compID)
-			for rRows.Next() {
-				var rid int
-				_ = rRows.Scan(&rid)
-				roundIDs = append(roundIDs, rid)
-			}
-			rRows.Close()
-
-			if len(roundIDs) > 0 {
+			{
 				type FinMatch struct {
-					ID            int
-					HomeTeamName  string
-					AwayTeamName  string
-					HomeScore     int
-					AwayScore     int
+					ID           int
+					HomeTeamName string
+					AwayTeamName string
+					HomeScore    int
+					AwayScore    int
 				}
 				var finMatches []FinMatch
 				fmRows, _ := db.Pool.Query(ctx,
@@ -746,7 +709,7 @@ func StatsVs(tmpl *template.Template) http.HandlerFunc {
 					   FROM matches m
 					   JOIN teams ht ON ht.id = m.home_team_id
 					   JOIN teams at ON at.id = m.away_team_id
-					  WHERE m.round_id = ANY($1) AND m.is_finished=TRUE ORDER BY m.match_date`, roundIDs)
+					  WHERE m.competition_id = $1 AND m.is_finished=TRUE ORDER BY m.match_date`, compID)
 				for fmRows.Next() {
 					var fm FinMatch
 					_ = fmRows.Scan(&fm.ID, &fm.HomeTeamName, &fm.AwayTeamName, &fm.HomeScore, &fm.AwayScore)

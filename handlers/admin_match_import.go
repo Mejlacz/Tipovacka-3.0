@@ -15,16 +15,22 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/xuri/excelize/v2"
 
 	"tipovacka/db"
 	"tipovacka/middleware"
@@ -291,6 +297,128 @@ func parseMILine(line string, currentYear int, knownTeams []string) importMatchP
 	}
 }
 
+// ── čtení nahraného souboru (XLSX / CSV) ──────────────────────────────────────
+
+// miTimeSecRe: HH:MM:SS → pro normalizaci na HH:MM (Excel buňky času často mají sekundy)
+var miTimeSecRe = regexp.MustCompile(`^(\d{1,2}):(\d{2}):\d{2}$`)
+
+// readImportFileRows načte řádky z nahraného XLSX nebo CSV souboru.
+// XLSX: první list. CSV: autodetekce oddělovače (',' nebo ';').
+func readImportFileRows(file io.Reader, filename string) ([][]string, error) {
+	lower := strings.ToLower(strings.TrimSpace(filename))
+	switch {
+	case strings.HasSuffix(lower, ".xlsx"):
+		f, err := excelize.OpenReader(file)
+		if err != nil {
+			return nil, fmt.Errorf("nelze otevřít XLSX soubor: %w", err)
+		}
+		defer f.Close()
+		sheets := f.GetSheetList()
+		if len(sheets) == 0 {
+			return nil, fmt.Errorf("soubor neobsahuje žádný list")
+		}
+		// Vyber list s nejvíc tabulkovými řádky (≥2 neprázdné buňky) —
+		// soubor může mít víc listů a ten datový nemusí být první.
+		best, bestScore := sheets[0], -1
+		for _, s := range sheets {
+			rr, _ := f.GetRows(s)
+			score := 0
+			for _, row := range rr {
+				nonEmpty := 0
+				for _, c := range row {
+					if strings.TrimSpace(c) != "" {
+						nonEmpty++
+					}
+				}
+				if nonEmpty >= 2 {
+					score++
+				}
+			}
+			if score > bestScore {
+				best, bestScore = s, score
+			}
+		}
+		rows, err := f.GetRows(best)
+		if err != nil {
+			return nil, err
+		}
+		// Datum bývá uložené jako Excel "serial" číslo a zobrazí se podle
+		// locale (např. americky 06-30-26) → nejednoznačné. Přepiš takové
+		// buňky z RAW hodnoty na jednoznačné DD.MM.YYYY. Časy (03:00) a
+		// názvy týmů zůstávají z formátovaného výstupu beze změny.
+		rawRows, _ := f.GetRows(best, excelize.Options{RawCellValue: true})
+		for i := range rows {
+			for j := range rows[i] {
+				if i >= len(rawRows) || j >= len(rawRows[i]) {
+					continue
+				}
+				v, perr := strconv.ParseFloat(strings.TrimSpace(rawRows[i][j]), 64)
+				if perr != nil || v < 20000 || v >= 90000 {
+					continue // není to datumový serial
+				}
+				tm, terr := excelize.ExcelDateToTime(v, false)
+				if terr != nil {
+					continue
+				}
+				if v != math.Floor(v) {
+					rows[i][j] = tm.Format("02.01.2006 15:04")
+				} else {
+					rows[i][j] = tm.Format("02.01.2006")
+				}
+			}
+		}
+		return rows, nil
+	case strings.HasSuffix(lower, ".csv"):
+		data, err := io.ReadAll(file)
+		if err != nil {
+			return nil, err
+		}
+		// Detekce oddělovače — český Excel exportuje CSV se středníkem
+		delim := ','
+		if bytes.Count(data, []byte(";")) > bytes.Count(data, []byte(",")) {
+			delim = ';'
+		}
+		rd := csv.NewReader(bytes.NewReader(data))
+		rd.Comma = delim
+		rd.FieldsPerRecord = -1
+		rd.LazyQuotes = true
+		return rd.ReadAll()
+	default:
+		return nil, fmt.Errorf("nepodporovaný formát — použij .xlsx nebo .csv")
+	}
+}
+
+// xlsxRowsToText převede řádky tabulky na text pro řádkový parser.
+// Buňky jednoho řádku spojí tabulátorem, vynechá prázdné a hlavičkové řádky
+// (řádek bez jediné číslice = hlavička jako "Datum / Domácí / Hosté / Čas").
+func xlsxRowsToText(rows [][]string) string {
+	var sb strings.Builder
+	for _, row := range rows {
+		var cells []string
+		hasDigit := false
+		for _, c := range row {
+			c = strings.TrimSpace(c)
+			if c == "" {
+				continue
+			}
+			// Normalizuj čas HH:MM:SS → HH:MM
+			if m := miTimeSecRe.FindStringSubmatch(c); m != nil {
+				c = m[1] + ":" + m[2]
+			}
+			if !hasDigit && strings.ContainsAny(c, "0123456789") {
+				hasDigit = true
+			}
+			cells = append(cells, c)
+		}
+		if len(cells) == 0 || !hasDigit {
+			continue // prázdný nebo hlavičkový řádek
+		}
+		sb.WriteString(strings.Join(cells, "\t"))
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
 // parseMatchImportText parsuje celý vložený text.
 func parseMatchImportText(text string, knownTeams []string) []importMatchParsed {
 	currentYear := time.Now().In(pragueLocation).Year()
@@ -305,16 +433,15 @@ func parseMatchImportText(text string, knownTeams []string) []importMatchParsed 
 	return results
 }
 
-// ── loadCompTeams: týmy soutěže pro daný round ────────────────────────────────
+// ── loadCompTeams: týmy soutěže ──────────────────────────────────────────────
 
-func loadCompTeams(ctx context.Context, roundID int) []string {
+func loadCompTeams(ctx context.Context, compID int) []string {
 	rows, _ := db.Pool.Query(ctx,
 		`SELECT COALESCE(t.display_name, t.name)
 		   FROM teams t
 		   JOIN competition_teams ct ON ct.team_id = t.id
-		   JOIN rounds r ON r.competition_id = ct.competition_id
-		  WHERE r.id = $1
-		  ORDER BY t.name`, roundID)
+		  WHERE ct.competition_id = $1
+		  ORDER BY t.name`, compID)
 	var teams []string
 	for rows.Next() {
 		var name string
@@ -328,11 +455,11 @@ func loadCompTeams(ctx context.Context, roundID int) []string {
 
 // ── session helpers ───────────────────────────────────────────────────────────
 
-func miSetSession(w http.ResponseWriter, r *http.Request, matches []importMatchParsed, roundID int) {
+func miSetSession(w http.ResponseWriter, r *http.Request, matches []importMatchParsed, compID int) {
 	sess := middleware.GetSession(r)
 	b, _ := json.Marshal(matches)
-	sess.Values["mi_parsed"] = string(b)
-	sess.Values["mi_round_id"] = roundID
+	sess.Values["mi_parsed"]  = string(b)
+	sess.Values["mi_comp_id"] = compID
 	_ = sess.Save(r, w)
 }
 
@@ -342,37 +469,81 @@ func miGetSession(r *http.Request) ([]importMatchParsed, int) {
 	if v, ok := sess.Values["mi_parsed"].(string); ok {
 		_ = json.Unmarshal([]byte(v), &matches)
 	}
-	roundID := 0
-	if v, ok := sess.Values["mi_round_id"].(int); ok {
-		roundID = v
+	compID := 0
+	if v, ok := sess.Values["mi_comp_id"].(int); ok {
+		compID = v
 	}
-	return matches, roundID
+	return matches, compID
 }
 
 func miClearSession(w http.ResponseWriter, r *http.Request) {
 	sess := middleware.GetSession(r)
 	delete(sess.Values, "mi_parsed")
-	delete(sess.Values, "mi_round_id")
+	delete(sess.Values, "mi_comp_id")
 	_ = sess.Save(r, w)
 }
 
-// ── loadActiveRounds ─ sdílený helper pro dropdown ────────────────────────────
+// ── loadActiveComps ─ sdílený helper pro dropdown ────────────────────────────
 
-func loadActiveRounds(ctx context.Context) []ocrRoundItem {
+func loadActiveComps(ctx context.Context) []ocrCompItem {
 	rows, _ := db.Pool.Query(ctx,
-		`SELECT r.id, r.name, c.name, c.season
-		   FROM rounds r
-		   JOIN competitions c ON c.id = r.competition_id
-		  WHERE COALESCE(c.is_active, false) = true
-		  ORDER BY c.sort_order ASC NULLS LAST, c.id DESC, r.id DESC`)
-	var rounds []ocrRoundItem
+		`SELECT id, name, season, COALESCE(sport,'football')
+		   FROM competitions
+		  WHERE COALESCE(is_active, false) = true
+		  ORDER BY COALESCE(sort_order,9999) ASC, id DESC`)
+	var comps []ocrCompItem
 	for rows.Next() {
-		var ri ocrRoundItem
-		_ = rows.Scan(&ri.ID, &ri.Name, &ri.CompName, &ri.CompSeason)
-		rounds = append(rounds, ri)
+		var ci ocrCompItem
+		_ = rows.Scan(&ci.ID, &ci.Name, &ci.Season, &ci.Sport)
+		comps = append(comps, ci)
 	}
 	rows.Close()
-	return rounds
+	return comps
+}
+
+// Deprecated: kept for any remaining callers — wraps loadActiveComps
+func loadActiveRounds(ctx context.Context) []ocrCompItem {
+	return loadActiveComps(ctx)
+}
+
+// ── GET /admin/matches/import/template ─ stažení vzorového XLSX ───────────────
+
+func AdminMatchImportTemplate(w http.ResponseWriter, r *http.Request) {
+	if admin := RequireAdmin(w, r); admin == nil {
+		return
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+	sheet := f.GetSheetName(0)
+
+	headers := []string{"Datum", "Domácí", "Hosté", "Čas"}
+	for i, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		_ = f.SetCellValue(sheet, cell, h)
+	}
+	// Ukázkové řádky — admin je přepíše svými zápasy
+	examples := [][]string{
+		{"15.5.2026", "Arsenal", "Chelsea", "18:00"},
+		{"16.5.2026", "Baník Ostrava", "Sigma Olomouc", "15:30"},
+	}
+	for ri, row := range examples {
+		for ci, val := range row {
+			cell, _ := excelize.CoordinatesToCellName(ci+1, ri+2)
+			_ = f.SetCellValue(sheet, cell, val)
+		}
+	}
+	// Tučná hlavička + šířky sloupců
+	if style, err := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}}); err == nil {
+		_ = f.SetCellStyle(sheet, "A1", "D1", style)
+	}
+	_ = f.SetColWidth(sheet, "A", "A", 14)
+	_ = f.SetColWidth(sheet, "B", "C", 22)
+	_ = f.SetColWidth(sheet, "D", "D", 10)
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", `attachment; filename="vzor_import_zapasu.xlsx"`)
+	_ = f.Write(w)
 }
 
 // ── GET /admin/matches/import ─────────────────────────────────────────────────
@@ -384,9 +555,9 @@ func AdminMatchImportForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		RenderTemplate(w, r, tmpl, "admin/match_import.html", TemplateData{
-			"User":   admin,
-			"Rounds": loadActiveRounds(context.Background()),
-			"Error":  nil,
+			"User":  admin,
+			"Comps": loadActiveComps(context.Background()),
+			"Error": nil,
 		})
 	}
 }
@@ -399,46 +570,67 @@ func AdminMatchImportParse(tmpl *template.Template) http.HandlerFunc {
 		if admin == nil {
 			return
 		}
-		if err := r.ParseForm(); err != nil {
+
+		ctx := context.Background()
+		comps := loadActiveComps(ctx)
+
+		showError := func(msg string) {
+			RenderTemplate(w, r, tmpl, "admin/match_import.html", TemplateData{
+				"User":  admin,
+				"Comps": comps,
+				"Error": msg,
+			})
+		}
+
+		// Podpora textu (paste) i nahrání souboru (multipart)
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			if err := r.ParseMultipartForm(16 << 20); err != nil {
+				showError("Nelze načíst formulář: " + err.Error())
+				return
+			}
+		} else if err := r.ParseForm(); err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 			return
 		}
 
-		ctx := context.Background()
-		rounds := loadActiveRounds(ctx)
-
-		showError := func(msg string) {
-			RenderTemplate(w, r, tmpl, "admin/match_import.html", TemplateData{
-				"User":   admin,
-				"Rounds": rounds,
-				"Error":  msg,
-			})
-		}
-
-		roundID, _ := strconv.Atoi(r.FormValue("round_id"))
+		compID, _ := strconv.Atoi(r.FormValue("competition_id"))
 		text := strings.TrimSpace(r.FormValue("text"))
 
-		if roundID == 0 {
-			showError("Vyber kolo.")
+		// Pokud byl nahrán soubor (.xlsx/.csv), má přednost před textem
+		if file, header, ferr := r.FormFile("import_file"); ferr == nil {
+			defer file.Close()
+			fileRows, rerr := readImportFileRows(file, header.Filename)
+			if rerr != nil {
+				showError("Chyba souboru: " + rerr.Error())
+				return
+			}
+			text = strings.TrimSpace(xlsxRowsToText(fileRows))
+			if text == "" {
+				showError("V souboru se nenašly žádné zápasy. Zkontroluj, že obsahuje sloupce s datem, časem a názvy týmů.")
+				return
+			}
+		}
+
+		if compID == 0 {
+			showError("Vyber soutěž.")
 			return
 		}
 		if text == "" {
-			showError("Vložte text se zápasy.")
+			showError("Vlož zápasy textem nebo nahraj soubor (.xlsx / .csv).")
 			return
 		}
 
-		// Ověř kolo
-		var roundName, compName string
+		// Ověř soutěž
+		var compName string
 		err := db.Pool.QueryRow(ctx,
-			`SELECT r.name, c.name FROM rounds r JOIN competitions c ON c.id = r.competition_id WHERE r.id = $1`,
-			roundID).Scan(&roundName, &compName)
+			`SELECT name FROM competitions WHERE id = $1`, compID).Scan(&compName)
 		if err != nil {
-			showError("Kolo nenalezeno.")
+			showError("Soutěž nenalezena.")
 			return
 		}
 
 		// Načti týmy soutěže pro chytré rozpoznávání
-		knownTeams := loadCompTeams(ctx, roundID)
+		knownTeams := loadCompTeams(ctx, compID)
 
 		parsed := parseMatchImportText(text, knownTeams)
 		if len(parsed) == 0 {
@@ -446,14 +638,16 @@ func AdminMatchImportParse(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		miSetSession(w, r, parsed, roundID)
-
+		// Pozn.: data NEukládáme do session (cookie store má limit ~4 KB a
+		// velký rozpis by přetekl → confirm by nedostal nic). Místo toho
+		// pošleme původní text + compID skrytými poli a na confirm znovu
+		// naparsujeme.
 		RenderTemplate(w, r, tmpl, "admin/match_import_preview.html", TemplateData{
-			"User":      admin,
-			"Parsed":    parsed,
-			"RoundID":   roundID,
-			"RoundName": roundName,
-			"CompName":  compName,
+			"User":     admin,
+			"Parsed":   parsed,
+			"CompID":   compID,
+			"CompName": compName,
+			"Text":     text,
 		})
 	}
 }
@@ -466,42 +660,62 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsed, roundID := miGetSession(r)
-	miClearSession(w, r)
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
+		return
+	}
+	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
+	text := strings.TrimSpace(r.FormValue("text"))
 
-	if len(parsed) == 0 || roundID == 0 {
+	if text == "" || compID == 0 {
+		LogAction(&admin.ID, admin.Username, "match_import", "competition", nil,
+			"Import zápasů NEPROVEDEN — chybí data (prázdný text nebo nevybraná soutěž)", nil, nil)
+		middleware.SetFlash(w, r, "error", "Chybí data k importu — zkus to prosím znovu.")
 		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
 		return
 	}
 
 	ctx := context.Background()
 
-	var compID int
-	sport := "football"
-	if err := db.Pool.QueryRow(ctx,
-		`SELECT r.competition_id, COALESCE(c.sport,'football')
-		   FROM rounds r JOIN competitions c ON c.id = r.competition_id
-		  WHERE r.id = $1`, roundID).Scan(&compID, &sport); err != nil {
-		middleware.SetFlash(w, r, "error", "Kolo nenalezeno.")
+	var compName string
+	_ = db.Pool.QueryRow(ctx, `SELECT name FROM competitions WHERE id=$1`, compID).Scan(&compName)
+
+	// Znovu naparsuj (stejně jako v náhledu) — bez round-tripu přes cookie
+	knownTeams := loadCompTeams(ctx, compID)
+	parsed := parseMatchImportText(text, knownTeams)
+	if len(parsed) == 0 {
+		LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+			"Import zápasů NEPROVEDEN — nerozpoznán žádný zápas (soutěž "+compName+")", nil, nil)
+		middleware.SetFlash(w, r, "error", "Nepodařilo se rozpoznat žádné zápasy.")
 		http.Redirect(w, r, "/admin/matches/import", http.StatusSeeOther)
 		return
 	}
+
+	sport := "football"
+	_ = db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(sport,'football') FROM competitions WHERE id=$1`, compID).Scan(&sport)
 
 	created, skipped, errCount := 0, 0, 0
 	for _, m := range parsed {
 		if m.ParseError != "" {
 			errCount++
+			LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+				"Import zápasu PŘESKOČEN (chyba parsování): '"+m.RawLine+"' — "+m.ParseError, nil, nil)
 			continue
 		}
 
 		homeID, _ := upsertTeamByName(ctx, m.HomeTeam, sport)
 		if homeID == 0 {
 			errCount++
+			LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+				"Import zápasu CHYBA — nepodařilo se vytvořit/najít domácí tým '"+m.HomeTeam+"'", nil, nil)
 			continue
 		}
 		awayID, _ := upsertTeamByName(ctx, m.AwayTeam, sport)
 		if awayID == 0 {
 			errCount++
+			LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+				"Import zápasu CHYBA — nepodařilo se vytvořit/najít hostující tým '"+m.AwayTeam+"'", nil, nil)
 			continue
 		}
 
@@ -514,8 +728,8 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE round_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			roundID, homeID, awayID).Scan(&existingID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
+			compID, homeID, awayID).Scan(&existingID)
 		if existingID > 0 {
 			if m.ParsedDate != nil && *m.ParsedDate != "" {
 				t, err := time.ParseInLocation("2006-01-02T15:04", *m.ParsedDate, pragueLocation)
@@ -524,6 +738,8 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			skipped++
+			LogAction(&admin.ID, admin.Username, "match_import", "match", &existingID,
+				"Import zápasu PŘESKOČEN (duplicita): "+m.HomeTeam+" vs "+m.AwayTeam+" ("+m.DateStr+")", nil, nil)
 			continue
 		}
 
@@ -534,16 +750,28 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 				matchDate = &t
 			}
 		}
-		_, err := db.Pool.Exec(ctx,
-			`INSERT INTO matches (round_id, home_team_id, away_team_id, match_date, is_finished)
-			 VALUES ($1,$2,$3,$4,false)`,
-			roundID, homeID, awayID, matchDate)
+		var newID int
+		err := db.Pool.QueryRow(ctx,
+			`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, is_finished)
+			 VALUES ($1,$2,$3,$4,false) RETURNING id`,
+			compID, homeID, awayID, matchDate).Scan(&newID)
 		if err != nil {
 			errCount++
+			LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID,
+				"Import zápasu CHYBA při zápisu do DB: "+m.HomeTeam+" vs "+m.AwayTeam+" ("+m.DateStr+") — "+err.Error(), nil, nil)
 			continue
 		}
 		created++
+		newVal := fmt.Sprintf(`{"competition_id":%d,"home_team_id":%d,"away_team_id":%d,"date":%q}`,
+			compID, homeID, awayID, m.DateStr)
+		LogAction(&admin.ID, admin.Username, "match_import", "match", &newID,
+			"Import zápasu: "+m.HomeTeam+" vs "+m.AwayTeam+" ("+m.DateStr+", soutěž "+compName+")", nil, &newVal)
 	}
+
+	// Souhrnný záznam celého importu
+	summary := fmt.Sprintf("Import zápasů do soutěže %s: %d vytvořeno, %d přeskočeno (duplicity), %d chyb (z %d řádků)",
+		compName, created, skipped, errCount, len(parsed))
+	LogAction(&admin.ID, admin.Username, "match_import", "competition", &compID, summary, nil, nil)
 
 	msg := fmt.Sprintf("Import dokončen: <b>%d</b> nových zápasů", created)
 	if skipped > 0 {
@@ -554,7 +782,7 @@ func AdminMatchImportConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 	msg += "."
 	middleware.SetFlash(w, r, "ok", msg)
-	http.Redirect(w, r, "/admin/rounds/"+strconv.Itoa(roundID)+"/matches", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/competitions/"+strconv.Itoa(compID)+"/matches", http.StatusSeeOther)
 }
 
 // ── POST /admin/matches/import/cancel ────────────────────────────────────────

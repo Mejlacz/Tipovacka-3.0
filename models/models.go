@@ -66,18 +66,9 @@ type Competition struct {
 	Sport         string
 	SortOrder     *int
 	FdCode        string     // football-data.org kód pro auto-fetch výsledků (např. CL, PL)
+	Deadline      *time.Time // NULL = tipování otevřeno do začátku každého zápasu
 	ExtraDeadline *time.Time // NULL = auto (první zápas soutěže), jinak admin override
 	ExtraRevealAt *time.Time // NULL = zveřejní se ve stejný čas jako deadline; jinak konkrétní čas
-}
-
-// ─── Round ────────────────────────────────────────────────────────────────────
-
-type Round struct {
-	ID            int
-	CompetitionID int
-	Name          string
-	Deadline      *time.Time
-	IsActive      bool
 }
 
 // ─── Team ─────────────────────────────────────────────────────────────────────
@@ -103,23 +94,21 @@ func (t *Team) Display() string {
 // ─── Match ────────────────────────────────────────────────────────────────────
 
 type Match struct {
-	ID           int
-	RoundID      int
-	HomeTeamID   int
-	AwayTeamID   int
-	HomeScore    *int
-	AwayScore    *int
-	MatchDate    *time.Time
-	IsFinished   bool
-	NotifySent   bool
+	ID            int
+	CompetitionID int
+	HomeTeamID    int
+	AwayTeamID    int
+	HomeScore     *int
+	AwayScore     *int
+	MatchDate     *time.Time
+	IsFinished    bool
+	NotifySent    bool
 	// Joined fields (přes JOIN, ne vždy naplněny)
 	HomeTeam     *Team
 	AwayTeam     *Team
-	Round        *Round
 	// Flattened JOIN fields (rychlé query bez objektů)
 	HomeTeamName string
 	AwayTeamName string
-	RoundName    string
 }
 
 // ─── Tip ──────────────────────────────────────────────────────────────────────

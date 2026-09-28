@@ -1,10 +1,10 @@
 <div class="page-header">
-    <h1 style="font-size:1.15rem">{{if eq .Comp.Sport "hockey"}}🏒{{else}}⚽{{end}} Týmy soutěže: {{.Comp.Name}} <small style="font-size:.75rem;font-weight:400;color:var(--muted-d)">{{.Comp.Season}}</small></h1>
+    <h1 style="font-size:1.15rem">{{if eq .Comp.Sport "hockey"}}🏒{{else}}⚽{{end}} Soupiska: {{.Comp.Name}} <small style="font-size:.75rem;font-weight:400;color:var(--muted-d)">{{.Comp.Season}}</small></h1>
     <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
 </div>
 <nav style="display:flex;gap:.35rem;margin-bottom:1rem;flex-wrap:wrap">
     <a href="/admin/teams"  class="btn btn-sm btn-secondary" style="font-size:.78rem">📋 Katalog týmů</a>
-    <a href="/admin/roster" class="btn btn-sm btn-secondary" style="font-size:.78rem">🗂️ Roster (matice)</a>
+    <a href="/admin/roster" class="btn btn-sm btn-secondary" style="font-size:.78rem">🗂️ Přehled (matice)</a>
     <span class="btn btn-sm btn-primary" style="font-size:.78rem;cursor:default">👥 {{.Comp.Name}}</span>
 </nav>
 
@@ -15,169 +15,434 @@
 {{end}}
 
 <style>
-.team-check-card {
-    display:flex;align-items:center;gap:.45rem;
-    padding:.35rem .7rem;border:2px solid var(--border-d);border-radius:8px;
-    cursor:pointer;background:var(--bg2);
-    transition:background .12s,border-color .12s;
-    font-size:.85rem;white-space:nowrap;user-select:none
+.dnd-workspace {
+    display: grid;
+    grid-template-columns: 2fr 3fr;
+    gap: 1rem;
+    align-items: start;
 }
-.team-check-card.is-selected {
-    border-color:#34d399;background:rgba(52,211,153,.1)
+.dnd-panel {
+    background: var(--bg2);
+    border: 1px solid var(--border-d);
+    border-radius: 12px;
+    overflow: hidden;
 }
-.team-check-card input[type=checkbox] { cursor:pointer;flex-shrink:0 }
-.grp-header { margin:.9rem 0 .35rem;display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;font-size:.88rem }
-.grp-header .grp-label { font-weight:700;color:var(--text-d) }
-.grp-header .grp-count { color:#34d399;font-size:.78rem;font-weight:600 }
-.grp-header .grp-count-off { color:var(--muted-d);font-size:.78rem }
-.team-row { display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem }
+.dnd-panel-head {
+    padding: .6rem .9rem;
+    border-bottom: 1px solid var(--border-d);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    background: var(--bg2);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+.dnd-panel-title { font-size: .88rem; font-weight: 700; }
+.dnd-count {
+    font-size: .7rem; padding: .1rem .5rem; border-radius: 99px;
+    background: var(--bg3); color: var(--muted-d); border: 1px solid var(--border-d); font-weight: 600;
+}
+.dnd-count.has-items { background: var(--bg3); color: var(--text-d); border-color: rgba(99,102,241,.4); }
+.dnd-hint-text { font-size: .73rem; color: var(--muted-d); margin-left: auto; }
+
+.dnd-panel-body {
+    padding: .55rem .75rem .75rem;
+    max-height: 72vh;
+    overflow-y: auto;
+}
+.dnd-drop-zone {
+    padding: .55rem .75rem .75rem;
+    max-height: 72vh;
+    overflow-y: auto;
+    min-height: 140px;
+    transition: background .12s;
+}
+.dnd-drop-zone.drag-over { background: rgba(99,102,241,.06); }
+
+.dnd-search {
+    display: block; width: 100%; margin-bottom: .55rem;
+    background: var(--bg3); color: var(--text-d);
+    border: 1px solid var(--border-d); border-radius: 7px;
+    padding: .38rem .65rem; font-size: .84rem;
+}
+.dnd-search:focus { outline: none; border-color: rgba(99,102,241,.55); }
+
+.cat-section { margin-bottom: .35rem; }
+.cat-head {
+    font-size: .68rem; font-weight: 700; color: var(--muted-d);
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: .5rem 0 .3rem; display: flex; align-items: center; gap: .4rem;
+}
+.cat-head:first-child { padding-top: 0; }
+.cat-chips { display: flex; flex-wrap: wrap; gap: .35rem; min-height: 4px; }
+
+/* Team chip */
+.t-chip {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .28rem .55rem; border-radius: 7px;
+    background: var(--bg3); border: 1px solid var(--border-d);
+    font-size: .82rem; font-weight: 500; color: var(--text-d);
+    cursor: grab; user-select: none;
+    transition: background .1s, border-color .1s, box-shadow .1s;
+    white-space: nowrap; max-width: 220px;
+}
+.t-chip:hover { background: var(--bg2); border-color: rgba(99,102,241,.5); }
+.t-chip.dragging { opacity: .3; pointer-events: none; }
+.t-chip.in-roster { background: rgba(99,102,241,.1); border-color: rgba(99,102,241,.45); }
+.t-chip.in-roster:hover { background: rgba(99,102,241,.16); border-color: rgba(99,102,241,.7); }
+.t-chip img { width: 1rem; height: 1rem; object-fit: contain; flex-shrink: 0; }
+.t-chip-name { overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.t-chip-comps {
+    font-size: .65rem; color: #a5b4fc; opacity: .75;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;
+}
+.t-chip-x {
+    flex-shrink: 0; color: var(--muted-d); font-size: .85rem; line-height: 1;
+    padding: .05rem .15rem; border-radius: 3px; cursor: pointer; margin-left: .05rem;
+}
+.t-chip-x:hover { background: rgba(248,113,113,.2); color: #f87171; }
+
+/* Drop hint for empty right panel */
+.drop-hint {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: .4rem; padding: 2.5rem 1rem;
+    border: 1.5px dashed var(--border-d); border-radius: 10px;
+    color: var(--muted-d); font-size: .85rem; text-align: center;
+    transition: border-color .12s, color .12s;
+}
+.dnd-drop-zone.drag-over .drop-hint { border-color: rgba(99,102,241,.5); color: var(--accent); }
+.drop-hint-icon { font-size: 1.75rem; opacity: .5; }
+
+/* Status toast */
+#dnd-status {
+    position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 200;
+    background: var(--bg3); border: 1px solid var(--border-d);
+    border-radius: 8px; padding: .45rem .9rem;
+    font-size: .82rem; color: var(--muted-d);
+    opacity: 0; pointer-events: none;
+    transition: opacity .18s;
+}
+#dnd-status.visible { opacity: 1; }
+#dnd-status.ok { border-color: rgba(52,211,153,.45); color: #34d399; }
+#dnd-status.err { border-color: rgba(248,113,113,.45); color: #f87171; }
+
+/* Clear all button */
+.btn-clear-roster {
+    font-size: .72rem; padding: .2rem .6rem; border-radius: 6px;
+    border: 1px solid var(--border-d); background: none; color: var(--muted-d);
+    cursor: pointer; margin-left: auto;
+}
+.btn-clear-roster:hover { border-color: rgba(248,113,113,.5); color: #f87171; }
 </style>
 
-<form method="post" action="/admin/competitions/{{.Comp.ID}}/teams" id="roster-form">
-<input type="hidden" name="_csrf" value="{{.CSRFToken}}">
-
-{{/* ── Toolbar ── */}}
-<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:.6rem;align-items:center">
-    <input type="text" id="team-search" placeholder="🔍 Hledat tým…"
-           oninput="filterTeams()"
-           style="width:200px;background:var(--bg3);color:var(--text-d);border:1px solid var(--border-d);border-radius:6px;padding:.35rem .6rem;font-size:.85rem" />
-    <button type="button" class="btn btn-secondary btn-sm" onclick="selectAll(true)">Vybrat vše</button>
-    <button type="button" class="btn btn-secondary btn-sm" onclick="selectAll(false)">Odznačit vše</button>
-    <button type="button" class="btn btn-secondary btn-sm" onclick="selectVisible(true)">Vybrat viditelné</button>
-    <button type="submit" class="btn btn-primary btn-sm">💾 Uložit roster</button>
-    <span id="count-badge" style="color:var(--muted-d);font-size:.85rem;margin-left:auto"></span>
-</div>
-
-{{/* ── Sport filter note ── */}}
-<p style="font-size:.8rem;color:var(--muted-d);margin:.25rem 0 .9rem">
-    {{if eq .Comp.Sport "hockey"}}🏒 Zobrazují se pouze hokejové týmy.{{else}}⚽ Zobrazují se pouze fotbalové týmy.{{end}}
-    Chybí tým? <a href="/admin/teams">Přidat do katalogu →</a>
+<p style="font-size:.78rem;color:var(--muted-d);margin:0 0 .75rem">
+    {{if eq .Comp.Sport "hockey"}}🏒 Hokejové{{else}}⚽ Fotbalové{{end}} týmy z katalogu.
+    Přetáhni týmy myší ze seznamu vlevo do soupisky soutěže vpravo.
+    Chybí tým? <a href="/admin/teams" style="color:var(--accent)">Přidat do katalogu →</a>
 </p>
 
-{{/* ── Skupiny podle kategorie ── */}}
-{{if .Groups}}
-{{range .Groups}}
-{{$cat := .Category}}
-<div class="grp-header" data-grp="{{$cat}}">
-    <span class="grp-label">{{if $cat}}{{$cat}}{{else}}Bez kategorie{{end}}</span>
-    <span class="grp-count" id="gc-{{$cat}}"></span>
-    <button type="button" class="btn btn-secondary" style="font-size:.72rem;padding:.1rem .5rem"
-            onclick="selectGroup('{{$cat}}', true)">vše</button>
-    <button type="button" class="btn btn-secondary" style="font-size:.72rem;padding:.1rem .5rem"
-            onclick="selectGroup('{{$cat}}', false)">žádné</button>
-</div>
-<div class="team-row" id="tr-{{$cat}}">
-{{range .Teams}}
-{{$comps := index $.TeamCompNames .ID}}
-<label class="team-check-card{{if index $.SelectedIDs .ID}} is-selected{{end}}"
-       data-name="{{lower .Name}}"
-       data-cat="{{$cat}}"
-       title="{{.Name}}{{if $comps}} — také v: {{range $i,$c := $comps}}{{if $i}}, {{end}}{{$c}}{{end}}{{end}}">
-    <input type="checkbox" name="team_ids" value="{{.ID}}"
-           {{if index $.SelectedIDs .ID}}checked{{end}}
-           onchange="updateCard(this)" />
-    {{if .LogoURL}}<img src="{{strVal .LogoURL}}" alt="" style="width:1.2rem;height:1.2rem;object-fit:contain;flex-shrink:0">{{end}}
-    <span>{{.Name}}</span>
-    <span style="font-size:.7rem;opacity:.45">{{if eq .Sport "hockey"}}🏒{{else if eq .Sport "football"}}⚽{{end}}</span>
-    {{if .Alias}}<small style="color:var(--muted-d)">({{strVal .Alias}})</small>{{end}}
-    {{if $comps}}<span style="font-size:.68rem;background:rgba(99,102,241,.2);color:#a5b4fc;border-radius:4px;padding:1px 5px;white-space:nowrap;flex-shrink:0" title="Také v: {{range $i,$c := $comps}}{{if $i}}, {{end}}{{$c}}{{end}}">{{range $i,$c := $comps}}{{if $i}} · {{end}}{{$c}}{{end}}</span>{{end}}
-</label>
-{{end}}
-</div>
-{{end}}
-{{else}}
-<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:1.5rem;text-align:center;color:var(--muted-d)">
-    Zatím nejsou žádné týmy. <a href="/admin/teams">Přidat týmy →</a>
-</div>
-{{end}}
+<div class="dnd-workspace">
 
-{{if .Groups}}
-<div style="margin-top:1.25rem">
-    <button type="submit" class="btn btn-primary">💾 Uložit roster</button>
+    {{/* ── LEVÝ PANEL: dostupné týmy ── */}}
+    <div class="dnd-panel" id="left-panel">
+        <div class="dnd-panel-head">
+            <span class="dnd-panel-title">📋 Dostupné týmy</span>
+            <span class="dnd-count" id="left-count">0</span>
+            <span class="dnd-hint-text">přetáhni →</span>
+        </div>
+        <div class="dnd-panel-body" id="left-body">
+            <input class="dnd-search" id="team-search" placeholder="🔍 Hledat tým…" autocomplete="off" oninput="filterLeft()">
+            {{if .Groups}}
+            {{range .Groups}}
+            {{$cat := .Category}}
+            <div class="cat-section" id="lcat-{{$cat}}" data-cat="{{$cat}}">
+                <div class="cat-head">{{if $cat}}{{$cat}}{{else}}Bez kategorie{{end}}</div>
+                <div class="cat-chips" id="lchips-{{$cat}}">
+                {{range .Teams}}
+                {{if not (index $.SelectedIDs .ID)}}
+                {{$comps := index $.TeamCompNames .ID}}
+                <div class="t-chip"
+                     draggable="true"
+                     data-tid="{{.ID}}"
+                     data-name="{{lower .Name}}"
+                     data-cat="{{$cat}}"
+                     title="{{.Name}}{{if $comps}} · také v: {{range $i,$c := $comps}}{{if $i}}, {{end}}{{$c}}{{end}}{{end}}">
+                    {{if .LogoURL}}<img src="{{strVal .LogoURL}}" alt="">{{end}}
+                    <span class="t-chip-name">{{.Name}}</span>
+                    {{if $comps}}<span class="t-chip-comps" title="Také v: {{range $i,$c := $comps}}{{if $i}}, {{end}}{{$c}}{{end}}">· {{range $i,$c := $comps}}{{if $i}}, {{end}}{{$c}}{{end}}</span>{{end}}
+                </div>
+                {{end}}
+                {{end}}
+                </div>
+            </div>
+            {{end}}
+            {{else}}
+            <div style="padding:1.5rem;text-align:center;color:var(--muted-d);font-size:.85rem">
+                Žádné týmy v katalogu. <a href="/admin/teams">Přidat →</a>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    {{/* ── PRAVÝ PANEL: soupiska ── */}}
+    <div class="dnd-panel" id="right-panel">
+        <div class="dnd-panel-head">
+            <span class="dnd-panel-title">{{if eq .Comp.Sport "hockey"}}🏒{{else}}⚽{{end}} {{.Comp.Name}} {{.Comp.Season}}</span>
+            <span class="dnd-count" id="right-count">0</span>
+            <button type="button" class="btn-clear-roster" id="btn-clear" title="Odebrat všechny týmy ze soupisky" style="display:none" onclick="clearAll()">Vymazat vše</button>
+        </div>
+        <div class="dnd-drop-zone" id="drop-zone">
+
+            {{/* Předrenderovaná kategorie pro každou skupinu — JS skryje prázdné */}}
+            {{range .Groups}}
+            {{$cat := .Category}}
+            <div class="cat-section right-cat" id="rcat-{{$cat}}" data-cat="{{$cat}}">
+                <div class="cat-head">{{if $cat}}{{$cat}}{{else}}Bez kategorie{{end}}</div>
+                <div class="cat-chips" id="rchips-{{$cat}}">
+                {{range .Teams}}
+                {{if index $.SelectedIDs .ID}}
+                <div class="t-chip in-roster"
+                     draggable="true"
+                     data-tid="{{.ID}}"
+                     data-name="{{lower .Name}}"
+                     data-cat="{{$cat}}">
+                    {{if .LogoURL}}<img src="{{strVal .LogoURL}}" alt="">{{end}}
+                    <span class="t-chip-name">{{.Name}}</span>
+                    <span class="t-chip-x" data-tid="{{.ID}}" title="Odebrat ze soupisky">×</span>
+                </div>
+                {{end}}
+                {{end}}
+                </div>
+            </div>
+            {{end}}
+
+            <div class="drop-hint" id="drop-hint">
+                <div class="drop-hint-icon">🏟</div>
+                <div>Přetáhni sem týmy ze seznamu vlevo</div>
+                <div style="font-size:.75rem;opacity:.6">nebo klikni na tým a stiskni Enter</div>
+            </div>
+
+        </div>
+    </div>
+
 </div>
-{{end}}
-</form>
+
+<div id="dnd-status"></div>
 
 <script>
 (function () {
-    function updateCard(cb) {
-        var label = cb.closest('label');
-        if (cb.checked) {
-            label.classList.add('is-selected');
-        } else {
-            label.classList.remove('is-selected');
-        }
-        updateCount();
+
+var COMP_ID = {{.Comp.ID}};
+var draggedChip = null;
+var dragSrc = null; // 'left' | 'right'
+var statusTimer = null;
+
+/* ── Drag events ── */
+
+document.addEventListener('dragstart', function (e) {
+    var chip = e.target.closest && e.target.closest('.t-chip');
+    if (!chip) return;
+    draggedChip = chip;
+    dragSrc = chip.closest('#right-panel') ? 'right' : 'left';
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', chip.dataset.tid);
+    // Defer adding class so ghost image renders correctly
+    requestAnimationFrame(function () { chip.classList.add('dragging'); });
+});
+
+document.addEventListener('dragend', function () {
+    if (draggedChip) draggedChip.classList.remove('dragging');
+    draggedChip = null;
+    dragSrc = null;
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    document.getElementById('left-body').classList.remove('drag-over');
+});
+
+/* Right panel drop zone */
+var dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', function (e) {
+    if (dragSrc !== 'left') return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', function (e) {
+    if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over');
+});
+dropZone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (dragSrc !== 'left' || !draggedChip) return;
+    addTeam(draggedChip);
+});
+
+/* Left panel as removal drop zone */
+var leftBody = document.getElementById('left-body');
+leftBody.addEventListener('dragover', function (e) {
+    if (dragSrc !== 'right') return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+});
+leftBody.addEventListener('drop', function (e) {
+    e.preventDefault();
+    if (dragSrc !== 'right' || !draggedChip) return;
+    removeTeam(draggedChip);
+});
+
+/* × button click */
+document.addEventListener('click', function (e) {
+    var x = e.target.closest && e.target.closest('.t-chip-x');
+    if (!x) return;
+    var chip = x.closest('.t-chip');
+    if (chip) removeTeam(chip);
+});
+
+/* ── Core actions ── */
+
+function addTeam(chip) {
+    var cat = chip.dataset.cat || '';
+    chip.classList.add('in-roster');
+
+    // Add × button if missing
+    if (!chip.querySelector('.t-chip-x')) {
+        var x = document.createElement('span');
+        x.className = 't-chip-x';
+        x.dataset.tid = chip.dataset.tid;
+        x.title = 'Odebrat ze soupisky';
+        x.textContent = '×';
+        chip.appendChild(x);
     }
-    window.updateCard = updateCard;
 
-    function updateCount() {
-        var total = document.querySelectorAll('input[name="team_ids"]:checked').length;
-        document.getElementById('count-badge').textContent = total + ' týmů vybráno';
-        // Per-group counts
-        document.querySelectorAll('.team-row').forEach(function(row) {
-            var cat = row.id.replace(/^tr-/, '');
-            var all = row.querySelectorAll('input[name="team_ids"]').length;
-            var sel = row.querySelectorAll('input[name="team_ids"]:checked').length;
-            var badge = document.getElementById('gc-' + cat);
-            if (badge) {
-                if (sel > 0) {
-                    badge.textContent = '✓ ' + sel + '/' + all;
-                    badge.className = 'grp-count';
-                } else {
-                    badge.textContent = '(' + all + ')';
-                    badge.className = 'grp-count-off';
-                }
-            }
-        });
+    // Find or create target category in right panel
+    var rchips = document.getElementById('rchips-' + cat);
+    if (!rchips) {
+        // Create new category section
+        var rcat = document.createElement('div');
+        rcat.className = 'cat-section right-cat';
+        rcat.id = 'rcat-' + cat;
+        rcat.dataset.cat = cat;
+        rcat.innerHTML = '<div class="cat-head">' + (cat || 'Bez kategorie') + '</div><div class="cat-chips" id="rchips-' + cat + '"></div>';
+        dropZone.insertBefore(rcat, document.getElementById('drop-hint'));
+        rchips = document.getElementById('rchips-' + cat);
+    }
+    rchips.appendChild(chip);
+
+    syncState();
+    toggle(chip.dataset.tid, true);
+}
+
+function removeTeam(chip) {
+    var cat = chip.dataset.cat || '';
+    chip.classList.remove('in-roster');
+
+    // Remove × button
+    var x = chip.querySelector('.t-chip-x');
+    if (x) x.remove();
+
+    // Return to left panel category
+    var lchips = document.getElementById('lchips-' + cat);
+    if (lchips) {
+        lchips.appendChild(chip);
+    } else {
+        leftBody.appendChild(chip);
     }
 
-    window.selectAll = function(state) {
-        document.querySelectorAll('input[name="team_ids"]').forEach(function(cb) {
-            cb.checked = state;
-            updateCard(cb);
-        });
-    };
-
-    window.selectVisible = function(state) {
-        document.querySelectorAll('.team-check-card').forEach(function(label) {
-            if (label.style.display !== 'none') {
-                var cb = label.querySelector('input[name="team_ids"]');
-                if (cb) { cb.checked = state; updateCard(cb); }
-            }
-        });
-    };
-
-    window.selectGroup = function(cat, state) {
-        var row = document.getElementById('tr-' + cat);
-        if (!row) return;
-        row.querySelectorAll('input[name="team_ids"]').forEach(function(cb) {
-            if (cb.closest('label').style.display !== 'none') {
-                cb.checked = state;
-                updateCard(cb);
-            }
-        });
-    };
-
-    window.filterTeams = function() {
-        var q = document.getElementById('team-search').value.toLowerCase().trim();
-        document.querySelectorAll('.team-check-card').forEach(function(label) {
-            var name = label.getAttribute('data-name') || '';
-            label.style.display = (!q || name.includes(q)) ? '' : 'none';
-        });
-        // Skrýt prázdné skupiny
-        document.querySelectorAll('.team-row').forEach(function(row) {
-            var visible = Array.from(row.querySelectorAll('.team-check-card'))
-                .some(function(l) { return l.style.display !== 'none'; });
-            row.style.display = visible ? '' : 'none';
-            var cat = row.id.replace(/^tr-/, '');
-            var hdr = document.querySelector('.grp-header[data-grp="' + CSS.escape(cat) + '"]');
-            if (hdr) hdr.style.display = visible ? '' : 'none';
-        });
-    };
-
-    document.addEventListener('DOMContentLoaded', function() {
-        updateCount();
+    // Clean up empty right categories
+    document.querySelectorAll('#drop-zone .right-cat').forEach(function (sec) {
+        if (sec.querySelector('.cat-chips').children.length === 0) sec.remove();
     });
+
+    syncState();
+    toggle(chip.dataset.tid, false);
+}
+
+window.clearAll = function () {
+    var chips = Array.from(dropZone.querySelectorAll('.t-chip'));
+    chips.forEach(function (chip) { removeTeam(chip); });
+};
+
+/* ── AJAX ── */
+
+function toggle(teamId, checked) {
+    showStatus('…', '');
+    var body = 'team_id=' + encodeURIComponent(teamId)
+             + '&comp_id=' + encodeURIComponent(COMP_ID)
+             + '&checked=' + (checked ? '1' : '0');
+    fetch('/admin/roster/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+        if (data.ok) {
+            showStatus(checked ? '✓ Přidáno' : '✓ Odebráno', 'ok');
+        } else {
+            showStatus('Chyba serveru', 'err');
+        }
+    })
+    .catch(function () { showStatus('Chyba připojení', 'err'); });
+}
+
+/* ── UI helpers ── */
+
+function syncState() {
+    // Count chips
+    var leftCount = document.querySelectorAll('#left-panel .t-chip').length;
+    var rightCount = dropZone.querySelectorAll('.t-chip').length;
+
+    var lBadge = document.getElementById('left-count');
+    var rBadge = document.getElementById('right-count');
+    lBadge.textContent = leftCount;
+    rBadge.textContent = rightCount;
+    lBadge.className = 'dnd-count' + (leftCount > 0 ? ' has-items' : '');
+    rBadge.className = 'dnd-count' + (rightCount > 0 ? ' has-items' : '');
+
+    // Toggle drop hint
+    var hint = document.getElementById('drop-hint');
+    hint.style.display = rightCount > 0 ? 'none' : '';
+
+    // Toggle clear-all button
+    document.getElementById('btn-clear').style.display = rightCount > 0 ? '' : 'none';
+
+    // Hide empty left category sections
+    document.querySelectorAll('#left-panel .cat-section').forEach(function (sec) {
+        var chips = sec.querySelectorAll('.t-chip');
+        var anyVisible = Array.from(chips).some(function (c) { return c.style.display !== 'none'; });
+        sec.style.display = (chips.length > 0 && anyVisible) ? '' : 'none';
+    });
+}
+
+function showStatus(msg, type) {
+    var el = document.getElementById('dnd-status');
+    el.textContent = msg;
+    el.className = 'dnd-status visible' + (type ? ' ' + type : '');
+    clearTimeout(statusTimer);
+    if (type) {
+        statusTimer = setTimeout(function () { el.classList.remove('visible'); }, 1800);
+    }
+}
+
+/* ── Search ── */
+
+window.filterLeft = function () {
+    var q = document.getElementById('team-search').value.toLowerCase().trim();
+    document.querySelectorAll('#left-panel .t-chip').forEach(function (chip) {
+        chip.style.display = (!q || (chip.dataset.name || '').includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('#left-panel .cat-section').forEach(function (sec) {
+        var anyVisible = Array.from(sec.querySelectorAll('.t-chip'))
+            .some(function (c) { return c.style.display !== 'none'; });
+        sec.style.display = anyVisible ? '' : 'none';
+    });
+};
+
+/* ── Init ── */
+
+document.addEventListener('DOMContentLoaded', function () {
+    syncState();
+});
+
 }());
 </script>

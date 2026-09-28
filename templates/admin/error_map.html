@@ -1,0 +1,494 @@
+<div class="page-header">
+    <h1>🔍 Mapa chyb</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+<p style="color:var(--muted-d);font-size:.85rem;margin-bottom:1.5rem">
+    Kdy co může selhat a kde to hledat. Vždy začni <a href="/admin/audit" style="color:var(--accent)">Audit logem</a> — chyby jsou tam zapsané včetně přesného DB erroru.
+</p>
+
+<style>
+.em-section { margin-bottom:2rem }
+.em-section h2 { font-size:1rem;font-weight:700;color:var(--accent);margin:0 0 .75rem;padding-bottom:.35rem;border-bottom:1px solid var(--border-d) }
+.em-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:.75rem }
+.em-card { background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:.85rem 1rem }
+.em-card h3 { margin:0 0 .5rem;font-size:.88rem;font-weight:700;color:var(--text-d) }
+.em-card h3 .sym { margin-right:.35rem }
+.em-causes { margin:0 0 .5rem;padding:0 0 0 1.1rem;list-style:disc }
+.em-causes li { font-size:.8rem;color:var(--muted-d);line-height:1.55;overflow-wrap:break-word;word-break:break-word }
+.em-files { display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.45rem }
+.em-file { font-size:.72rem;font-family:monospace;background:var(--bg3);border:1px solid var(--border-d);border-radius:4px;padding:.1rem .4rem;color:var(--muted-d) }
+.em-file.primary { border-color:rgba(99,102,241,.5);color:var(--accent) }
+</style>
+
+{{/* ─── Zápasy a výsledky ─────────────────────────────────────────── */}}
+<div class="em-section">
+<h2>⚽ Zápasy a výsledky</h2>
+<div class="em-grid">
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Zápas nejde přidat</h3>
+<ul class="em-causes">
+<li>Týmy nejsou přiřazeny k soutěži → přejdi na <em>Správa týmů soutěže</em></li>
+<li>home_team_id nebo away_team_id = 0 (form neposlal ID)</li>
+<li>DB INSERT selhal — přesný důvod je v audit logu (action: <code>match_create</code>)</li>
+<li>Kontrola duplikátů — zápas stejných týmů ve stejný den už existuje</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_matches.go — AdminMatchCreate</span>
+<span class="em-file">admin_teams.go — AdminCompetitionTeamsSave</span>
+<span class="em-file">admin.go — AdminCompetitionSetDeadline</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Výsledek nejde zadat / přepsat</h3>
+<ul class="em-causes">
+<li>DB UPDATE selhal — zkontroluj audit log (action: <code>match_score</code>)</li>
+<li>Zápas je already finished a formulář to nekontroluje</li>
+<li>Přepočet bodů selhal (chyba v RecalculateTips) → logy v konzoli</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_matches.go — AdminMatchSetResult</span>
+<span class="em-file primary">common.go — RecalculateTips</span>
+<span class="em-file">common.go — RecalculateStandings</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Body se nepřepočítaly po zadání výsledku</h3>
+<ul class="em-causes">
+<li>RecalculateTips neprošla — chyba v SQL, špatné competition_id</li>
+<li>RecalculateStandings selhal — chyba v standings tabulce</li>
+<li>Hromadné výsledky (BulkResults) — každý zápas počítá zvlášť, jeden neúspěch ostatní neblokuje</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">common.go — RecalculateTips, RecalculateStandings</span>
+<span class="em-file">admin_matches.go — AdminBulkResultsSubmit</span>
+<span class="em-file">admin_matches.go — AdminMatchSetResult</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Zápas nejde smazat</h3>
+<ul class="em-causes">
+<li>Na zápas existují tipy → je potřeba nejdřív smazat tipy uživatelů (AdminRemoveUserTips), nebo DB cascade</li>
+<li>DB DELETE selhal — audit log (action: <code>match_delete</code>)</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_matches.go — AdminMatchDelete</span>
+<span class="em-file">admin_matches.go — AdminRemoveUserTips</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Datum zápasu nejde nastavit / je špatně zobrazeno</h3>
+<ul class="em-causes">
+<li>Parsování datetime-local formátu selhal (očekává se "2006-01-02T15:04")</li>
+<li>Časové pásmo — server vs Prague — viz <a href="/admin/time" style="color:var(--accent)">/admin/time</a></li>
+<li>TZ override aktivní — zkontroluj <a href="/admin/time" style="color:var(--accent)">diagnostiku času</a></li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_matches.go — AdminMatchSetDate, AdminMatchEdit</span>
+<span class="em-file primary">common.go — NowPrague, SetTZOffsetOverride</span>
+<span class="em-file">admin_time.go — AdminTimeDiag</span>
+</div>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Tipy a deadline ────────────────────────────────────────────── */}}
+<div class="em-section">
+<h2>🎯 Tipy a deadline</h2>
+<div class="em-grid">
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Tip nejde uložit</h3>
+<ul class="em-causes">
+<li>Deadline soutěže nebo zápasu vypršel → tipování blokováno</li>
+<li>Uživatel není schválen (is_approved = false)</li>
+<li>Zápas je already finished (is_finished = true)</li>
+<li>DB UPSERT selhal — audit log (action: <code>tip_save</code>)</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">tips.go — SubmitTip, SubmitTipAjax</span>
+<span class="em-file primary">common.go — IsBeforeDeadlineComp</span>
+<span class="em-file">admin.go — AdminCompetitionSetDeadline</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Deadline nefunguje správně (tipy jdou/nejdou když nemají)</h3>
+<ul class="em-causes">
+<li>Deadline je NULL → tipování otevřeno do začátku každého zápasu</li>
+<li>Soutěžní deadline vs. datum zápasu — bere se minimum</li>
+<li>TZ problém — deadline je v UTC, zobrazuje se v Prague čase</li>
+<li>Prázdný deadline_str při nastavení → deadline se smaže</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">common.go — IsBeforeDeadlineComp</span>
+<span class="em-file">admin.go — AdminCompetitionSetDeadline</span>
+<span class="em-file">admin_matches.go — AdminMatchesList (zobrazení deadline)</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Admin přepsal tip uživatele a šlo to vrátit</h3>
+<ul class="em-causes">
+<li>Audit log ukládá old_value při admin_set_tip → přejdi na <a href="/admin/audit?cat=tipy" style="color:var(--accent)">Audit log › Tipy</a></li>
+<li>Undo funguje pro posledních 100 undoable akcí</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_matches.go — AdminSetTip</span>
+<span class="em-file primary">admin_audit.go — AdminAuditUndo</span>
+</div>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Uživatelé a přístupy ───────────────────────────────────────── */}}
+<div class="em-section">
+<h2>👤 Uživatelé a přístupy</h2>
+<div class="em-grid">
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Přihlášení nefunguje</h3>
+<ul class="em-causes">
+<li>Špatné heslo nebo email — audit log (action: <code>login_fail</code>)</li>
+<li>Uživatel je zablokován (is_blocked = true)</li>
+<li>Uživatel čeká na schválení (is_approved = false) → přesměruje na /pending</li>
+<li>Sloupec email neexistuje v DB → přihlášení jen přes username</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">auth.go — LoginSubmit</span>
+<span class="em-file">common.go — GetCurrentUser, RequireLogin</span>
+<span class="em-file">common.go — InitUserSchema (sloupce)</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Reset hesla nefunguje (zapomenuté heslo)</h3>
+<ul class="em-causes">
+<li>Email se neodešle → viz sekce Email níže</li>
+<li>Token expiroval — tokeny mají platnost 1 hodinu</li>
+<li>APP_URL není nastavena ve Fly.io secrets → odkaz v emailu směřuje špatně</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">auth.go — ForgotPasswordSubmit, ResetPasswordSubmit</span>
+<span class="em-file">admin_email.go — sendEmail</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Admin práva nefungují / uživatel nevidí admin sekci</h3>
+<ul class="em-causes">
+<li>is_admin = false v DB → nastav přes AdminUserSetRole nebo toggle</li>
+<li>Sloupec is_admin neexistuje → InitUserSchema vrátí false pro userCols.IsAdmin</li>
+<li>Session expirovala → uživatel musí se znovu přihlásit</li>
+<li>Audit log (action: <code>user_toggle_admin</code>, <code>user_role</code>)</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">common.go — RequireAdmin, InitUserSchema</span>
+<span class="em-file">admin.go — AdminUserToggleAdmin, AdminUserSetRole</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Uživatel nejde schválit / zablokovat</h3>
+<ul class="em-causes">
+<li>DB UPDATE selhal — audit log (action: <code>user_approve</code>, <code>user_block</code>)</li>
+<li>Sloupec is_approved / is_blocked neexistuje → InitUserSchema</li>
+<li>Pokus o zablokování owner účtu bez owner oprávnění</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin.go — AdminUserApprove, AdminUserBlock, AdminUserUnblock</span>
+<span class="em-file">common.go — InitUserSchema</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Hromadný import uživatelů selhal</h3>
+<ul class="em-causes">
+<li>Duplicitní username nebo email → INSERT selže pro daný řádek, ostatní pokračují</li>
+<li>Špatný formát CSV/textu → parsování vrátí prázdný slice</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_user_import.go — AdminUserImportSubmit</span>
+<span class="em-file">admin.go — buildUserInsertSQL</span>
+</div>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Import dat ─────────────────────────────────────────────────── */}}
+<div class="em-section">
+<h2>📥 Import dat</h2>
+<div class="em-grid">
+
+<div class="em-card">
+<h3><span class="sym">❌</span>API import fotbalu nefunguje (football-data.org)</h3>
+<ul class="em-causes">
+<li>API klíč expiroval nebo není nastavený → Fly.io secret <code>FD_API_KEY</code></li>
+<li>Rate limit — bezplatný plán má omezení na volání za minutu</li>
+<li>Tým z API nenalezen v DB → resolveOrUpsertTeam vytvoří nový</li>
+<li>fd_code soutěže chybí → nastav přes editaci soutěže</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_api_import.go — AdminAPIImport, AutoFetchResults</span>
+<span class="em-file">admin_api_import.go — resolveOrUpsertTeam</span>
+<span class="em-file">admin.go — AdminCompetitionEditSubmit (fd_code)</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>API import hokeje nefunguje (thesportsdb.com)</h3>
+<ul class="em-causes">
+<li>League ID nebo season string špatně zadán</li>
+<li>API vrací jiný formát → cleanHockeyTeamName může selhat</li>
+<li>Timeout na vzdálenou API</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_api_hockey.go — ashImport, ashUpdateResults</span>
+<span class="em-file">admin_api_hockey.go — cleanHockeyTeamName, tsdbCall</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>OCR import / textový import nefunguje</h3>
+<ul class="em-causes">
+<li>Parsování nerozpoznalo formát textu → zkontroluj parseMILine / parseOCRText</li>
+<li>Tým z textu nenalezen fuzzy matchingem → přiřadí se jako nový nebo prázdný</li>
+<li>Session expirovala mezi Parse a Confirm → data ztracena, je potřeba znovu uploadovat</li>
+<li>Žádná soutěž nebyla vybrána → compID = 0</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_match_import.go — parseMILine, AdminMatchImportConfirm</span>
+<span class="em-file primary">admin_ocr.go — parseOCRText, AdminOCRConfirm</span>
+<span class="em-file">admin_match_import.go — matchTeamsWithKnown</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Import / export CSV nebo XLSX selhal</h3>
+<ul class="em-causes">
+<li>Špatný formát souboru nebo kódování (UTF-8 vs CP1250)</li>
+<li>Chybí závislost excelize → build selže</li>
+<li>Export prázdný — žádná data v DB pro danou soutěž</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_export.go — AdminGeneralExportCSV, AdminGeneralExportXLSX</span>
+<span class="em-file">admin_teams.go — AdminTeamsImportCSV, AdminTeamsImportXLSX</span>
+<span class="em-file">admin_export.go — AdminTipsImportSubmit</span>
+</div>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Email a notifikace ─────────────────────────────────────────── */}}
+<div class="em-section">
+<h2>📧 Email a notifikace</h2>
+<div class="em-grid">
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Email se neodešle</h3>
+<ul class="em-causes">
+<li>SMTP přihlašovací údaje chybí → Fly.io secrets: <code>SMTP_HOST</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code></li>
+<li>Port 587 / TLS blokován Fly.io sítí</li>
+<li>Prázdný email uživatele → send_welcome odmítne</li>
+<li>Audit log (action: <code>user_send_welcome</code>) zachytí chybu</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_email.go — sendEmail, sendEmailHTML</span>
+<span class="em-file">admin_email.go — AdminEmailSend</span>
+<span class="em-file">admin.go — AdminUserSendWelcome</span>
+<span class="em-file">auth.go — ForgotPasswordSubmit</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Notifikace o zápase se neodeslaly</h3>
+<ul class="em-causes">
+<li>Uživatel nemá povoleny notifikace (notification_settings tabulka)</li>
+<li>sendEmail selhal → viz Email výše</li>
+<li>Zápas byl přidán bez data → notifikace se nespustí bez match_date</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">notify.go — sendMatchNotificationForID</span>
+<span class="em-file">admin_matches.go — AdminMatchNotifyNow</span>
+<span class="em-file">profile.go — ProfileNotifications</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Push notifikace nefungují</h3>
+<ul class="em-causes">
+<li>VAPID klíče nejsou nastaveny ve Fly.io secrets</li>
+<li>Uživatel odvolal povolení v prohlížeči</li>
+<li>Subscription expirovala → je potřeba se znovu přihlásit k push</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">profile.go — ProfilePushSubscribe, ProfilePushTest</span>
+<span class="em-file">notify.go — notifySendEmail</span>
+</div>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Týmy ───────────────────────────────────────────────────────── */}}
+<div class="em-section">
+<h2>🏟️ Týmy</h2>
+<div class="em-grid">
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Tým nejde přidat k soutěži / chybí v selectu</h3>
+<ul class="em-causes">
+<li>Tým není v competition_teams tabulce → přiřaď ho přes <em>Správa týmů soutěže</em></li>
+<li>Tým má jiný sport než soutěž → filter v SQL</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_teams.go — AdminCompetitionTeamsSave</span>
+<span class="em-file">admin_matches.go — AdminMatchesList (načítá týmy pro select)</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Sloučení týmů selhalo</h3>
+<ul class="em-causes">
+<li>Zdrojový a cílový tým jsou stejné → odmítnuto</li>
+<li>FK závislosti (tipy, zápasy) — merge přesouvá, ne maže</li>
+<li>Audit log (action: <code>team_merge</code>)</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_teams.go — AdminTeamMerge, AdminTeamMergeBulk</span>
+<span class="em-file">admin_user_merge.go — AdminUserMerge (analogické pro uživatele)</span>
+</div>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Bonusové otázky ────────────────────────────────────────────── */}}
+<div class="em-section">
+<h2>🎁 Bonusové otázky</h2>
+<div class="em-grid">
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Automatické vyhodnocení nedalo body</h3>
+<ul class="em-causes">
+<li>Správná odpověď není nastavena → nastav ji přes <em>Uložit správnou odpověď</em></li>
+<li>Fuzzy matching nenašel shodu — levenshtein vzdálenost nad prahem</li>
+<li>Odpovědi jsou sloučeny → unmerge a znovu evaluate</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_extra.go — AdminExtraAutoEvaluate, isFuzzyMatch</span>
+<span class="em-file">admin_extra.go — AdminExtraSaveCorrect, AdminExtraMergeAnswers</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Odpověď na bonusovou otázku nejde uložit</h3>
+<ul class="em-causes">
+<li>Otázka je uzavřena (is_closed = true)</li>
+<li>Deadline bonusových otázek vypršel</li>
+<li>Audit log (action: <code>extra_save</code>)</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">extra.go — ExtraSaveAjax</span>
+<span class="em-file">admin_extra.go — AdminExtraQuestionToggleClose, AdminExtraDeadlineSettings</span>
+</div>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Infrastruktura a deploy ────────────────────────────────────── */}}
+<div class="em-section">
+<h2>⚙️ Infrastruktura a deploy</h2>
+<div class="em-grid">
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Deploy selhal (GitHub Actions)</h3>
+<ul class="em-causes">
+<li>Build error v Go → zkontroluj Actions log na GitHubu</li>
+<li>FLY_API_TOKEN expiroval → obnov v GitHub Secrets</li>
+<li>Fly.io nedosažitelný → status.fly.io</li>
+<li>Stav: <code>curl https://api.github.com/repos/Mejlacz/Tipovacka-3.0/actions/runs?per_page=3</code></li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">.github/workflows/fly-deploy.yml</span>
+<span class="em-file">main.go — lifespan, init</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Server nereaguje / timeout</h3>
+<ul class="em-causes">
+<li>Fly.io machine zaspal (free tier) → keepalive <a href="/admin/keepalive" style="color:var(--accent)">/admin/keepalive</a></li>
+<li>DB connection pool vyčerpán → zkontroluj <a href="/admin/health-dashboard" style="color:var(--accent)">Health dashboard</a></li>
+<li>Paměťový limit překročen → Fly.io dashboard</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_keepalive.go — AdminKeepaliveEnable</span>
+<span class="em-file">admin_health.go — AdminHealthDashboard</span>
+<span class="em-file">database/ — get_db, Pool</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Neon záloha (sync) nefunguje</h3>
+<ul class="em-causes">
+<li>NEON_BACKUP_URL není nastavena ve Fly.io secrets</li>
+<li>Zdrojová a cílová DB mají jiné schéma → copyTableNeon selže na sloupci</li>
+<li>Sync tabulky (neon_sync_config, neon_sync_log) neexistují → InitNeonSyncTables()</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_neon_sync.go — RunNeonSync, copyTableNeon</span>
+<span class="em-file">admin_neon_sync.go — InitNeonSyncTables</span>
+</div>
+</div>
+
+<div class="em-card">
+<h3><span class="sym">❌</span>Čas / datum se zobrazuje špatně</h3>
+<ul class="em-causes">
+<li>Server běží v UTC, Prague time se počítá přes pragueLocation</li>
+<li>TZ override aktivní → resetuj na <a href="/admin/time" style="color:var(--accent)">/admin/time</a></li>
+<li>Naive vs aware datetime při porovnání → přidej ::timestamptz v SQL</li>
+</ul>
+<div class="em-files">
+<span class="em-file primary">admin_time.go — AdminTimeDiag, LoadTZOverrideFromDB</span>
+<span class="em-file">common.go — NowPrague, pragueLocation</span>
+</div>
+</div>
+
+</div>
+</div>
+
+{{/* ─── Audit log ──────────────────────────────────────────────────── */}}
+<div class="em-section">
+<h2>📋 Audit log — přehled action kódů</h2>
+<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:8px;padding:.85rem 1rem;overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;font-size:.8rem">
+<thead>
+<tr style="background:var(--bg3)">
+<th style="padding:.3rem .6rem;text-align:left;white-space:nowrap">action</th>
+<th style="padding:.3rem .6rem;text-align:left">Co znamená</th>
+<th style="padding:.3rem .6rem;text-align:left">Soubor</th>
+</tr>
+</thead>
+<tbody>
+{{range $i, $r := .AuditActions}}
+<tr style="{{if eq (mod $i 2) 0}}background:var(--bg2){{else}}background:var(--bg3){{end}}">
+<td style="padding:.25rem .6rem;font-family:monospace;white-space:nowrap;color:var(--accent)">{{index $r 0}}</td>
+<td style="padding:.25rem .6rem;color:var(--muted-d)">{{index $r 1}}</td>
+<td style="padding:.25rem .6rem;font-family:monospace;font-size:.72rem;color:var(--muted-d)">{{index $r 2}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+</div>
+</div>

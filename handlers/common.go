@@ -386,14 +386,15 @@ func NowPrague() time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
 }
 
-// IsBeforeDeadline vrátí true pokud tipování ještě není uzavřeno.
-func IsBeforeDeadline(round *models.Round, match *models.Match) bool {
+// IsBeforeDeadlineComp vrátí true pokud tipování pro zápas v dané soutěži ještě není uzavřeno.
+// Priorita: competition.Deadline (pokud nastavena) → match.MatchDate → false.
+func IsBeforeDeadlineComp(comp *models.Competition, match *models.Match) bool {
 	now := NowPrague()
+	if comp != nil && comp.Deadline != nil {
+		return now.Before(*comp.Deadline)
+	}
 	if match.MatchDate != nil {
 		return now.Before(*match.MatchDate)
-	}
-	if round.Deadline != nil {
-		return now.Before(*round.Deadline)
 	}
 	return false
 }
@@ -450,26 +451,10 @@ func LogAction(adminID *int, adminUsername, action, entityType string, entityID 
 func RecalculateStandings(competitionID int) {
 	ctx := context.Background()
 
-	roundRows, err := db.Pool.Query(ctx, `SELECT id FROM rounds WHERE competition_id = $1`, competitionID)
-	if err != nil {
-		log.Printf("[standings] rounds query error: %v", err)
-		return
-	}
-	var roundIDs []int
-	for roundRows.Next() {
-		var rid int
-		_ = roundRows.Scan(&rid)
-		roundIDs = append(roundIDs, rid)
-	}
-	roundRows.Close()
-	if len(roundIDs) == 0 {
-		return
-	}
-
 	tipRows, err := db.Pool.Query(ctx,
 		`SELECT user_id, points FROM tips
 		  JOIN matches ON matches.id = tips.match_id
-		  WHERE matches.round_id = ANY($1)`, roundIDs)
+		  WHERE matches.competition_id = $1`, competitionID)
 	if err != nil {
 		log.Printf("[standings] tips query error: %v", err)
 		return

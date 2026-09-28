@@ -463,9 +463,8 @@ func AdminExtraAnswersView(tmpl *template.Template) http.HandlerFunc {
 		var autoDeadline *time.Time
 		var firstMatch time.Time
 		errFM := db.Pool.QueryRow(ctx,
-			`SELECT MIN(m.match_date) FROM matches m
-			   JOIN rounds r ON r.id = m.round_id
-			  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, compID).Scan(&firstMatch)
+			`SELECT MIN(match_date) FROM matches
+			  WHERE competition_id = $1 AND match_date IS NOT NULL`, compID).Scan(&firstMatch)
 		if errFM == nil && !firstMatch.IsZero() {
 			autoDeadline = &firstMatch
 		}
@@ -1223,9 +1222,8 @@ func AdminExtraNotifyNow(w http.ResponseWriter, r *http.Request) {
 	} else {
 		var firstMatch time.Time
 		err2 := db.Pool.QueryRow(ctx,
-			`SELECT MIN(m.match_date) FROM matches m
-			   JOIN rounds r ON r.id = m.round_id
-			  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, compID).Scan(&firstMatch)
+			`SELECT MIN(match_date) FROM matches
+			  WHERE competition_id = $1 AND match_date IS NOT NULL`, compID).Scan(&firstMatch)
 		if err2 == nil && !firstMatch.IsZero() {
 			deadlineText = firstMatch.In(loc).Format("02.01. 15:04")
 		}

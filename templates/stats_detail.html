@@ -1,57 +1,70 @@
+<style>
+.st-tile-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:.65rem; margin-bottom:1.25rem; }
+.st-tile { background:var(--bg2); border:1px solid var(--border-d); border-radius:10px; padding:.75rem 1rem; text-align:center; }
+.st-tile-val { font-size:1.55rem; font-weight:800; line-height:1.1; }
+.st-tile-lbl { font-size:.74rem; color:var(--muted-d); margin-top:.2rem; }
+.st-meta { display:flex; flex-wrap:wrap; gap:.4rem .75rem; margin-bottom:1rem; }
+.st-meta-item { display:inline-flex; align-items:center; gap:.3rem; padding:.2rem .6rem; border-radius:20px; font-size:.76rem; background:var(--bg2); border:1px solid var(--border-d); color:var(--muted-d); }
+.st-meta-item strong { color:var(--text-d); }
+</style>
+
 <div class="page-header">
     <h1>{{tr .Lang "stats_title"}}</h1>
 </div>
 
 {{/* Competition tabs */}}
-<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1.5rem">
+<div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:1.5rem">
     {{range .ActiveCompetitions}}
     <a href="/stats/{{.ID}}" class="btn btn-sm {{if eq .ID $.CompID}}btn-primary{{else}}btn-secondary{{end}}">
         {{.Name}}{{if .Season}} {{.Season}}{{end}}
     </a>
     {{end}}
+    {{if and .ActiveCompetitions .InactiveCompetitions}}
+    <span style="font-size:.72rem;color:var(--muted-d);padding:0 .15rem;align-self:center;white-space:nowrap">· Archiv</span>
+    {{end}}
     {{range .InactiveCompetitions}}
     <a href="/stats/{{.ID}}" class="btn btn-sm {{if eq .ID $.CompID}}btn-primary{{else}}btn-secondary{{end}}"
-       style="opacity:.7">{{.Name}}{{if .Season}} {{.Season}}{{end}}</a>
+       style="opacity:.6">{{.Name}}{{if .Season}} {{.Season}}{{end}}</a>
     {{end}}
 </div>
 
 {{if .Comp}}
-<h2 style="font-size:1.1rem;margin-bottom:1rem">{{.Comp.Name}}{{if .Comp.Season}} — {{.Comp.Season}}{{end}}</h2>
+<h2 style="font-size:1.05rem;font-weight:700;margin-bottom:1rem">{{.Comp.Name}}{{if .Comp.Season}} — {{.Comp.Season}}{{end}}</h2>
 {{end}}
 
 {{if .S}}
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem;margin-bottom:1.5rem">
-    <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
-        <div style="font-size:1.6rem;font-weight:700;color:#fbbf24">{{.S.TotalPts}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_pts_total"}}</div>
+<div class="st-tile-grid">
+    <div class="st-tile">
+        <div class="st-tile-val" style="color:#fbbf24">{{.S.TotalPts}}</div>
+        <div class="st-tile-lbl">{{tr .Lang "stats_pts_total"}}</div>
     </div>
-    <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
-        <div style="font-size:1.6rem;font-weight:700;color:#34d399">{{.S.Exact}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_exact"}}</div>
+    <div class="st-tile">
+        <div class="st-tile-val" style="color:#34d399">{{.S.Exact}}</div>
+        <div class="st-tile-lbl">{{tr .Lang "stats_exact"}}</div>
     </div>
-    <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
-        <div style="font-size:1.6rem;font-weight:700;color:#60a5fa">{{.S.Winner}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "profile_winner"}}</div>
+    <div class="st-tile">
+        <div class="st-tile-val" style="color:#60a5fa">{{.S.Winner}}</div>
+        <div class="st-tile-lbl">{{tr .Lang "profile_winner"}}</div>
     </div>
-    <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
-        <div style="font-size:1.6rem;font-weight:700;color:#ef4444">{{.S.Miss}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_miss"}}</div>
+    <div class="st-tile">
+        <div class="st-tile-val" style="color:#ef4444">{{.S.Miss}}</div>
+        <div class="st-tile-lbl">{{tr .Lang "stats_miss"}}</div>
     </div>
-    <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
-        <div style="font-size:1.6rem;font-weight:700">{{.S.TipsGiven}}/{{.S.TotalFinished}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_tips"}}</div>
+    <div class="st-tile">
+        <div class="st-tile-val" style="font-size:1.15rem">{{.S.TipsGiven}}/{{.S.TotalFinished}}</div>
+        <div class="st-tile-lbl">{{tr .Lang "stats_tips"}}</div>
     </div>
-    <div style="background:var(--bg2);border-radius:10px;padding:.75rem 1rem;text-align:center">
-        <div style="font-size:1.6rem;font-weight:700">{{.S.Rank}}./{{.S.TotalPlayers}}</div>
-        <div style="font-size:.78rem;color:var(--muted-d)">{{tr .Lang "stats_rank"}}</div>
+    <div class="st-tile">
+        <div class="st-tile-val" style="font-size:1.15rem">{{.S.Rank}}./{{.S.TotalPlayers}}</div>
+        <div class="st-tile-lbl">{{tr .Lang "stats_rank"}}</div>
     </div>
 </div>
 
-<div style="display:flex;flex-wrap:wrap;gap:.5rem .9rem;font-size:.82rem;color:var(--muted-d);margin-bottom:1rem">
-    <span>{{tr .Lang "stats_avg"}}: <strong style="color:#e2e8f0">{{.S.Avg}}</strong></span>
-    <span>{{tr .Lang "stats_group_avg"}}: <strong style="color:#e2e8f0">{{.S.GroupAvg}}</strong></span>
-    {{if .S.FavScore}}<span>{{tr .Lang "stats_fav_score"}}: <strong style="color:#e2e8f0">{{.S.FavScore}} ({{.S.FavScoreCount}}×)</strong></span>{{end}}
-    {{if .S.BestStreak}}<span>{{tr .Lang "stats_streak"}}: <strong style="color:#e2e8f0">{{.S.BestStreak}}</strong></span>{{end}}
+<div class="st-meta">
+    <span class="st-meta-item">{{tr .Lang "stats_avg"}}: <strong>{{.S.Avg}}</strong></span>
+    <span class="st-meta-item">{{tr .Lang "stats_group_avg"}}: <strong>{{.S.GroupAvg}}</strong></span>
+    {{if .S.FavScore}}<span class="st-meta-item">{{tr .Lang "stats_fav_score"}}: <strong>{{.S.FavScore}} ({{.S.FavScoreCount}}×)</strong></span>{{end}}
+    {{if .S.BestStreak}}<span class="st-meta-item">🔥 {{tr .Lang "stats_streak"}}: <strong>{{.S.BestStreak}}</strong></span>{{end}}
 </div>
 
 {{if .CompareUsers}}
@@ -68,7 +81,7 @@
 {{if .S}}
 <div style="margin-bottom:1.5rem;display:flex;gap:.4rem;flex-wrap:wrap">
     <a href="/stats/{{.CompID}}/extended" class="btn btn-sm btn-secondary">📊 Rozšířené statistiky</a>
-    <button id="pr-chart-toggle" class="btn btn-sm btn-secondary" onclick="togglePrChart()">📈 Přesnost per kolo</button>
+    <button id="pr-chart-toggle" class="btn btn-sm btn-secondary" onclick="togglePrChart()">📈 Přesnost v čase</button>
 </div>
 <div id="pr-chart-wrap" style="display:none;background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1rem;margin-bottom:1.5rem">
     <canvas id="pr-chart" style="max-height:280px"></canvas>
@@ -81,7 +94,7 @@ function togglePrChart() {
     var btn  = document.getElementById('pr-chart-toggle');
     var open = wrap.style.display === 'none';
     wrap.style.display = open ? 'block' : 'none';
-    btn.textContent = open ? '📉 Skrýt graf' : '📈 Přesnost per kolo';
+    btn.textContent = open ? '📉 Skrýt graf' : '📈 Přesnost v čase';
     if (open && !_prLoaded) { _prLoaded = true; loadPrChart(); }
 }
 function loadPrChart() {

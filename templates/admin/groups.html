@@ -74,10 +74,9 @@
         </form>
 
         {{/* Smazat skupinu */}}
-        <form method="post" action="/admin/groups/{{.ID}}/delete" style="margin:0"
-              onsubmit="return confirm('Opravdu smazat skupinu {{.Name}}?')">
-            <button type="submit" class="btn" style="font-size:0.8rem;padding:0.25rem 0.6rem;color:var(--red,#ef4444)">🗑 Smazat</button>
-        </form>
+        <button type="button" class="btn grp-del-btn"
+                data-gid="{{.ID}}" data-name="{{.Name}}"
+                style="font-size:0.8rem;padding:0.25rem 0.6rem;color:var(--red,#ef4444)">🗑 Smazat</button>
     </div>
 
     {{/* Stávající členové */}}
@@ -124,3 +123,22 @@
 {{end}}
 
 {{end}}
+
+<script>
+document.querySelectorAll('.grp-del-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        _confirmSmazat({
+            title: '🗑 Smazat skupinu',
+            name: btn.dataset.name,
+            warn: 'Tato akce je nevratná — smaže se skupina a její nastavení.',
+            btn: 'Smazat skupinu'
+        }, function() {
+            var f = document.createElement('form'); f.method = 'post';
+            f.action = '/admin/groups/' + btn.dataset.gid + '/delete';
+            var c = document.createElement('input'); c.type = 'hidden'; c.name = '_csrf';
+            c.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+            f.appendChild(c); document.body.appendChild(f); f.submit();
+        });
+    });
+});
+</script>

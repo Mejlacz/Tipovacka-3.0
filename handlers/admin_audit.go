@@ -29,7 +29,7 @@ func historyCategory(action string) string {
 	case "tip_save", "extra_save", "admin_set_tip", "admin_set_extra_answer":
 		return "tipy"
 	case "match_score", "match_score_clear", "match_create", "match_add_quick",
-		"match_edit", "match_delete", "match_date_change", "auto_fetch_results", "api_update_results":
+		"match_edit", "match_delete", "match_date_change", "match_import", "auto_fetch_results", "api_update_results":
 		return "zapasy"
 	case "round_create", "round_edit", "round_delete", "round_toggle":
 		return "kola"
@@ -65,6 +65,7 @@ var histActionIcon = map[string]string{
 	"match_edit":             "✏️",
 	"match_delete":           "🗑️",
 	"match_date_change":      "🗓️",
+	"match_import":           "📥",
 	"auto_fetch_results":     "🤖",
 	"api_update_results":     "🔄",
 	"round_create":           "📋",
@@ -94,7 +95,7 @@ var histActionIcon = map[string]string{
 // histCatActions mapuje kategorii → slice akcí (sdíleno mezi History a AuditLog).
 var histCatActions = map[string][]string{
 	"tipy":      {"tip_save", "extra_save", "admin_set_tip", "admin_set_extra_answer"},
-	"zapasy":    {"match_score", "match_score_clear", "match_create", "match_add_quick", "match_edit", "match_delete", "match_date_change", "auto_fetch_results", "api_update_results"},
+	"zapasy":    {"match_score", "match_score_clear", "match_create", "match_add_quick", "match_edit", "match_delete", "match_date_change", "match_import", "auto_fetch_results", "api_update_results"},
 	"kola":      {"round_create", "round_edit", "round_delete", "round_toggle"},
 	"uzivatele": {"user_create", "user_role", "user_delete", "user_approve", "user_block", "user_unblock", "user_toggle_admin", "user_toggle_owner", "user_inactive", "user_import", "merge_user"},
 	"tymy":      {"team_merge", "team_delete"},
@@ -250,6 +251,7 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 			page = 1
 		}
 		cat := r.URL.Query().Get("cat")
+		selectedAction := r.URL.Query().Get("action")
 
 		// ── Počty per kategorie ────────────────────────────────────────────
 		type CatCount struct {
@@ -283,8 +285,11 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		var conditions []string
 		var queryArgs []interface{}
 
-		// Non-Owner admins nevidí přesné tipy uživatelů
-		if !admin.IsOwner {
+		// Tipy se zobrazují pouze v záložce "tipy", ne v "Vše"
+		if cat == "" {
+			conditions = append(conditions, `action NOT IN ('tip_save','extra_save')`)
+		} else if !admin.IsOwner {
+			// Non-Owner admins nevidí přesné tipy ani v záložce tipy
 			conditions = append(conditions, `action NOT IN ('tip_save','extra_save')`)
 		}
 
@@ -301,6 +306,36 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 				conditions = append(conditions, `action != ALL($`+strconv.Itoa(len(queryArgs))+`)`)
 			}
 		}
+		if selectedAction != "" {
+			queryArgs = append(queryArgs, selectedAction)
+			conditions = append(conditions, `action = $`+strconv.Itoa(len(queryArgs)))
+		}
+
+		// Dostupné akce pro select (respektuje cat filtr, ale ne action filtr)
+		var availableActions []string
+		actConditions := conditions[:len(conditions)]
+		if selectedAction != "" {
+			actConditions = conditions[:len(conditions)-1]
+		}
+		actWhere := ""
+		actArgs := queryArgs[:len(queryArgs)]
+		if selectedAction != "" {
+			actArgs = queryArgs[:len(queryArgs)-1]
+		}
+		for i, c := range actConditions {
+			if i == 0 {
+				actWhere = " WHERE " + c
+			} else {
+				actWhere += " AND " + c
+			}
+		}
+		actRows, _ := db.Pool.Query(ctx, `SELECT DISTINCT action FROM audit_log`+actWhere+` ORDER BY action`, actArgs...)
+		for actRows.Next() {
+			var a string
+			_ = actRows.Scan(&a)
+			availableActions = append(availableActions, a)
+		}
+		actRows.Close()
 
 		whereClause := ""
 		for i, c := range conditions {
@@ -342,11 +377,11 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		}
 		rows.Close()
 
-		// Undoable: last 3 not-yet-undone undoable actions
+		// Undoable: last 100 not-yet-undone undoable actions
 		undoRows, _ := db.Pool.Query(ctx,
 			`SELECT id FROM audit_log
 			  WHERE undone = FALSE AND action = ANY($1)
-			  ORDER BY id DESC LIMIT 3`,
+			  ORDER BY id DESC LIMIT 100`,
 			[]string{"match_score", "user_create", "user_role", "admin_set_tip"})
 		undoableIDs := map[int]bool{}
 		for undoRows.Next() {
@@ -359,17 +394,19 @@ func AdminAuditLog(tmpl *template.Template) http.HandlerFunc {
 		flash := middleware.GetFlash(w, r)
 
 		RenderTemplate(w, r, tmpl, "audit_log.html", TemplateData{
-			"User":            admin,
-			"Entries":         entries,
-			"UndoableIDs":     undoableIDs,
-			"UndoableActions": UNDOABLE_ACTIONS,
-			"Flash":           flash,
-			"Page":            page,
-			"TotalPages":      totalPages,
-			"TotalCount":      totalCount,
-			"TotalAll":        totalAll,
-			"CatCounts":       catCounts,
-			"SelectedCat":     cat,
+			"User":             admin,
+			"Entries":          entries,
+			"UndoableIDs":      undoableIDs,
+			"UndoableActions":  UNDOABLE_ACTIONS,
+			"Flash":            flash,
+			"Page":             page,
+			"TotalPages":       totalPages,
+			"TotalCount":       totalCount,
+			"TotalAll":         totalAll,
+			"CatCounts":        catCounts,
+			"SelectedCat":      cat,
+			"SelectedAction":   selectedAction,
+			"AvailableActions": availableActions,
 		})
 	}
 }
@@ -399,11 +436,11 @@ func AdminAuditUndo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify it's within last 3 undoable
+	// Verify it's within last 100 undoable
 	undoRows, _ := db.Pool.Query(ctx,
 		`SELECT id FROM audit_log
 		  WHERE undone = FALSE AND action = ANY($1)
-		  ORDER BY id DESC LIMIT 3`,
+		  ORDER BY id DESC LIMIT 100`,
 		[]string{"match_score", "user_create", "user_role", "admin_set_tip"})
 	undoableIDs := map[int]bool{}
 	for undoRows.Next() {
@@ -414,7 +451,7 @@ func AdminAuditUndo(w http.ResponseWriter, r *http.Request) {
 	undoRows.Close()
 
 	if !undoableIDs[entryID] {
-		middleware.SetFlash(w, r, "warn", "Lze vrátit jen posledních 3 akce.")
+		middleware.SetFlash(w, r, "warn", "Lze vrátit jen posledních 100 akcí.")
 		http.Redirect(w, r, "/admin/audit", http.StatusSeeOther)
 		return
 	}

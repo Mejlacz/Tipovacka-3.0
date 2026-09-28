@@ -79,12 +79,11 @@
     <h2>3. Aktivní soutěže</h2>
     {{if .ActiveComps}}
     <table class="hd-table">
-        <tr><th>ID</th><th>Název</th><th>Kola</th><th>Zápasy</th><th>Nevyhodnocené</th></tr>
+        <tr><th>ID</th><th>Název</th><th>Zápasy</th><th>Nevyhodnocené</th></tr>
         {{range .ActiveComps}}
         <tr>
             <td style="color:var(--muted-d)">{{.ID}}</td>
-            <td><a href="/admin/competitions/{{.ID}}/rounds">{{.Name}}</a></td>
-            <td>{{.Rounds}}</td>
+            <td><a href="/admin/competitions/{{.ID}}/matches">{{.Name}}</a></td>
             <td>{{.Matches}}</td>
             <td>
                 {{if gt .Unscored 0}}
@@ -106,13 +105,12 @@
     <h2>4. Nadcházející zápasy</h2>
     {{if .Upcoming}}
     <table class="hd-table">
-        <tr><th>ID</th><th>Zápas</th><th>Datum</th><th>Kolo</th><th>Soutěž</th></tr>
+        <tr><th>ID</th><th>Zápas</th><th>Datum</th><th>Soutěž</th></tr>
         {{range .Upcoming}}
         <tr>
             <td style="color:var(--muted-d);font-size:.75em">{{.ID}}</td>
             <td>{{.Home}} – {{.Away}}</td>
             <td>{{.Date}}</td>
-            <td>{{.RoundName}}</td>
             <td>{{.CompName}}</td>
         </tr>
         {{end}}

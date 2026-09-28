@@ -1,27 +1,56 @@
 <style>
 main.container { margin-left: 0 !important; max-width: 100% !important; width: 100% !important; }
+
+/* ── Leaderboard header ── */
+.lb-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem; padding:.5rem 0 1rem; }
+.lb-header h1 { font-size:1.4rem; font-weight:800; color:var(--text-d); margin:0; }
+.lb-header-right { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.lb-comp-select { background:var(--bg3); border:1px solid var(--border-d); color:var(--text-d); border-radius:8px; padding:.35rem .65rem; font-size:.85rem; font-weight:600; cursor:pointer; outline:none; min-width:200px; }
+.lb-comp-select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(99,102,241,.15); }
+
+/* ── Legend pills ── */
+.lb-legend { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:.75rem; }
+.lb-pill { display:inline-flex; align-items:center; gap:.4rem; padding:.25rem .65rem; border-radius:20px; font-size:.75rem; font-weight:600; }
+.lb-pill-exact  { background:var(--ui-exact-bg, #14532d); color:#86efac; border:1px solid rgba(134,239,172,.2); }
+.lb-pill-winner { background:var(--ui-winner-bg, #3d2200); color:#ca8a04; border:1px solid rgba(202,138,4,.2); }
+.lb-pill-miss   { background:var(--ui-miss-bg, #1e2a38); color:#64748b; border:1px solid rgba(100,116,139,.2); }
+.lb-pill-hidden { background:rgba(99,102,241,.1); color:var(--accent); border:1px solid rgba(99,102,241,.25); }
+.lb-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.lb-dot-open   { background:#22c55e; }
+.lb-dot-closed { background:#f59e0b; }
+
+/* ── Rank medals top 3 ── */
+.rank-medal { font-size:1rem; line-height:1; }
+
+/* ── Me highlight improved ── */
+.leaderboard-matrix tbody tr.highlight td.col-user .player-tip { font-weight:700; }
 </style>
-<div class="page-header">
+
+<div class="lb-header">
     <h1>{{tr .Lang "lb_title"}}</h1>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+    <div class="lb-header-right">
         <form method="get" action="/leaderboard" class="filter-form" style="margin:0">
-            <select name="competition_id" onchange="this.form.submit()">
-                {{range .Competitions}}
+            <select name="competition_id" class="lb-comp-select" onchange="this.form.submit()">
+                <optgroup label="Aktivní">
+                {{range .Competitions}}{{if .IsActive}}
                 <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
-                    {{if .IsHidden}}🙈 {{end}}{{.Name}} {{.Season}}
+                    {{if .IsHidden}}🙈 {{end}}{{trc $.Lang .Name}} {{.Season}}
                 </option>
-                {{end}}
+                {{end}}{{end}}
+                </optgroup>
+                <optgroup label="Archiv">
+                {{range .Competitions}}{{if not .IsActive}}
+                <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
+                    {{trc $.Lang .Name}} {{.Season}}
+                </option>
+                {{end}}{{end}}
+                </optgroup>
             </select>
         </form>
-        {{if and .User.IsAdmin .SelectedCompetitionID .CompRounds}}
-        <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('add-match-modal').style.display='flex'"
-                style="font-size:0.82rem">➕ Zápas</button>
-        {{end}}
         {{if and .User.IsAdmin .SelectedCompetitionID}}
-        <a href="/admin/tips/{{.SelectedCompetitionID}}/export" class="btn btn-secondary btn-sm"
-           style="font-size:0.82rem" title="Stáhnout CSV se tipy soutěže">Export tipů</a>
-        <a href="/admin/tips/{{.SelectedCompetitionID}}/import" class="btn btn-secondary btn-sm"
-           style="font-size:0.82rem" title="Importovat tipy ze CSV">Import tipů</a>
+        <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('add-match-modal').style.display='flex'">➕ Zápas</button>
+        <a href="/admin/tips/{{.SelectedCompetitionID}}/export" class="btn btn-secondary btn-sm" title="Stáhnout CSV se tipy soutěže">Export tipů</a>
+        <a href="/admin/tips/{{.SelectedCompetitionID}}/import" class="btn btn-secondary btn-sm" title="Importovat tipy ze CSV">Import tipů</a>
         {{end}}
     </div>
 </div>
@@ -33,24 +62,11 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
 {{end}}
 
 {{/* ── Add Match Modal (admin only) ── */}}
-{{if and .User.IsAdmin .SelectedCompetitionID .CompRounds}}
+{{if and .User.IsAdmin .SelectedCompetitionID}}
 <div id="add-match-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
     <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:12px;padding:1.5rem;width:min(420px,95vw);max-height:90vh;overflow-y:auto">
         <h3 style="margin:0 0 1rem">➕ Přidat zápas</h3>
         <form method="post" id="add-match-form">
-            <div class="form-group" style="margin-bottom:.75rem">
-                <label style="font-size:.82rem;color:var(--muted-d)">Kolo</label>
-                <select name="round_id" id="am-round" required style="width:100%">
-                    <option value="new">➕ Nové kolo</option>
-                    {{range .CompRounds}}
-                    <option value="{{.ID}}">{{.Name}}</option>
-                    {{end}}
-                </select>
-            </div>
-            <div class="form-group" id="am-new-round-row" style="margin-bottom:.75rem">
-                <label style="font-size:.82rem;color:var(--muted-d)">Název nového kola</label>
-                <input type="text" name="new_round_name" id="am-new-round-name" value="{{.NextRoundName}}" style="width:100%" />
-            </div>
             <div class="form-group" style="margin-bottom:.75rem">
                 <label style="font-size:.82rem;color:var(--muted-d)">Domácí</label>
                 <select name="home_team_id" required style="width:100%">
@@ -78,13 +94,6 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
 (function() {
     var modal = document.getElementById('add-match-modal');
     var form  = document.getElementById('add-match-form');
-    var roundSel = document.getElementById('am-round');
-    var newRoundRow = document.getElementById('am-new-round-row');
-    function toggleNewRound() {
-        newRoundRow.style.display = roundSel.value === 'new' ? '' : 'none';
-    }
-    roundSel.addEventListener('change', toggleNewRound);
-    toggleNewRound();
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
     form.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -109,19 +118,16 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
 
 
 {{/* ── Barevná legenda ── */}}
-<div class="lb-legend" style="margin-bottom:.75rem;font-size:.82rem;display:flex;gap:1rem;flex-wrap:wrap">
-    <span class="lb-legend-item"><span class="lb-legend-dot tip-exact" style="display:inline-block;width:12px;height:12px;background:var(--ui-exact-bg,#16a34a);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Přesný tip</span>
-    <span class="lb-legend-item"><span class="lb-legend-dot tip-winner" style="display:inline-block;width:12px;height:12px;background:var(--ui-winner-bg,#b45309);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Správný vítěz</span>
-    <span class="lb-legend-item"><span class="lb-legend-dot tip-miss" style="display:inline-block;width:12px;height:12px;background:var(--bg3);border-radius:2px;margin-right:3px;vertical-align:middle"></span>Špatný tip</span>
-    <span class="lb-legend-item"><span style="color:var(--accent);font-size:0.9rem">✓</span> Vsazeno (skryto)</span>
+<div class="lb-legend">
+    <span class="lb-pill lb-pill-exact">✅ {{tr .Lang "lb_legend_exact"}}</span>
+    <span class="lb-pill lb-pill-winner">☑️ {{tr .Lang "lb_legend_winner"}}</span>
+    <span class="lb-pill lb-pill-miss">❌ {{tr .Lang "lb_legend_miss"}}</span>
+    <span class="lb-pill lb-pill-hidden">✓ {{tr .Lang "lb_legend_hidden"}}</span>
+    {{if or .User.IsAdmin .User.IsOwner}}
+    <span class="lb-pill" style="background:rgba(34,197,94,.08);color:#22c55e;border:1px solid rgba(34,197,94,.2)"><span class="lb-dot lb-dot-open"></span>otevřeno</span>
+    <span class="lb-pill" style="background:rgba(245,158,11,.08);color:#f59e0b;border:1px solid rgba(245,158,11,.2)"><span class="lb-dot lb-dot-closed"></span>uzavřeno</span>
+    {{end}}
 </div>
-
-{{if or .User.IsAdmin .User.IsOwner}}
-<div style="font-size:0.75rem;color:var(--muted-d);margin-bottom:0.4rem;display:flex;align-items:center;gap:0.9rem;flex-wrap:wrap">
-    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;vertical-align:middle;margin-right:3px"></span>otevřeno (editovatelně uživateli)</span>
-    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;vertical-align:middle;margin-right:3px"></span>uzavřeno (jen admin)</span>
-</div>
-{{end}}
 
 <div class="table-scroll">
 <table class="leaderboard-matrix">
@@ -129,8 +135,8 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         {{/* ── Row 1: column headers ── */}}
         <tr>
             <th class="col-place">#</th>
-            <th class="col-user">Tipér</th>
-            {{if .ExtraCols}}<th class="col-total" style="border-left:2px solid #dee2e6" title="Celkem (tipy + extra)">Celkem</th>{{end}}
+            <th class="col-user">{{tr .Lang "lb_tipster"}}</th>
+            {{if .ExtraCols}}<th class="col-total" style="border-left:2px solid #dee2e6" title="{{tr .Lang "lb_total"}} ({{tr .Lang "lb_tips"}} + extra)">{{tr .Lang "lb_total"}}</th>{{end}}
             {{range .Matches}}
             {{$htName := coalesce .HomeTeam.DisplayName .HomeTeam.Name}}
             {{$atName := coalesce .AwayTeam.DisplayName .AwayTeam.Name}}
@@ -190,15 +196,15 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                 {{end}}
             </th>
             {{end}}
-            <th class="col-pts" style="font-size:0.75rem;color:var(--muted-d)">Body</th>
-            <th class="col-match" title="Tipy">
-                <div class="match-header" style="font-size:0.78rem">Tipy</div>
+            <th class="col-pts" style="font-size:0.75rem;color:var(--muted-d)">{{tr .Lang "lb_points"}}</th>
+            <th class="col-match" title="{{tr .Lang "lb_tips"}}">
+                <div class="match-header" style="font-size:0.78rem">{{tr .Lang "lb_tips"}}</div>
             </th>
         </tr>
         {{/* ── Row 2: results ── */}}
         <tr class="results-row">
             <td class="col-place" style="color:var(--muted-d)"></td>
-            <td class="col-user" style="font-size:0.75rem;color:var(--muted-d)">Výsledky</td>
+            <td class="col-user" style="font-size:0.75rem;color:var(--muted-d)">{{tr .Lang "lb_results"}}</td>
             {{if .ExtraCols}}<td class="col-total" style="border-left:2px solid #dee2e6"></td>{{end}}
             {{range .Matches}}
             <td class="cell-result{{if or $.User.IsAdmin $.User.IsOwner}} result-editable{{end}}"
@@ -233,14 +239,14 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
     {{$isMe := and $.User (eq $row.User.ID $.User.ID)}}
     <tr {{if $isMe}}class="highlight"{{end}}>
         <td class="col-place">
-            <span class="rank-num">{{$row.Place}}.</span><span class="rank-trend">{{if gt $row.Trend 0}}<span class="trend-up" title="o {{$row.Trend}} míst výš">↑{{$row.Trend}}</span>{{else if lt $row.Trend 0}}<span class="trend-dn" title="o {{absInt $row.Trend}} míst níž">↓{{absInt $row.Trend}}</span>{{end}}</span>
+            {{if eq $row.Place 1}}<span class="rank-medal">🥇</span>{{else if eq $row.Place 2}}<span class="rank-medal">🥈</span>{{else if eq $row.Place 3}}<span class="rank-medal">🥉</span>{{else}}<span class="rank-num">{{$row.Place}}.</span>{{end}}<span class="rank-trend">{{if gt $row.Trend 0}}<span class="trend-up" title="o {{$row.Trend}} míst výš">↑{{$row.Trend}}</span>{{else if lt $row.Trend 0}}<span class="trend-dn" title="o {{absInt $row.Trend}} míst níž">↓{{absInt $row.Trend}}</span>{{end}}</span>
         </td>
         <td class="col-user">
             {{$accStr := "—"}}{{if $row.Accuracy}}{{$accStr = printf "%d %%" (intVal $row.Accuracy)}}{{end}}
             {{$tipData := printf "🎯 Přesnost: %s\n✅ Přesné: %d\n☑️ Vítěz: %d\n❌ Minul: %d\n📊 Tipy: %s" $accStr $row.Exact $row.Winner $row.Miss $row.TipRatio}}
             <span class="player-tip" data-tip="{{$tipData}}" style="cursor:pointer"
                   {{if not $isMe}}data-vs-url="/stats/{{$.SelectedCompetitionID}}/vs/{{$row.User.ID}}"
-                  data-stats-url="/stats/{{$.SelectedCompetitionID}}/extended?user_id={{$row.User.ID}}"{{end}}>{{if $isMe}}<span style="display:inline-block;background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(16,185,129,.35);border-radius:20px;padding:.1rem .55rem;font-size:.78rem;font-weight:700">{{$row.User.Username}}</span>{{else}}{{$row.User.Username}}{{end}}</span>
+                  data-stats-url="/stats/{{$.SelectedCompetitionID}}/extended?user_id={{$row.User.ID}}"{{end}}>{{if $isMe}}<span style="display:inline-block;background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(16,185,129,.35);border-radius:20px;padding:.1rem .55rem;font-size:.78rem;font-weight:700">{{$row.User.Username}}</span>{{else}}{{$row.User.Username}}{{end}}</span>{{if $row.User.IsHidden}}<span title="Schovaný hráč" style="font-size:.75rem;opacity:.6;margin-left:.2rem;cursor:default">👻</span>{{end}}
             {{if ge $row.Streak 3}}<span title="{{$row.Streak}}× přesný tip v řadě" style="font-size:.7rem;margin-left:.25rem;cursor:default">🔥{{$row.Streak}}</span>{{end}}
             {{if and $.User.IsAdmin (not $isMe)}}
             <button class="user-remove-tips-btn"
@@ -665,7 +671,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var modal = document.createElement('div');
     modal.id = 'tipster-modal';
     modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:2000;align-items:flex-start;justify-content:center;padding-top:' + (navH + 12) + 'px;padding-left:1rem;padding-right:1rem;overflow-y:auto';
-    modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:16px;padding:1.4rem 1.25rem 1.1rem;width:min(380px,92vw);margin-bottom:1rem"><div id="tipster-modal-body"></div><button id="tipster-modal-close" class="btn btn-secondary btn-sm" style="margin-top:1.1rem;width:100%">Zavřít</button></div>';
+    modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:16px;padding:1.4rem 1.25rem 1.1rem;width:min(380px,92vw);margin-bottom:1rem"><div id="tipster-modal-body"></div><button id="tipster-modal-close" class="btn btn-secondary btn-sm" style="margin-top:1.1rem;width:100%">{{tr .Lang "lb_modal_close"}}</button></div>';
     document.body.appendChild(modal);
     document.getElementById('tipster-modal-close').addEventListener('click', function() { modal.style.display = 'none'; });
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });

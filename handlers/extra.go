@@ -79,9 +79,8 @@ func ExtraView(tmpl *template.Template) http.HandlerFunc {
 				// Auto: začátek prvního zápasu v soutěži
 				var firstMatch time.Time
 				err := db.Pool.QueryRow(ctx,
-					`SELECT MIN(m.match_date) FROM matches m
-					   JOIN rounds r ON r.id = m.round_id
-					  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, comp.ID).
+					`SELECT MIN(match_date) FROM matches
+					  WHERE competition_id = $1 AND match_date IS NOT NULL`, comp.ID).
 					Scan(&firstMatch)
 				if err == nil && !firstMatch.IsZero() {
 					effectiveDeadline = &firstMatch
@@ -202,9 +201,8 @@ func ExtraSaveAjax(w http.ResponseWriter, r *http.Request) {
 	if compExtraDeadline == nil {
 		var firstMatch time.Time
 		errFM := db.Pool.QueryRow(ctx,
-			`SELECT MIN(m.match_date) FROM matches m
-			   JOIN rounds r ON r.id = m.round_id
-			  WHERE r.competition_id = $1 AND m.match_date IS NOT NULL`, q.CompetitionID).
+			`SELECT MIN(match_date) FROM matches
+			  WHERE competition_id = $1 AND match_date IS NOT NULL`, q.CompetitionID).
 			Scan(&firstMatch)
 		if errFM == nil && !firstMatch.IsZero() && time.Now().After(firstMatch) {
 			w.Header().Set("Content-Type", "application/json")

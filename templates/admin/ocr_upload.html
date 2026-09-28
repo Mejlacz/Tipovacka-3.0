@@ -18,20 +18,12 @@
 
         <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
             <div style="flex:1;min-width:220px">
-                <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Kolo</label>
-                <select name="round_id" required style="width:100%">
-                    <option value="">— Vyber kolo —</option>
-                    {{$last := ""}}
-                    {{range .Rounds}}
-                        {{$label := print .CompName " — " .CompSeason}}
-                        {{if ne $label $last}}
-                            {{if $last}}</optgroup>{{end}}
-                            <optgroup label="{{$label}}">
-                            {{$last = $label}}
-                        {{end}}
-                        <option value="{{.ID}}">{{.Name}}</option>
+                <label style="font-size:.8rem;color:var(--muted-d);display:block;margin-bottom:.3rem">Soutěž</label>
+                <select name="competition_id" required style="width:100%">
+                    <option value="">— Vyber soutěž —</option>
+                    {{range .Comps}}
+                        <option value="{{.ID}}">{{.Name}} {{.Season}}</option>
                     {{end}}
-                    {{if .Rounds}}</optgroup>{{end}}
                 </select>
             </div>
         </div>

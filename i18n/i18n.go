@@ -2,6 +2,16 @@
 // Jednoduchý překladový systém (CS / EN).
 package i18n
 
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
+)
+
 var translations = map[string]map[string]string{
 	"cs": {
 		"nav_leaderboard":    "Žebříček",
@@ -91,6 +101,11 @@ var translations = map[string]map[string]string{
 		"tips_saved":         "Uloženo",
 		"tips_nothing_to_save": "Nic k uložení",
 		"tips_save_error":    "tipů se nepodařilo uložit",
+		"tips_errors":        "chyb",
+		"tips_extra_btn":     "🎯 Tipovat Extra otázky",
+		"tips_open_section":  "⚡ Otevřená tipování",
+		"tips_starting":      "Právě začíná!",
+		"tips_all_tipped_wait": "✅ Všechno natipováno! Změnit tipy můžeš v žebříčku.",
 		"archive_title":      "Archiv soutěží",
 		"archive_no_comps":   "Žádné soutěže.",
 		"archive_active":     "Aktivní",
@@ -106,6 +121,14 @@ var translations = map[string]map[string]string{
 		"archive_round_total": "Kolo celkem",
 		"archive_no_tips":    "Žádné tipy v této soutěži.",
 		"archive_tipster":    "Tipér",
+		"hof_title":          "🏆 Síň slávy",
+		"hof_link":           "🏆 Síň slávy",
+		"hof_tipper":         "Tipér",
+		"hof_gold":           "🥇 1. místo",
+		"hof_silver":         "🥈 2. místo",
+		"hof_bronze":         "🥉 3. místo",
+		"hof_podiums":        "Pódia",
+		"hof_no_data":        "Zatím žádná data — soutěže musí být vyhodnoceny.",
 		"extra_add_question": "+ Přidat otázku",
 		"extra_manage_answers": "✏️ Správa odpovědí",
 		"extra_export":       "📤 Export XLSX",
@@ -127,6 +150,11 @@ var translations = map[string]map[string]string{
 		"extra_conn_error":   "Chyba spojení.",
 		"extra_comp_label":   "Soutěž:",
 		"extra_delete_confirm": "Smazat otázku",
+		"extra_select_ph":    "— vyberte —",
+		"extra_delete_q":     "Opravdu smazat otázku",
+		"extra_locked_revealed": "🔒 Tipování uzavřeno · Výsledky zveřejněny",
+		"extra_locked_pending":  "🔒 Tipování uzavřeno · Výsledky budou zveřejněny brzy",
+		"extra_deadline_label":  "⏰ Deadline pro tipování:",
 		"profile_title":      "👤 Profil",
 		"profile_personal":   "Osobní údaje",
 		"profile_nickname":   "Přezdívka",
@@ -291,6 +319,123 @@ var translations = map[string]map[string]string{
 		"email_confirm_suf":  "vybraným uživatelům",
 		"email_manual_plus":  "+ manuální emaily",
 		"email_translate_en": "🌐 Přidat EN překlad (Google Translate)",
+		// Mobile bottom nav
+		"mbn_matches":  "Zápasy",
+		"mbn_stats":    "Statistiky",
+		"mbn_extra":    "Extra",
+		"mbn_profile":  "Profil",
+		// Theme picker
+		"theme_picker_title":  "🎨 Vybrat téma",
+		"theme_close":         "Zavřít",
+		"theme_dark_desc":     "Výchozí tmavé téma",
+		"theme_classic_desc":  "Retro červený styl",
+		"theme_midnight_desc": "Hluboká fialová záře",
+		"theme_ocean_desc":    "Tmavý oceán, teal akcent",
+		"theme_forest_desc":   "Temný les, zaoblené tvary",
+		"theme_sunset_desc":   "Teplá jantarová záře",
+		"theme_neon_desc":     "Kyberpunk, neonová záře",
+		"theme_light_desc":    "Čistý denní vzhled",
+		// Nav links missing
+		"nav_feedback": "💬 Napište nám",
+		"nav_info":     "ℹ️ Info",
+		// Index
+		"index_open_tips": "⚡ Otevřená tipování",
+		"index_extra_tip": "🎯 Tipovat Extra otázky",
+		// Feedback page
+		"feedback_title":          "💬 Napište nám",
+		"feedback_desc":           "Máte nápad na vylepšení, narazili jste na chybu nebo chcete prostě napsat adminům? Pište sem — odpovíme co nejdříve.",
+		"feedback_placeholder":    "Váš nápad nebo zpráva… (Ctrl+Enter pro odeslání)",
+		"feedback_attach":         "📎 Přiložit screenshot",
+		"feedback_remove_img":     "✕ Odebrat",
+		"feedback_send":           "Odeslat zprávu",
+		"feedback_sending":        "⏳ Odesílám…",
+		"feedback_previous":       "Vaše předchozí zprávy",
+		"feedback_read":           "✓ Přečteno adminem",
+		"feedback_unread":         "⏳ Nepřečteno",
+		"feedback_too_short":      "Zpráva je příliš krátká.",
+		"feedback_img_too_large":  "❌ Obrázek je příliš velký (max 5 MB).",
+		"feedback_sent":           "✅ Zpráva odeslána! Díky.",
+		"feedback_conn_error":     "❌ Chyba spojení.",
+		"feedback_err_too_short":  "zpráva je příliš krátká",
+		"feedback_err_bad_img":    "nepodporovaný formát obrázku (.jpg, .png, .webp)",
+		"feedback_err_img_large":  "obrázek je příliš velký (max 5 MB)",
+		"feedback_err_db":         "nepodařilo se uložit",
+		"feedback_err_server":     "chyba serveru",
+		"feedback_err_send":       "nepodařilo se odeslat",
+		// Profile additions
+		"profile_no_avatar":        "Nemáš nastavenou profilovou fotku.",
+		"profile_delete_avatar":    "Smazat fotku",
+		"profile_confirm_del":      "Opravdu smazat profilovou fotku?",
+		"profile_upload_avatar":    "⬆️ Nahrát fotku",
+		"profile_avatar_hint":      "Max 5 MB, formáty: JPG, PNG, WEBP.",
+		"profile_optional":         "Nepovinné",
+		"profile_language":         "Jazyk",
+		"profile_appearance_title": "🎨 Vzhled rozhraní",
+		"profile_appearance_desc":  "Barvy tipů, font a akcent — vlastní rozhraní přizpůsobené tobě.",
+		"profile_appearance_btn":   "Upravit vzhled →",
+		"profile_save_settings":    "Uložit nastavení",
+		"profile_push_devices_lbl": "Přihlášená zařízení:",
+		"profile_push_device_hint": "— push platí jen pro toto zařízení.",
+		"profile_push_device_col":  "Zařízení",
+		"profile_push_endpoint":    "Endpoint",
+		"profile_push_rm_confirm":  "Odebrat tento push přístroj?",
+		"profile_push_on_status":   "Push je zapnutý na tomto zařízení.",
+		"profile_push_off_status":  "Push není zapnutý.",
+		"profile_push_error":       "Chyba:",
+		"profile_stat_exact":       "🎯 Přesné:",
+		"profile_stat_winner":      "✅ Výsledek:",
+		"profile_stat_miss":        "❌ Špatně:",
+		"profile_stat_tips":        "📋 Tipů:",
+		"profile_stat_tippts":      "📦 Body tipy:",
+		"profile_stat_extra":       "🏅 Extra:",
+		"profile_stat_total":       "🏆 Celkem:",
+		"profile_logout_title":     "🚪 Odhlásit se",
+		"profile_logout_btn":       "Odhlásit se",
+		// Leaderboard
+		"lb_results": "Výsledky",
+		// Achievements
+		"ach_all_comps": "🌍 Všechny soutěže",
+		"ach_no_comp":   "Žádná soutěž nenalezena.",
+		"ach_no_tips":   "V téhle soutěži zatím nikdo netipoval.",
+		"ach_all_desc":  "Celkový přehled achievementů přes všechny soutěže. Čísla v buňkách = kolikrát byl achievement získán v různých soutěžích.",
+		"ach_legend":    "📖 Zobrazit legendu",
+		"ach_player":    "Hráč",
+		"ach_total":     "Celkem",
+		"ach_closed":    "🔒 Uzavřená soutěž — achievementy jsou finální.",
+		// Appearance page
+		"app_title":        "🎨 Vzhled rozhraní",
+		"app_back":         "← Zpět na profil",
+		"app_tip_colors":   "🎯 Barvy buněk tipů",
+		"app_exact_tip":    "Přesný tip (3 body)",
+		"app_exact_sub":    "Pozadí buňky se správným skóre",
+		"app_winner_tip":   "Správný vítěz (1 bod)",
+		"app_winner_sub":   "Pozadí buňky se správným vítězem",
+		"app_miss_tip":     "Špatný tip (0 bodů)",
+		"app_miss_sub":     "Pozadí buňky se špatným tipem",
+		"app_other_colors": "🎨 Ostatní barvy",
+		"app_accent":       "Akcent",
+		"app_accent_sub":   "Tlačítka, linky, aktivní prvky",
+		"app_row_hl":       "Zvýraznění vlastního řádku",
+		"app_row_hl_sub":   "Barva pozadí tvého řádku v žebříčku",
+		"app_font":         "🔤 Písmo",
+		"app_save":         "Uložit vzhled",
+		"app_reset":        "Obnovit výchozí náhled",
+		"app_preview":      "👁️ Náhled žebříčku",
+		"app_results_row":  "Výsledky",
+		"app_exact_label":  "Přesný tip (3 b)",
+		"app_winner_label": "Správný vítěz (1 b)",
+		"app_miss_label":   "Špatný tip",
+		"app_accent_label": "Akcent:",
+		"app_link_sample":  "ukázkový odkaz",
+		"app_btn_sample":   "tlačítko",
+		// Chat
+		"chat_connecting":  "Připojuji se…",
+		"chat_disconnected":"Odpojeno — reconnecting…",
+		"chat_new_msgs":    "⬇ nové zprávy",
+		"chat_placeholder": "Napište zprávu… (Enter odešle, Shift+Enter nový řádek)",
+		"chat_today":       "Dnes",
+		"chat_yesterday":   "Včera",
+		"tips_saved_tips":  "tipů",
 	},
 	"en": {
 		"nav_leaderboard":    "Leaderboard",
@@ -380,6 +525,11 @@ var translations = map[string]map[string]string{
 		"tips_saved":         "Saved",
 		"tips_nothing_to_save": "Nothing to save",
 		"tips_save_error":    "tips failed to save",
+		"tips_errors":        "errors",
+		"tips_extra_btn":     "🎯 Tip Extra questions",
+		"tips_open_section":  "⚡ Open tips",
+		"tips_starting":      "Starting now!",
+		"tips_all_tipped_wait": "✅ All tipped! You can change tips in the leaderboard.",
 		"archive_title":      "Competition archive",
 		"archive_no_comps":   "No competitions.",
 		"archive_active":     "Active",
@@ -395,6 +545,14 @@ var translations = map[string]map[string]string{
 		"archive_round_total": "Round total",
 		"archive_no_tips":    "No tips in this competition.",
 		"archive_tipster":    "Tipster",
+		"hof_title":          "🏆 Hall of Fame",
+		"hof_link":           "🏆 Hall of Fame",
+		"hof_tipper":         "Tipster",
+		"hof_gold":           "🥇 1st place",
+		"hof_silver":         "🥈 2nd place",
+		"hof_bronze":         "🥉 3rd place",
+		"hof_podiums":        "Podiums",
+		"hof_no_data":        "No data yet — competitions must be evaluated first.",
 		"extra_add_question": "+ Add question",
 		"extra_manage_answers": "✏️ Manage answers",
 		"extra_export":       "📤 Export XLSX",
@@ -416,6 +574,11 @@ var translations = map[string]map[string]string{
 		"extra_conn_error":   "Connection error.",
 		"extra_comp_label":   "Competition:",
 		"extra_delete_confirm": "Delete question",
+		"extra_select_ph":    "— select —",
+		"extra_delete_q":     "Really delete question",
+		"extra_locked_revealed": "🔒 Tipping closed · Results revealed",
+		"extra_locked_pending":  "🔒 Tipping closed · Results coming soon",
+		"extra_deadline_label":  "⏰ Tipping deadline:",
 		"profile_title":      "👤 Profile",
 		"profile_personal":   "Personal info",
 		"profile_nickname":   "Nickname",
@@ -580,7 +743,188 @@ var translations = map[string]map[string]string{
 		"email_confirm_suf":  "selected recipients",
 		"email_manual_plus":  "+ manual emails",
 		"email_translate_en": "🌐 Add EN translation (Google Translate)",
+		// Mobile bottom nav
+		"mbn_matches":  "Matches",
+		"mbn_stats":    "Stats",
+		"mbn_extra":    "Extra",
+		"mbn_profile":  "Profile",
+		// Theme picker
+		"theme_picker_title":  "🎨 Choose theme",
+		"theme_close":         "Close",
+		"theme_dark_desc":     "Default dark theme",
+		"theme_classic_desc":  "Retro red style",
+		"theme_midnight_desc": "Deep purple glow",
+		"theme_ocean_desc":    "Dark ocean, teal accent",
+		"theme_forest_desc":   "Dark forest, green tones",
+		"theme_sunset_desc":   "Warm amber glow",
+		"theme_neon_desc":     "Cyberpunk neon glow",
+		"theme_light_desc":    "Clean light look",
+		// Nav links missing
+		"nav_feedback": "💬 Contact us",
+		"nav_info":     "ℹ️ Info",
+		// Index
+		"index_open_tips": "⚡ Open tips",
+		"index_extra_tip": "🎯 Extra questions",
+		// Feedback page
+		"feedback_title":          "💬 Contact us",
+		"feedback_desc":           "Have a suggestion, found a bug, or just want to reach the admins? Write here — we will get back to you as soon as possible.",
+		"feedback_placeholder":    "Your idea or message… (Ctrl+Enter to send)",
+		"feedback_attach":         "📎 Attach screenshot",
+		"feedback_remove_img":     "✕ Remove",
+		"feedback_send":           "Send message",
+		"feedback_sending":        "⏳ Sending…",
+		"feedback_previous":       "Your previous messages",
+		"feedback_read":           "✓ Read by admin",
+		"feedback_unread":         "⏳ Unread",
+		"feedback_too_short":      "Message is too short.",
+		"feedback_img_too_large":  "❌ Image is too large (max 5 MB).",
+		"feedback_sent":           "✅ Message sent! Thanks.",
+		"feedback_conn_error":     "❌ Connection error.",
+		"feedback_err_too_short":  "message is too short",
+		"feedback_err_bad_img":    "unsupported image format (.jpg, .png, .webp)",
+		"feedback_err_img_large":  "image too large (max 5 MB)",
+		"feedback_err_db":         "failed to save",
+		"feedback_err_server":     "server error",
+		"feedback_err_send":       "failed to send",
+		// Profile additions
+		"profile_no_avatar":        "No profile picture set.",
+		"profile_delete_avatar":    "Delete photo",
+		"profile_confirm_del":      "Really delete profile picture?",
+		"profile_upload_avatar":    "⬆️ Upload photo",
+		"profile_avatar_hint":      "Max 5 MB, formats: JPG, PNG, WEBP.",
+		"profile_optional":         "Optional",
+		"profile_language":         "Language",
+		"profile_appearance_title": "🎨 Interface appearance",
+		"profile_appearance_desc":  "Tip colors, font and accent — interface customized for you.",
+		"profile_appearance_btn":   "Customize appearance →",
+		"profile_save_settings":    "Save settings",
+		"profile_push_devices_lbl": "Registered devices:",
+		"profile_push_device_hint": "— push works only on this device.",
+		"profile_push_device_col":  "Device",
+		"profile_push_endpoint":    "Endpoint",
+		"profile_push_rm_confirm":  "Remove this push device?",
+		"profile_push_on_status":   "Push is enabled on this device.",
+		"profile_push_off_status":  "Push is not enabled.",
+		"profile_push_error":       "Error:",
+		"profile_stat_exact":       "🎯 Exact:",
+		"profile_stat_winner":      "✅ Winner:",
+		"profile_stat_miss":        "❌ Miss:",
+		"profile_stat_tips":        "📋 Tips:",
+		"profile_stat_tippts":      "📦 Tip points:",
+		"profile_stat_extra":       "🏅 Extra:",
+		"profile_stat_total":       "🏆 Total:",
+		"profile_logout_title":     "🚪 Sign out",
+		"profile_logout_btn":       "Sign out",
+		// Leaderboard
+		"lb_results": "Results",
+		// Achievements
+		"ach_all_comps": "🌍 All competitions",
+		"ach_no_comp":   "No competition found.",
+		"ach_no_tips":   "Nobody has tipped in this competition yet.",
+		"ach_all_desc":  "Overall achievements across all competitions. Numbers in cells = how many times the achievement was earned in different competitions.",
+		"ach_legend":    "📖 Show legend",
+		"ach_player":    "Player",
+		"ach_total":     "Total",
+		"ach_closed":    "🔒 Closed competition — achievements are final.",
+		// Appearance page
+		"app_title":        "🎨 Interface appearance",
+		"app_back":         "← Back to profile",
+		"app_tip_colors":   "🎯 Tip cell colors",
+		"app_exact_tip":    "Exact tip (3 points)",
+		"app_exact_sub":    "Cell background for correct score",
+		"app_winner_tip":   "Correct winner (1 point)",
+		"app_winner_sub":   "Cell background for correct winner",
+		"app_miss_tip":     "Wrong tip (0 points)",
+		"app_miss_sub":     "Cell background for wrong tip",
+		"app_other_colors": "🎨 Other colors",
+		"app_accent":       "Accent",
+		"app_accent_sub":   "Buttons, links, active elements",
+		"app_row_hl":       "Own row highlight",
+		"app_row_hl_sub":   "Background color of your row in the leaderboard",
+		"app_font":         "🔤 Font",
+		"app_save":         "Save appearance",
+		"app_reset":        "Restore defaults",
+		"app_preview":      "👁️ Leaderboard preview",
+		"app_results_row":  "Results",
+		"app_exact_label":  "Exact tip (3 pts)",
+		"app_winner_label": "Correct winner (1 pt)",
+		"app_miss_label":   "Wrong tip",
+		"app_accent_label": "Accent:",
+		"app_link_sample":  "sample link",
+		"app_btn_sample":   "button",
+		// Chat
+		"chat_connecting":  "Connecting…",
+		"chat_disconnected":"Disconnected — reconnecting…",
+		"chat_new_msgs":    "⬇ new messages",
+		"chat_placeholder": "Write a message… (Enter to send, Shift+Enter new line)",
+		"chat_today":       "Today",
+		"chat_yesterday":   "Yesterday",
+		"tips_saved_tips":  "tips",
 	},
+}
+
+// ── Auto-překlad DB obsahu (názvy soutěží, extra otázky…) ────────────────────
+
+var (
+	trcCache  = map[string]string{} // klíč: lang + "\x00" + text
+	trcMu     sync.Mutex
+	trcClient = &http.Client{Timeout: 5 * time.Second}
+)
+
+// Trc přeloží libovolný text (z DB) do daného jazyka přes Google Translate.
+// - lang == "cs" nebo prázdný text → vrátí text beze změny
+// - výsledky se cachují v paměti procesu
+// - při chybě překladu vrátí originál
+func Trc(lang, text string) string {
+	if lang == "cs" || lang == "" || text == "" {
+		return text
+	}
+	key := lang + "\x00" + text
+	trcMu.Lock()
+	if v, ok := trcCache[key]; ok {
+		trcMu.Unlock()
+		return v
+	}
+	trcMu.Unlock()
+
+	result := googleTranslate(text, lang)
+	if result == "" {
+		return text
+	}
+	trcMu.Lock()
+	trcCache[key] = result
+	trcMu.Unlock()
+	return result
+}
+
+// googleTranslate volá free Google Translate endpoint (stejně jako admin_email.go).
+func googleTranslate(text, target string) string {
+	apiURL := "https://translate.googleapis.com/translate_a/single?client=gtx&sl=cs&tl=" +
+		url.QueryEscape(target) + "&dt=t&q=" + url.QueryEscape(text)
+	resp, err := trcClient.Get(apiURL)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var rawAny []interface{}
+	if err := json.Unmarshal(body, &rawAny); err != nil || len(rawAny) == 0 {
+		return ""
+	}
+	parts, ok := rawAny[0].([]interface{})
+	if !ok {
+		return ""
+	}
+	var sb strings.Builder
+	for _, p := range parts {
+		if arr, ok := p.([]interface{}); ok && len(arr) > 0 {
+			if s, ok := arr[0].(string); ok {
+				sb.WriteString(s)
+			}
+		}
+	}
+	return sb.String()
 }
 
 // Tr translates a key to the given language.

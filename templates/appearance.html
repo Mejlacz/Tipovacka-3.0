@@ -1,7 +1,7 @@
-{{define "title"}}Vzhled rozhraní{{end}}
+{{define "title"}}{{tr .Lang "app_title"}}{{end}}
 <div class="page-header">
-    <h1>🎨 Vzhled rozhraní</h1>
-    <a href="/profile" style="font-size:.85rem;color:var(--muted-d)">← Zpět na profil</a>
+    <h1>{{tr .Lang "app_title"}}</h1>
+    <a href="/profile" style="font-size:.85rem;color:var(--muted-d)">{{tr .Lang "app_back"}}</a>
 </div>
 
 {{if .Flash}}
@@ -18,7 +18,7 @@
 
         {{/* Barvy tipů */}}
         <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-            <h2 style="margin:0 0 1rem;font-size:.95rem">🎯 Barvy buněk tipů</h2>
+            <h2 style="margin:0 0 1rem;font-size:.95rem">{{tr .Lang "app_tip_colors"}}</h2>
             <div style="display:flex;flex-direction:column;gap:.75rem">
 
                 <div style="display:flex;align-items:center;gap:.75rem">
@@ -26,8 +26,8 @@
                            value="{{if .Settings.ExactBg}}{{.Settings.ExactBg}}{{else}}#14532d{{end}}"
                            style="width:42px;height:32px;border:none;cursor:pointer;background:none;padding:0">
                     <div>
-                        <div style="font-size:.9rem;font-weight:600">Přesný tip (3 body)</div>
-                        <div style="font-size:.75rem;color:var(--muted-d)">Pozadí buňky se správným skóre</div>
+                        <div style="font-size:.9rem;font-weight:600">{{tr .Lang "app_exact_tip"}}</div>
+                        <div style="font-size:.75rem;color:var(--muted-d)">{{tr .Lang "app_exact_sub"}}</div>
                     </div>
                 </div>
 
@@ -36,8 +36,8 @@
                            value="{{if .Settings.WinnerBg}}{{.Settings.WinnerBg}}{{else}}#3d2200{{end}}"
                            style="width:42px;height:32px;border:none;cursor:pointer;background:none;padding:0">
                     <div>
-                        <div style="font-size:.9rem;font-weight:600">Správný vítěz (1 bod)</div>
-                        <div style="font-size:.75rem;color:var(--muted-d)">Pozadí buňky se správným vítězem</div>
+                        <div style="font-size:.9rem;font-weight:600">{{tr .Lang "app_winner_tip"}}</div>
+                        <div style="font-size:.75rem;color:var(--muted-d)">{{tr .Lang "app_winner_sub"}}</div>
                     </div>
                 </div>
 
@@ -46,8 +46,8 @@
                            value="{{if .Settings.MissBg}}{{.Settings.MissBg}}{{else}}#1e2a38{{end}}"
                            style="width:42px;height:32px;border:none;cursor:pointer;background:none;padding:0">
                     <div>
-                        <div style="font-size:.9rem;font-weight:600">Špatný tip (0 bodů)</div>
-                        <div style="font-size:.75rem;color:var(--muted-d)">Pozadí buňky se špatným tipem</div>
+                        <div style="font-size:.9rem;font-weight:600">{{tr .Lang "app_miss_tip"}}</div>
+                        <div style="font-size:.75rem;color:var(--muted-d)">{{tr .Lang "app_miss_sub"}}</div>
                     </div>
                 </div>
 
@@ -56,7 +56,7 @@
 
         {{/* Ostatní barvy */}}
         <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-            <h2 style="margin:0 0 1rem;font-size:.95rem">🎨 Ostatní barvy</h2>
+            <h2 style="margin:0 0 1rem;font-size:.95rem">{{tr .Lang "app_other_colors"}}</h2>
             <div style="display:flex;flex-direction:column;gap:.75rem">
 
                 <div style="display:flex;align-items:center;gap:.75rem">
@@ -64,8 +64,8 @@
                            value="{{if .Settings.Accent}}{{.Settings.Accent}}{{else}}#10b981{{end}}"
                            style="width:42px;height:32px;border:none;cursor:pointer;background:none;padding:0">
                     <div>
-                        <div style="font-size:.9rem;font-weight:600">Akcent</div>
-                        <div style="font-size:.75rem;color:var(--muted-d)">Tlačítka, linky, aktivní prvky</div>
+                        <div style="font-size:.9rem;font-weight:600">{{tr .Lang "app_accent"}}</div>
+                        <div style="font-size:.75rem;color:var(--muted-d)">{{tr .Lang "app_accent_sub"}}</div>
                     </div>
                 </div>
 
@@ -74,8 +74,8 @@
                            value="{{if .Settings.RowHL}}{{.Settings.RowHL}}{{else}}#1a3a5f{{end}}"
                            style="width:42px;height:32px;border:none;cursor:pointer;background:none;padding:0">
                     <div>
-                        <div style="font-size:.9rem;font-weight:600">Zvýraznění vlastního řádku</div>
-                        <div style="font-size:.75rem;color:var(--muted-d)">Barva pozadí tvého řádku v žebříčku</div>
+                        <div style="font-size:.9rem;font-weight:600">{{tr .Lang "app_row_hl"}}</div>
+                        <div style="font-size:.75rem;color:var(--muted-d)">{{tr .Lang "app_row_hl_sub"}}</div>
                     </div>
                 </div>
 
@@ -84,7 +84,7 @@
 
         {{/* Font */}}
         <section style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem">
-            <h2 style="margin:0 0 1rem;font-size:.95rem">🔤 Písmo</h2>
+            <h2 style="margin:0 0 1rem;font-size:.95rem">{{tr .Lang "app_font"}}</h2>
             <select id="font_sel" name="font"
                     style="width:100%;padding:.45rem .65rem;background:var(--bg3);border:1px solid var(--border-d);border-radius:6px;color:inherit;font-size:.9rem">
                 {{range .FontOptions}}
@@ -94,8 +94,8 @@
         </section>
 
         <div style="display:flex;gap:.75rem;flex-wrap:wrap">
-            <button type="submit" class="btn btn-primary">Uložit vzhled</button>
-            <button type="button" id="btn-reset-defaults" class="btn btn-secondary">Obnovit výchozí náhled</button>
+            <button type="submit" class="btn btn-primary">{{tr .Lang "app_save"}}</button>
+            <button type="button" id="btn-reset-defaults" class="btn btn-secondary">{{tr .Lang "app_reset"}}</button>
         </div>
     </div>
 </form>
@@ -106,22 +106,22 @@
 {{/* ── Náhled ── */}}
 <div>
     <div style="background:var(--bg2);border:1px solid var(--border-d);border-radius:10px;padding:1.2rem;position:sticky;top:1rem">
-        <h2 style="margin:0 0 1rem;font-size:.95rem">👁️ Náhled žebříčku</h2>
+        <h2 style="margin:0 0 1rem;font-size:.95rem">{{tr .Lang "app_preview"}}</h2>
         <style id="preview-style"></style>
         <div id="preview-wrap" style="overflow-x:auto">
         <table class="leaderboard-matrix" style="width:100%;font-size:.82rem">
             <thead>
                 <tr>
                     <th class="col-place">#</th>
-                    <th class="col-user">Tipér</th>
-                    <th class="col-pts">Body</th>
+                    <th class="col-user">{{tr .Lang "lb_tipster"}}</th>
+                    <th class="col-pts">{{tr .Lang "lb_points"}}</th>
                     <th class="col-match"><div class="match-header">Arsenal–Chelsea</div></th>
                     <th class="col-match"><div class="match-header">Bayern–Barca</div></th>
                     <th class="col-match"><div class="match-header">PSG–Real</div></th>
                 </tr>
                 <tr class="results-row">
                     <td class="col-place"></td>
-                    <td class="col-user" style="font-size:.75rem;color:var(--muted-d)">Výsledky</td>
+                    <td class="col-user" style="font-size:.75rem;color:var(--muted-d)">{{tr .Lang "app_results_row"}}</td>
                     <td class="col-pts"></td>
                     <td class="cell-result"><strong>2:1</strong></td>
                     <td class="cell-result"><strong>3:2</strong></td>
@@ -131,7 +131,7 @@
             <tbody>
                 <tr class="highlight">
                     <td class="col-place"><span class="rank-num">1.</span></td>
-                    <td class="col-user" style="font-weight:700;color:var(--gold)">Ty</td>
+                    <td class="col-user" style="font-weight:700;color:var(--gold)">{{tr .Lang "stats_you"}}</td>
                     <td class="col-pts" style="font-weight:700">7</td>
                     <td class="cell-tip tip-exact" title="2:1 (přesný tip)">2:1</td>
                     <td class="cell-tip tip-exact" title="3:2 (přesný tip)">3:2</td>
@@ -166,16 +166,16 @@
         </div>
 
         <div style="margin-top:.85rem;font-size:.78rem;display:flex;gap:.8rem;flex-wrap:wrap;color:var(--muted-d)">
-            <span><span id="dot-exact" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Přesný tip (3 b)</span>
-            <span><span id="dot-winner" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Správný vítěz (1 b)</span>
-            <span><span id="dot-miss" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Špatný tip</span>
+            <span><span id="dot-exact" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:3px;vertical-align:middle"></span>{{tr .Lang "app_exact_label"}}</span>
+            <span><span id="dot-winner" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:3px;vertical-align:middle"></span>{{tr .Lang "app_winner_label"}}</span>
+            <span><span id="dot-miss" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:3px;vertical-align:middle"></span>{{tr .Lang "app_miss_label"}}</span>
         </div>
 
         <div style="margin-top:.85rem;font-size:.8rem">
-            <span>Akcent: </span>
-            <a href="#" id="preview-accent-link" style="font-weight:600;text-decoration:none">ukázkový odkaz</a>
+            <span>{{tr .Lang "app_accent_label"}} </span>
+            <a href="#" id="preview-accent-link" style="font-weight:600;text-decoration:none">{{tr .Lang "app_link_sample"}}</a>
             &nbsp;
-            <button id="preview-accent-btn" type="button" class="btn btn-primary btn-sm" style="padding:.2rem .65rem;font-size:.78rem">tlačítko</button>
+            <button id="preview-accent-btn" type="button" class="btn btn-primary btn-sm" style="padding:.2rem .65rem;font-size:.78rem">{{tr .Lang "app_btn_sample"}}</button>
         </div>
     </div>
 </div>

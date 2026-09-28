@@ -9,17 +9,26 @@
             <form method="get" action="/extra" style="margin:0">
                 <select name="competition_id" onchange="this.form.submit()"
                         style="padding:0.3rem 0.6rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem">
-                    {{range .Competitions}}
+                    <optgroup label="Aktivní">
+                    {{range .Competitions}}{{if .IsActive}}
                     <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
-                        {{.Name}}{{if .Season}} {{.Season}}{{end}}
+                        {{trc $.Lang .Name}}{{if .Season}} {{.Season}}{{end}}
                     </option>
-                    {{end}}
+                    {{end}}{{end}}
+                    </optgroup>
+                    <optgroup label="Archiv">
+                    {{range .Competitions}}{{if not .IsActive}}
+                    <option value="{{.ID}}" {{if eq .ID $.SelectedCompetitionID}}selected{{end}}>
+                        {{trc $.Lang .Name}}{{if .Season}} {{.Season}}{{end}}
+                    </option>
+                    {{end}}{{end}}
+                    </optgroup>
                 </select>
             </form>
             {{end}}
         </div>
         {{if .Comp}}
-        <div style="color:var(--muted-d);margin-top:0.25rem;font-size:0.88rem">{{tr .Lang "extra_comp_label"}} <strong>{{.Comp.Name}}</strong></div>
+        <div style="color:var(--muted-d);margin-top:0.25rem;font-size:0.88rem">{{tr .Lang "extra_comp_label"}} <strong>{{trc .Lang .Comp.Name}}</strong></div>
         {{end}}
     </div>
 
@@ -44,16 +53,16 @@
 {{if .IsLocked}}
   {{if .IsRevealed}}
   <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.88rem;color:#34d399">
-    🔒 Tipování uzavřeno · Výsledky zveřejněny
+    {{tr .Lang "extra_locked_revealed"}}
   </div>
   {{else}}
   <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.88rem;color:#f87171">
-    🔒 Tipování uzavřeno · Výsledky budou zveřejněny brzy
+    {{tr .Lang "extra_locked_pending"}}
   </div>
   {{end}}
 {{else if .EffectiveDeadline}}
   <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.88rem;color:#fbbf24">
-    ⏰ Deadline pro tipování: <strong>{{fmtTime .EffectiveDeadline "02.01.2006 15:04"}}</strong>
+    {{tr .Lang "extra_deadline_label"}} <strong>{{fmtTime .EffectiveDeadline "02.01.2006 15:04"}}</strong>
   </div>
 {{end}}
 {{end}}
@@ -85,9 +94,9 @@
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.5rem;margin-bottom:0.75rem">
                 <div>
                     <span style="font-size:0.8rem;color:var(--muted-d);margin-right:0.4rem">{{add $i 1}}.</span>
-                    <strong style="font-size:1.05rem">{{$q.Text}}</strong>
+                    <strong style="font-size:1.05rem">{{trc $.Lang $q.Text}}</strong>
                     {{if $q.IsClosed}}
-                    <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#f87171;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">Uzavřeno</span>
+                    <span style="font-size:0.75rem;background:rgba(239,68,68,0.15);color:#f87171;padding:0.15rem 0.5rem;border-radius:10px;margin-left:0.5rem">{{tr $.Lang "extra_closed"}}</span>
                     {{end}}
                     {{if ne $q.MaxPoints 3}}
                     <span style="font-size:0.75rem;color:var(--muted-d);margin-left:0.4rem">({{$q.MaxPoints}} b)</span>
@@ -103,7 +112,7 @@
             {{/* Správná odpověď — zobrazit jen pokud jsou výsledky zveřejněny */}}
             {{if and $.IsRevealed $q.CorrectAnswer}}
             <div style="font-size:0.82rem;color:#fbbf24;background:rgba(245,158,11,0.12);padding:0.3rem 0.7rem;border-radius:6px;margin-bottom:0.6rem">
-                Správná odpověď: <strong>{{$q.CorrectAnswer}}</strong>
+                {{tr $.Lang "extra_correct"}} <strong>{{trc $.Lang (strVal $q.CorrectAnswer)}}</strong>
             </div>
             {{end}}
 
@@ -115,9 +124,9 @@
                 <select class="extra-input"
                         {{if $locked}}disabled{{end}}
                         style="flex:1;padding:0.45rem 0.7rem;border-radius:7px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem;{{if $locked}}opacity:0.7;{{end}}">
-                    <option value="">— vyberte —</option>
+                    <option value="">{{tr $.Lang "extra_select_ph"}}</option>
                     {{range splitLines (strVal $q.AnswerOptions)}}
-                    <option value="{{.}}" {{if and $ans (eq $ans.Answer .)}}selected{{end}}>{{.}}</option>
+                    <option value="{{.}}" {{if and $ans (eq $ans.Answer .)}}selected{{end}}>{{trc $.Lang .}}</option>
                     {{end}}
                 </select>
                 {{else}}
@@ -125,7 +134,7 @@
                 <input type="text"
                        class="extra-input"
                        value="{{if $ans}}{{$ans.Answer}}{{end}}"
-                       placeholder="Váš tip…"
+                       placeholder="{{tr $.Lang "extra_placeholder"}}"
                        {{if $locked}}disabled{{end}}
                        style="flex:1;padding:0.45rem 0.7rem;border-radius:7px;border:1px solid var(--border-d);background:var(--bg3);color:var(--text-d);font-size:0.9rem;{{if $locked}}opacity:0.7;{{end}}"
                        maxlength="200">
@@ -134,11 +143,11 @@
                 <button class="btn btn-secondary extra-save"
                         style="white-space:nowrap;min-width:80px"
                         type="button">
-                    Uložit
+                    {{tr $.Lang "extra_save"}}
                 </button>
                 {{else}}
                 <span style="font-size:0.8rem;color:var(--muted-d);min-width:80px;text-align:center">
-                    {{if and $.IsRevealed $ans $ans.Points}}Ohodnoceno{{else}}Uzavřeno{{end}}
+                    {{if and $.IsRevealed $ans $ans.Points}}{{tr $.Lang "extra_evaluated"}}{{else}}{{tr $.Lang "extra_closed"}}{{end}}
                 </span>
                 {{end}}
             </div>
@@ -146,12 +155,11 @@
             {{/* Admin: smazat otázku */}}
             {{if $.User.IsAdmin}}
             <div style="margin-top:0.6rem;text-align:right">
-                <form method="post" action="/admin/extra/questions/{{$q.ID}}/delete"
-                      onsubmit="return confirm('Opravdu smazat otázku {{$q.Text}}?')" style="display:inline">
-                    <button type="submit" style="font-size:0.75rem;color:#dc3545;background:none;border:none;cursor:pointer;text-decoration:underline">
-                        Smazat otázku
-                    </button>
-                </form>
+                <button type="button" class="extra-del-btn"
+                        data-qid="{{$q.ID}}" data-name="{{$q.Text}}"
+                        style="font-size:0.75rem;color:#dc3545;background:none;border:none;cursor:pointer;text-decoration:underline">
+                    {{tr $.Lang "extra_delete_confirm"}}
+                </button>
             </div>
             {{end}}
 
@@ -164,6 +172,13 @@
 </div>
 
 <script>
+var LANG_EXTRA = {
+    saved:   '✅ {{tr .Lang "extra_saved"}}',
+    save:    '{{tr .Lang "extra_save"}}',
+    qClosed: '❌ {{tr .Lang "extra_q_closed"}}',
+    saveErr: '❌ {{tr .Lang "extra_save_error"}}',
+    connErr: '❌ {{tr .Lang "extra_conn_error"}}'
+};
 document.addEventListener('DOMContentLoaded', function () {
     var flash = document.getElementById('extra-flash');
 
@@ -193,25 +208,42 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(function (data) {
                     if (data.ok) {
                         btn.textContent = '✓';
-                        showMsg('✅ Uloženo', 'ok');
-                        setTimeout(function () { btn.textContent = 'Uložit'; btn.disabled = false; }, 1200);
+                        showMsg(LANG_EXTRA.saved, 'ok');
+                        setTimeout(function () { btn.textContent = LANG_EXTRA.save; btn.disabled = false; }, 1200);
                     } else {
-                        btn.textContent = 'Uložit';
+                        btn.textContent = LANG_EXTRA.save;
                         btn.disabled = false;
-                        if (data.error === 'closed') showMsg('❌ Otázka je uzavřena', 'err');
-                        else showMsg('❌ Chyba při ukládání', 'err');
+                        if (data.error === 'closed') showMsg(LANG_EXTRA.qClosed, 'err');
+                        else showMsg(LANG_EXTRA.saveErr, 'err');
                     }
                 })
                 .catch(function () {
-                    btn.textContent = 'Uložit';
+                    btn.textContent = LANG_EXTRA.save;
                     btn.disabled = false;
-                    showMsg('❌ Chyba spojení', 'err');
+                    showMsg(LANG_EXTRA.connErr, 'err');
                 });
         }
 
         btn.addEventListener('click', save);
         input.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') save();
+        });
+    });
+
+    document.querySelectorAll('.extra-del-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            _confirmSmazat({
+                title: '🗑 Smazat otázku',
+                name: btn.dataset.name,
+                warn: 'Smaže se otázka i všechny její odpovědi.',
+                btn: 'Smazat otázku'
+            }, function() {
+                var f = document.createElement('form'); f.method = 'post';
+                f.action = '/admin/extra/questions/' + btn.dataset.qid + '/delete';
+                var c = document.createElement('input'); c.type = 'hidden'; c.name = '_csrf';
+                c.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+                f.appendChild(c); document.body.appendChild(f); f.submit();
+            });
         });
     });
 });

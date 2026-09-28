@@ -1,56 +1,61 @@
+<style>
+.arc-wrap { overflow-x:auto; border:1px solid var(--border-d); border-radius:10px; max-width:720px; margin-bottom:.75rem }
+.arc-table { width:100%; border-collapse:collapse; font-size:.85rem }
+.arc-table th { background:var(--bg2); padding:.4rem .65rem; text-align:left; font-size:.75rem; font-weight:600; color:var(--muted-d); text-transform:uppercase; letter-spacing:.04em }
+.arc-table th:not(:first-child) { text-align:center }
+.arc-table td { padding:.4rem .65rem; border-bottom:1px solid var(--border-d); vertical-align:middle }
+.arc-table tr:last-child td { border-bottom:none }
+.arc-table tbody tr:hover td { background:rgba(255,255,255,.03) }
+.arc-match { font-weight:500; color:var(--text-d) }
+.arc-score { text-align:center; font-variant-numeric:tabular-nums; color:var(--muted-d) }
+.arc-pts { display:inline-flex; align-items:center; justify-content:center; min-width:1.65rem; height:1.4rem; padding:0 .35rem; border-radius:99px; font-size:.8rem; font-weight:700 }
+.arc-pts-3 { background:rgba(52,211,153,.15); color:#34d399 }
+.arc-pts-1 { background:rgba(96,165,250,.15); color:#60a5fa }
+.arc-pts-0 { background:rgba(107,114,128,.1); color:#6b7280 }
+.arc-total { display:inline-flex; align-items:center; gap:.5rem; font-size:.88rem; font-weight:600; margin-top:.75rem; padding:.5rem .9rem; background:var(--bg2); border:1px solid var(--border-d); border-radius:8px }
+.arc-total-val { color:#fbbf24; font-size:1.05rem; font-weight:800 }
+</style>
+
 <div class="page-header">
-    <h1>{{.Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
+    <h1>{{.Comp.Name}} <span style="font-size:1rem;font-weight:400;color:var(--muted-d)">{{.Comp.Season}}</span></h1>
     <a href="/archive" class="btn btn-secondary btn-sm">← Archiv</a>
 </div>
 
-{{if .RoundSections}}
-{{range .RoundSections}}
-<div style="margin-bottom:2rem">
-    <h2 style="font-size:1rem;font-weight:700;margin-bottom:.5rem">
-        {{.Round.Name}}
-        <span style="font-size:.82rem;font-weight:400;color:var(--muted-d)">— celkem: {{.Total}} b</span>
-    </h2>
-    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;max-width:700px">
-        <thead>
-            <tr style="background:var(--bg2)">
-                <th style="text-align:left;padding:.3rem .5rem">Zápas</th>
-                <th style="padding:.3rem .5rem;text-align:center">Výsledek</th>
-                <th style="padding:.3rem .5rem;text-align:center">Tip</th>
-                <th style="padding:.3rem .5rem;text-align:center">Body</th>
-            </tr>
-        </thead>
-        <tbody>
-        {{range .Rows}}
+{{if .Rows}}
+<div class="arc-wrap">
+<table class="arc-table">
+    <thead>
         <tr>
-            <td style="padding:.3rem .5rem">
-                {{.Match.HomeTeamName}} vs {{.Match.AwayTeamName}}
-            </td>
-            <td style="padding:.3rem .5rem;text-align:center;font-size:.85rem">
-                {{if .Match.HomeScore}}
-                    {{intVal .Match.HomeScore}}:{{intVal .Match.AwayScore}}
-                {{else}}—{{end}}
-            </td>
-            <td style="padding:.3rem .5rem;text-align:center;font-size:.85rem">
-                {{if .Tip}}{{.Tip.HomeScore}}:{{.Tip.AwayScore}}{{else}}<span style="color:var(--muted-d)">—</span>{{end}}
-            </td>
-            <td style="padding:.3rem .5rem;text-align:center;font-weight:700;font-size:.9rem">
-                {{if .Points}}
-                    {{if eq (intVal .Points) 3}}<span style="color:#34d399">{{intVal .Points}}</span>
-                    {{else if eq (intVal .Points) 1}}<span style="color:#60a5fa">{{intVal .Points}}</span>
-                    {{else}}<span style="color:var(--muted-d)">{{intVal .Points}}</span>{{end}}
-                {{else if .Tip}}<span style="color:var(--muted-d)">—</span>
-                {{else}}<span style="color:#6b7280">✗</span>{{end}}
-            </td>
+            <th>Zápas</th>
+            <th>Výsledek</th>
+            <th>Tip</th>
+            <th>Body</th>
         </tr>
-        {{end}}
-        </tbody>
-    </table>
+    </thead>
+    <tbody>
+    {{range .Rows}}
+    <tr>
+        <td class="arc-match">{{.Match.HomeTeamName}} vs {{.Match.AwayTeamName}}</td>
+        <td class="arc-score">
+            {{if .Match.HomeScore}}{{intVal .Match.HomeScore}}:{{intVal .Match.AwayScore}}{{else}}<span style="color:var(--muted-d)">—</span>{{end}}
+        </td>
+        <td class="arc-score">
+            {{if .Tip}}{{.Tip.HomeScore}}:{{.Tip.AwayScore}}{{else}}<span style="color:var(--muted-d)">—</span>{{end}}
+        </td>
+        <td class="arc-score">
+            {{if .Points}}
+                {{if eq (intVal .Points) 3}}<span class="arc-pts arc-pts-3">{{intVal .Points}}</span>
+                {{else if eq (intVal .Points) 1}}<span class="arc-pts arc-pts-1">{{intVal .Points}}</span>
+                {{else}}<span class="arc-pts arc-pts-0">{{intVal .Points}}</span>{{end}}
+            {{else if .Tip}}<span style="color:var(--muted-d)">—</span>
+            {{else}}<span style="color:#6b7280">✗</span>{{end}}
+        </td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
 </div>
-{{end}}
-
-<div style="margin-top:1rem;font-weight:700;font-size:1rem">
-    Celkem: <span style="color:#fbbf24">{{.OverallTotal}} b</span>
-</div>
+<div class="arc-total">Celkem: <span class="arc-total-val">{{.OverallTotal}} b</span></div>
 {{else}}
 <p class="empty">Žádné tipy v této soutěži.</p>
 {{end}}

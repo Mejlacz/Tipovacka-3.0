@@ -21,9 +21,6 @@
     {{range .CompOrder}}
     {{$ce := index $.Comps .}}
     <h2 style="margin:1.5rem 0 .5rem;font-size:1rem;color:var(--muted-d)">{{$ce.Comp.Name}} {{$ce.Comp.Season}}</h2>
-    {{range $ce.RoundOrder}}
-    {{$re := index $ce.Rounds .}}
-    <h3 style="margin:.75rem 0 .35rem;font-size:.9rem">{{$re.Round.Name}}</h3>
     <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-bottom:.5rem">
         <thead>
             <tr style="background:var(--bg2)">
@@ -34,7 +31,7 @@
             </tr>
         </thead>
         <tbody>
-        {{range $re.Matches}}
+        {{range $ce.Matches}}
         <tr>
             <td style="padding:.35rem .5rem;font-weight:500">
                 {{if .HomeTeam}}{{coalesce .HomeTeam.DisplayName .HomeTeam.Name}}{{else}}tým {{.HomeTeamID}}{{end}}
@@ -57,7 +54,6 @@
         {{end}}
         </tbody>
     </table>
-    {{end}}
     {{end}}
 
     <div style="margin-top:1.25rem">

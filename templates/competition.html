@@ -1,21 +1,72 @@
+<style>
+/* ── Team avatars ──────────────────────────────────── */
+.match-teams { display:flex; align-items:center; gap:.6rem; margin-bottom:.4rem }
+.team-side   { display:flex; align-items:center; gap:.5rem; flex:1 }
+.team-side.away { flex-direction:row-reverse; text-align:right }
+.team-avatar {
+    width:30px; height:30px; border-radius:8px;
+    background:var(--bg3); border:1px solid var(--border-d);
+    display:flex; align-items:center; justify-content:center;
+    font-size:.68rem; font-weight:800; color:var(--muted-d);
+    flex-shrink:0; letter-spacing:-.02em;
+}
+.team { font-size:.92rem; font-weight:700; color:var(--text-d) }
+.match-vs-pip {
+    min-width:30px; text-align:center;
+    font-size:.68rem; font-weight:700; color:var(--muted-d);
+    background:var(--bg3); border-radius:5px; padding:.2rem .3rem;
+}
+
+/* ── Result + tip side by side ─────────────────────── */
+.match-result-row {
+    display:flex; align-items:stretch; gap:.75rem;
+    margin-top:.5rem; flex-wrap:wrap;
+}
+.result-block, .tip-block {
+    display:flex; flex-direction:column; gap:.15rem;
+}
+.result-block-label, .tip-block-label {
+    font-size:.68rem; font-weight:600; color:var(--muted-d); text-transform:uppercase; letter-spacing:.05em;
+}
+.result-score-big {
+    font-size:1.4rem; font-weight:800; letter-spacing:-.02em;
+    color:var(--text-d); font-variant-numeric:tabular-nums;
+}
+.tip-score-row { display:flex; align-items:center; gap:.4rem; margin-top:.1rem }
+.tip-score-val { font-size:1rem; font-weight:700; color:var(--text-d); font-variant-numeric:tabular-nums }
+.pts-chip {
+    font-size:.75rem; font-weight:700; padding:.18rem .45rem; border-radius:6px;
+}
+.pts-chip-3 { background:rgba(52,211,153,.18); color:#34d399 }
+.pts-chip-1 { background:rgba(99,102,241,.15); color:#818cf8 }
+.pts-chip-0 { background:rgba(100,116,139,.1); color:var(--muted-d) }
+
+.result-divider { width:1px; background:var(--border-d); align-self:stretch; margin:.1rem 0 }
+
+/* ── Locked state ──────────────────────────────────── */
+.locked-tip-row { font-size:.82rem; color:var(--muted-d); margin-top:.4rem; display:flex; align-items:center; gap:.4rem }
+</style>
+
 <div class="page-header">
-    <h1>{{.Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
+    <h1>{{trc .Lang .Comp.Name}} <span class="muted" style="font-size:1rem;font-weight:400">{{.Comp.Season}}</span></h1>
     {{if and .User .User.IsAdmin}}
-    <a href="/admin/competitions/{{.Comp.ID}}/rounds" class="btn btn-primary btn-sm">{{tr .Lang "tips_add_match"}}</a>
+    <a href="/admin/competitions/{{.Comp.ID}}/matches" class="btn btn-primary btn-sm">{{tr .Lang "tips_add_match"}}</a>
     {{end}}
 </div>
 
 {{if .ExtraOpen}}
 <a href="/extra?competition_id={{.Comp.ID}}"
-   style="display:inline-flex;align-items:center;gap:0.4rem;margin-bottom:1.1rem;
-          padding:0.45rem 1rem;border-radius:8px;font-size:0.9rem;font-weight:600;
+   style="display:inline-flex;align-items:center;gap:.4rem;margin-bottom:1.1rem;
+          padding:.45rem 1rem;border-radius:8px;font-size:.9rem;font-weight:600;
           text-decoration:none;background:var(--accent);color:#fff">
-    🎯 Tipovat Extra otázky
+    {{tr .Lang "tips_extra_btn"}}
 </a>
 {{end}}
 
 {{if not .MatchContext}}
-    {{if .AllLocked}}
+    {{if .AllTipped}}
+    <div class="alert alert-success" style="max-width:480px">{{tr .Lang "tips_all_tipped_wait"}}</div>
+    {{else if .AllLocked}}
     <div class="alert alert-success" style="max-width:480px">{{tr .Lang "tips_all_tipped"}}</div>
     {{else}}
     <p class="empty">{{tr .Lang "tips_no_active"}}</p>
@@ -23,34 +74,34 @@
 {{else}}
 
 <div id="bulk-save-bar" style="display:none;position:sticky;top:3.4rem;z-index:100;
-     background:var(--bg1,#0f1923);padding:0.45rem 0;margin-bottom:0.5rem;
-     border-bottom:1px solid var(--border-d,rgba(255,255,255,.08));text-align:right">
-    <button id="bulk-save-btn" class="btn btn-primary" style="padding:0.35rem 1.1rem;font-size:0.92rem">
-        💾 Uložit vše
+     background:var(--bg1,#0f1923);padding:.45rem 0;margin-bottom:.5rem;
+     border-bottom:1px solid var(--border-d);text-align:right">
+    <button id="bulk-save-btn" class="btn btn-primary" style="padding:.35rem 1.1rem;font-size:.92rem">
+        💾 {{tr .Lang "tips_save_all"}}
     </button>
-    <span id="bulk-save-status" style="margin-left:0.7rem;font-size:0.82rem;display:none"></span>
+    <span id="bulk-save-status" style="margin-left:.7rem;font-size:.82rem;display:none"></span>
 </div>
 
 <div class="match-list">
-{{$currentRound := ""}}
-{{$currentRoundID := 0}}
 {{range .MatchContext}}
-    {{if ne .RoundName $currentRound}}
-        {{if $currentRound}}</div><div class="round-summary-wrap" data-round-id="{{$currentRoundID}}"></div>{{end}}
-        {{$currentRound = .RoundName}}
-        {{$currentRoundID = .Match.RoundID}}
-        <div class="round-section-header" data-round-id="{{$currentRoundID}}">{{.RoundName}}</div>
-        <div class="round-section">
-    {{end}}
-
     {{$htName := coalesce .Match.HomeTeam.DisplayName .Match.HomeTeam.Name}}
     {{$atName := coalesce .Match.AwayTeam.DisplayName .Match.AwayTeam.Name}}
     <div class="match-card{{if not .CanTip}} match-locked{{end}}">
+
+        {{/* Team row with avatars */}}
         <div class="match-teams">
-            <span class="team">{{$htName}}</span>
-            <span class="match-vs">vs</span>
-            <span class="team">{{$atName}}</span>
+            <div class="team-side">
+                <div class="team-avatar">{{initials $htName}}</div>
+                <span class="team">{{$htName}}</span>
+            </div>
+            <div class="match-vs-pip">VS</div>
+            <div class="team-side away">
+                <div class="team-avatar">{{initials $atName}}</div>
+                <span class="team">{{$atName}}</span>
+            </div>
         </div>
+
+        {{/* Date + countdown */}}
         {{if .Match.MatchDate}}
         <div class="match-date">
             {{fmtPrague .Match.MatchDate "02.01.2006 15:04"}}
@@ -59,20 +110,36 @@
             {{end}}
         </div>
         {{end}}
+
+        {{/* Finished match — result + tip side by side */}}
         {{if .Match.IsFinished}}
-            <div class="match-result">{{tr $.Lang "tips_result"}} <strong>{{intVal .Match.HomeScore}}:{{intVal .Match.AwayScore}}</strong></div>
-            {{if .Tip}}
-            <div class="match-tip">
-                {{tr $.Lang "tips_your_tip"}} {{.Tip.HomeScore}}:{{.Tip.AwayScore}}
-                <span class="points points-{{intVal .Tip.Points}}">
-                    {{if eq (intVal .Tip.Points) 3}}🎯 3b{{else if eq (intVal .Tip.Points) 1}}✅ 1b{{else}}❌ 0b{{end}}
-                </span>
+            <div class="match-result-row">
+                <div class="result-block">
+                    <span class="result-block-label">{{tr $.Lang "tips_result"}}</span>
+                    <span class="result-score-big">{{intVal .Match.HomeScore}}<span style="color:var(--muted-d);margin:0 .1rem">:</span>{{intVal .Match.AwayScore}}</span>
+                </div>
+                {{if .Tip}}
+                <div class="result-divider"></div>
+                <div class="tip-block">
+                    <span class="tip-block-label">{{tr $.Lang "tips_your_tip"}}</span>
+                    <div class="tip-score-row">
+                        <span class="tip-score-val">{{.Tip.HomeScore}}<span style="color:var(--muted-d);margin:0 .1rem">:</span>{{.Tip.AwayScore}}</span>
+                        <span class="pts-chip {{if eq (intVal .Tip.Points) 3}}pts-chip-3{{else if eq (intVal .Tip.Points) 1}}pts-chip-1{{else}}pts-chip-0{{end}}">
+                            {{if eq (intVal .Tip.Points) 3}}🎯 3b{{else if eq (intVal .Tip.Points) 1}}✅ 1b{{else}}❌ 0b{{end}}
+                        </span>
+                    </div>
+                </div>
+                {{else}}
+                <div class="tip-block" style="justify-content:flex-end">
+                    <span class="tip-block-label">{{tr $.Lang "tips_your_tip"}}</span>
+                    <span style="font-size:.82rem;color:var(--muted-d);margin-top:.15rem">{{tr $.Lang "tips_not_tipped"}}</span>
+                </div>
+                {{end}}
             </div>
-            {{else}}
-            <div class="match-tip muted">{{tr $.Lang "tips_not_tipped"}}</div>
-            {{end}}
             <div class="tip-dist-wrap" data-match-id="{{.Match.ID}}"
                  data-home="{{$htName}}" data-away="{{$atName}}"></div>
+
+        {{/* Tipovatelný zápas */}}
         {{else if .CanTip}}
             <form method="post" action="/tip/submit" class="tip-form" data-match-id="{{.Match.ID}}">
                 <input type="hidden" name="match_id" value="{{.Match.ID}}" />
@@ -87,24 +154,26 @@
                     {{if .Tip}}{{tr $.Lang "tips_edit"}}{{else}}{{tr $.Lang "tips_tip"}}{{end}}
                 </button>
             </form>
+
+        {{/* Zamčený zápas */}}
         {{else}}
             {{if .Tip}}
-            <div class="match-tip muted">{{tr $.Lang "tips_your_tip"}} {{.Tip.HomeScore}}:{{.Tip.AwayScore}} {{tr $.Lang "tips_locked"}}</div>
+            <div class="locked-tip-row">
+                🔒 <span>{{tr $.Lang "tips_your_tip"}} <strong>{{.Tip.HomeScore}}:{{.Tip.AwayScore}}</strong> — {{tr $.Lang "tips_locked"}}</span>
+            </div>
             <div class="tip-dist-wrap" data-match-id="{{.Match.ID}}"
                  data-home="{{$htName}}" data-away="{{$atName}}"></div>
             {{else}}
-            <div class="match-tip muted">{{tr $.Lang "tips_deadline"}}</div>
+            <div class="locked-tip-row">⏰ {{tr $.Lang "tips_deadline"}}</div>
             {{end}}
         {{end}}
-    </div>
 
-{{end}}
     </div>
-    <div class="round-summary-wrap" data-round-id="{{$currentRoundID}}"></div>
+{{end}}
 </div>
 
 <script>
-/* ── Tip Distribution — "Jak tipovali ostatní" ──────────────────────── */
+/* ── Tip Distribution ─────────────────────────────────────────────── */
 (function () {
     var wraps = document.querySelectorAll('.tip-dist-wrap[data-match-id]');
     if (!wraps.length) return;
@@ -113,9 +182,7 @@
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 if (d.hidden || !d.total) return;
-                var home = el.dataset.home;
-                var away = el.dataset.away;
-                el.innerHTML = buildDist(d, home, away);
+                el.innerHTML = buildDist(d, el.dataset.home, el.dataset.away);
             }).catch(function () {});
     });
     function pct(n, t) { return Math.round(n * 100 / t); }
@@ -143,51 +210,14 @@
     }
 }());
 
-/* ── Round Summary — "Kolo shrnutí" ─────────────────────────────────── */
-(function () {
-    var wraps = document.querySelectorAll('.round-summary-wrap[data-round-id]');
-    if (!wraps.length) return;
-    wraps.forEach(function (el) {
-        var roundId = el.dataset.roundId;
-        if (!roundId || roundId === '0') return;
-        fetch('/api/round/' + roundId + '/summary')
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d.finished || !d.top_scorers || !d.top_scorers.length) return;
-                el.innerHTML = buildRoundSummary(d);
-            }).catch(function () {});
-    });
-
-    var medals = ['🥇', '🥈', '🥉', '4.', '5.'];
-    function buildRoundSummary(d) {
-        var html = '<div class="round-summary">';
-        html += '<div class="rs-title">🏁 Výsledky kola</div>';
-        html += '<div class="rs-meta">';
-        html += '<span>' + d.match_count + ' zápasů</span>';
-        html += '<span>' + d.participants + ' hráčů</span>';
-        html += '<span>průměr ' + d.avg_pts + ' b</span>';
-        if (d.tip_count > 0) {
-            var exactPct = Math.round(d.exact_count * 100 / d.tip_count);
-            html += '<span>🎯 přesných ' + exactPct + '%</span>';
-        }
-        html += '</div>';
-        html += '<div class="rs-scorers">';
-        d.top_scorers.forEach(function (s, i) {
-            var isFirst = (i === 0);
-            html += '<div class="rs-scorer' + (isFirst ? ' rs-scorer-first' : '') + '">';
-            html += '<span class="rs-medal">' + (medals[i] || (i + 1) + '.') + '</span>';
-            html += '<span class="rs-name">' + s.username + '</span>';
-            html += '<span class="rs-pts">' + s.points + ' b</span>';
-            if (s.exact > 0) html += '<span class="rs-exact">🎯' + s.exact + '</span>';
-            html += '</div>';
-        });
-        html += '</div>';
-        html += '</div>';
-        return html;
-    }
-}());
-
-var LANG_STARTING = 'Právě začíná!';
+var LANG_STARTING = '{{tr .Lang "tips_starting"}}';
+var LANG_TIPS = {
+    nothingToSave: '{{tr .Lang "tips_nothing_to_save"}}',
+    saving:   '⏳ {{tr .Lang "tips_saving"}}…',
+    saved:    '✅ {{tr .Lang "tips_saved"}}',
+    saveAll:  '💾 {{tr .Lang "tips_save_all"}}',
+    errors:   '{{tr .Lang "tips_errors"}}'
+};
 (function () {
     var els = document.querySelectorAll('.match-countdown[data-countdown]');
     if (!els.length) return;
@@ -235,14 +265,14 @@ var LANG_STARTING = 'Právě začíná!';
     document.addEventListener('input', function(e) { if (e.target.classList.contains('score-input')) updateBar(); });
     btn.addEventListener('click', function () {
         var forms = getOpenForms().filter(isFilled);
-        if (!forms.length) { status.textContent = 'Nic k uložení.'; status.style.display='block'; setTimeout(function(){status.style.display='none';},2000); return; }
-        btn.disabled = true; btn.textContent = '⏳ Ukládám…'; status.style.display='none';
+        if (!forms.length) { status.textContent = LANG_TIPS.nothingToSave; status.style.display='block'; setTimeout(function(){status.style.display='none';},2000); return; }
+        btn.disabled = true; btn.textContent = LANG_TIPS.saving; status.style.display='none';
         var total = forms.length, done = 0, failed = 0;
         function finish() {
             done++;
             if (done + failed < total) return;
-            if (failed === 0) { btn.textContent = '✅ Uloženo'; setTimeout(function(){window.location.reload();}, 800); }
-            else { btn.disabled=false; btn.textContent='💾 Uložit vše'; status.textContent='⚠️ '+failed+' chyb'; status.style.display='block'; }
+            if (failed === 0) { btn.textContent = LANG_TIPS.saved; setTimeout(function(){window.location.reload();}, 800); }
+            else { btn.disabled=false; btn.textContent=LANG_TIPS.saveAll; status.textContent='⚠️ '+failed+' '+LANG_TIPS.errors; status.style.display='block'; }
         }
         forms.forEach(function (form) {
             var body = new URLSearchParams();

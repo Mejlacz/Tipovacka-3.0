@@ -46,6 +46,10 @@ func migrateSchema() {
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_deadline TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS extra_reveal_at TIMESTAMPTZ`,
 		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE competitions ADD COLUMN IF NOT EXISTS deadline TIMESTAMPTZ`,
+		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS competition_id BIGINT`,
+		// Naplň competition_id z rounds (pro stávající data)
+		`UPDATE matches m SET competition_id = r.competition_id FROM rounds r WHERE r.id = m.round_id AND m.competition_id IS NULL`,
 		`ALTER TABLE extra_answers ADD COLUMN IF NOT EXISTS original_answer TEXT`,
 		`CREATE TABLE IF NOT EXISTS app_config (key VARCHAR(100) PRIMARY KEY, value TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS feedback (
@@ -64,6 +68,8 @@ func migrateSchema() {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx ON chat_messages(created_at DESC)`,
+		`ALTER TABLE matches ALTER COLUMN round_id DROP NOT NULL`,
+		`ALTER TABLE competition_payments ADD COLUMN IF NOT EXISTS excluded BOOL NOT NULL DEFAULT false`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
@@ -170,6 +176,7 @@ func main() {
 
 	// ── Archive ───────────────────────────────────────────────────────────────
 	r.Get("/archive", handlers.ArchiveIndex(tmpl))
+	r.Get("/archive/hall-of-fame", handlers.ArchiveHallOfFame(tmpl))
 	r.Get("/archive/competition/{competition_id}", handlers.ArchiveCompetition(tmpl))
 	r.Get("/archive/round/{round_id}", handlers.ArchiveRoundRedirect)
 
@@ -221,6 +228,7 @@ func main() {
 	r.Get("/admin/competitions/{competition_id}/edit", handlers.AdminCompetitionEditForm(tmpl))
 	r.Post("/admin/competitions/{competition_id}/edit", handlers.AdminCompetitionEditSubmit)
 	r.Post("/admin/competitions/{competition_id}/toggle", handlers.AdminCompetitionToggle)
+	r.Post("/admin/competitions/{competition_id}/set-deadline", handlers.AdminCompetitionSetDeadline)
 	r.Post("/admin/competitions/{competition_id}/delete", handlers.AdminCompetitionDelete)
 	r.Post("/admin/competitions/{competition_id}/sort-order", handlers.AdminCompetitionSortOrder)
 
@@ -246,8 +254,10 @@ func main() {
 
 	// Admin manual page
 	r.Get("/admin/manual", handlers.AdminManual(tmpl))
+	r.Get("/admin/code-map", handlers.AdminCodeMap(tmpl))
+	r.Get("/admin/error-map", handlers.AdminErrorMap(tmpl))
 
-	// Admin rounds
+	// Admin rounds (přesměrování na competition matches — kola jsou odstraněna)
 	r.Get("/admin/competitions/{competition_id}/rounds", handlers.AdminRoundsList(tmpl))
 	r.Post("/admin/competitions/{competition_id}/rounds/new", handlers.AdminRoundCreate)
 	r.Post("/admin/rounds/{round_id}/edit", handlers.AdminRoundEdit)
@@ -255,8 +265,15 @@ func main() {
 	r.Post("/admin/rounds/{round_id}/notify-new", handlers.AdminRoundNotifyNew)
 
 	// Admin matches
-	r.Get("/admin/rounds/{round_id}/matches", handlers.AdminMatchesList(tmpl))
-	r.Post("/admin/rounds/{round_id}/matches/new", handlers.AdminMatchCreate)
+	r.Get("/admin/competitions/{competition_id}/matches", handlers.AdminMatchesList(tmpl))
+	r.Post("/admin/competitions/{competition_id}/matches/new", handlers.AdminMatchCreate)
+	// Backward compat: staré round-based URL přesměruje na admin
+	r.Get("/admin/rounds/{round_id}/matches", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin", http.StatusMovedPermanently)
+	})
+	r.Post("/admin/rounds/{round_id}/matches/new", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	})
 	r.Post("/admin/matches/{match_id}/edit", handlers.AdminMatchEdit)
 	r.Post("/admin/matches/{match_id}/set-result", handlers.AdminMatchSetResult)
 	r.Post("/admin/matches/{match_id}/clear-result", handlers.AdminMatchClearResult)
@@ -269,11 +286,12 @@ func main() {
 	r.Post("/admin/competitions/{competition_id}/users/{user_id}/remove-tips", handlers.AdminRemoveUserTips)
 	r.Get("/admin/unscored", handlers.AdminUnscored(tmpl))
 	r.Get("/admin/unscored-count", handlers.AdminUnscoredCount)
-	r.Get("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsForm(tmpl))
-	r.Post("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsSubmit)
 	// Global bulk results view (all active competitions)
 	r.Get("/admin/results", handlers.AdminBulkResultsForm(tmpl))
 	r.Post("/admin/results", handlers.AdminBulkResultsSubmit)
+	// Backward compat: staré round-based bulk-results
+	r.Get("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsForm(tmpl))
+	r.Post("/admin/rounds/{round_id}/bulk-results", handlers.AdminBulkResultsSubmit)
 	r.Post("/admin/competitions/{competition_id}/add-match", handlers.AdminQuickAddMatchAjax)
 
 	// Admin teams
@@ -281,6 +299,7 @@ func main() {
 	r.Post("/admin/teams/new", handlers.AdminTeamCreate)
 	r.Post("/admin/teams/{team_id}/edit", handlers.AdminTeamEdit)
 	r.Post("/admin/teams/{team_id}/delete", handlers.AdminTeamDelete)
+	r.Post("/admin/teams/bulk-delete", handlers.AdminTeamBulkDelete)
 	r.Post("/admin/teams/{team_id}/merge", handlers.AdminTeamMerge)
 	r.Post("/admin/teams/import-csv", handlers.AdminTeamsImportCSV)
 	r.Post("/admin/teams/import-xlsx", handlers.AdminTeamsImportXLSX)
@@ -303,10 +322,11 @@ func main() {
 
 	// Admin rozcestník — přidat zápasy
 	r.Get("/admin/add-matches", handlers.AdminAddMatchesHub(tmpl))
-	r.Post("/admin/rounds/quick-new", handlers.AdminRoundQuickNew)
+	r.Post("/admin/rounds/quick-new", handlers.AdminRoundQuickNew) // redirect stub
 
 	// Admin hromadný import budoucích zápasů
 	r.Get("/admin/matches/import", handlers.AdminMatchImportForm(tmpl))
+	r.Get("/admin/matches/import/template", handlers.AdminMatchImportTemplate)
 	r.Post("/admin/matches/import/parse", handlers.AdminMatchImportParse(tmpl))
 	r.Post("/admin/matches/import/confirm", handlers.AdminMatchImportConfirm)
 	r.Post("/admin/matches/import/cancel", handlers.AdminMatchImportCancel)
@@ -320,6 +340,18 @@ func main() {
 	r.Get("/admin/api/team-resolve", handlers.AdminAPITeamResolve)
 	r.Post("/admin/api/import", handlers.AdminAPIImport)
 	r.Post("/admin/api/update-results", handlers.AdminAPIUpdateResults)
+
+	// Admin platby
+	r.Get("/admin/payments", handlers.AdminPaymentOverview(tmpl))
+	r.Get("/admin/payments/{comp_id}", handlers.AdminPaymentDetail(tmpl))
+	r.Post("/admin/payments/{comp_id}/{user_id}/toggle-paid", handlers.AdminPaymentToggle)
+	r.Post("/admin/payments/{comp_id}/{user_id}/toggle-exclude", handlers.AdminPaymentExclude)
+	r.Post("/admin/payments/{comp_id}/set-reminder-date", handlers.AdminPaymentSetReminderDate)
+	r.Post("/admin/payments/{comp_id}/send-reminder", handlers.AdminPaymentSendReminder)
+	r.Post("/admin/payments/{comp_id}/save-settings", handlers.AdminPaymentSaveSettings)
+	r.Post("/admin/payments/{comp_id}/upload-qr/{num}", handlers.AdminPaymentUploadQR)
+	r.Post("/admin/payments/{comp_id}/delete-qr/{num}", handlers.AdminPaymentDeleteQR)
+	r.Get("/api/payment-reminder", handlers.AdminPaymentReminderAPI)
 
 	// Admin audit
 	r.Get("/admin/history", handlers.AdminHistory(tmpl))
@@ -489,6 +521,7 @@ func templateFuncs() template.FuncMap {
 		"add":      func(a, b int) int { return a + b },
 		"sub":      func(a, b int) int { return a - b },
 		"mul":      func(a, b int) int { return a * b },
+		"mod":      func(a, b int) int { return a % b },
 		"abs":      func(a int) int { if a < 0 { return -a }; return a },
 		// splitPipe splits a string by | and trims whitespace
 		"splitPipe": func(s string) []string {
@@ -578,6 +611,10 @@ func templateFuncs() template.FuncMap {
 		"tr": func(lang, key string) string {
 			return i18n.Tr(lang, key)
 		},
+		// trc auto-translates DB content (competition names, extra questions…)
+		"trc": func(lang, text string) string {
+			return i18n.Trc(lang, text)
+		},
 		// splitLines splits a string by newlines and returns non-empty trimmed lines
 		"splitLines": func(s string) []string {
 			parts := strings.Split(s, "\n")
@@ -592,6 +629,43 @@ func templateFuncs() template.FuncMap {
 		},
 		// lower converts string to lowercase (for data-name search)
 		"lower": strings.ToLower,
+		// sportBadge maps a sport code to an emoji + name badge
+		"sportBadge": func(sport string) string {
+			switch strings.ToLower(sport) {
+			case "hockey", "hokej", "ice_hockey":
+				return "🏒 Hokej"
+			case "football", "fotbal", "soccer":
+				return "⚽ Fotbal"
+			case "basketball", "basketbal":
+				return "🏀 Basketbal"
+			case "tennis", "tenis":
+				return "🎾 Tenis"
+			default:
+				return sport
+			}
+		},
+		// initials extracts up to 2 uppercase initials from a team name
+		"initials": func(name string) string {
+			parts := strings.Fields(name)
+			if len(parts) == 0 {
+				return "?"
+			}
+			r0 := []rune(strings.ToUpper(parts[0]))
+			if len(r0) == 0 {
+				return "?"
+			}
+			if len(parts) == 1 {
+				if len(r0) >= 2 {
+					return string(r0[:2])
+				}
+				return string(r0[:1])
+			}
+			r1 := []rune(strings.ToUpper(parts[1]))
+			if len(r1) == 0 {
+				return string(r0[:1])
+			}
+			return string(r0[:1]) + string(r1[:1])
+		},
 		// fmtTime formats a *time.Time pointer using the given layout; returns "" for nil
 		"fmtTime": func(t *time.Time, layout string) string {
 			if t == nil {
