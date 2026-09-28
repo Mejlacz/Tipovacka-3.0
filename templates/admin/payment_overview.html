@@ -1,0 +1,108 @@
+<div class="page-header">
+    <h1>💰 Přehled plateb</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+<style>
+.pay-cards { display:flex; flex-wrap:wrap; gap:1rem; margin-top:1rem }
+.pay-card {
+    background:var(--bg2);
+    border:1px solid var(--border-d);
+    border-radius:12px;
+    padding:1.25rem 1rem;
+    min-width:180px;
+    text-decoration:none;
+    color:inherit;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:.6rem;
+    transition:border-color .15s, background .15s, transform .12s;
+}
+.pay-card:hover { border-color:rgba(255,255,255,.18); background:var(--bg3); transform:translateY(-2px) }
+.pay-card.all-paid-card { border-color:rgba(52,211,153,.3) }
+.pay-card.all-paid-card:hover { background:rgba(52,211,153,.04) }
+
+.pay-sport-badge {
+    font-size:.68rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--muted-d);
+    background:var(--bg3);
+    border:1px solid var(--border-d);
+    padding:.2rem .55rem;
+    border-radius:99px;
+}
+.pay-card-name {
+    font-size:.95rem;
+    font-weight:700;
+    color:#e2e8f0;
+    text-align:center;
+    line-height:1.25;
+}
+
+.pay-arc-wrap { position:relative; width:90px; height:90px }
+.pay-arc-wrap svg { width:90px; height:90px; transform:rotate(-90deg); display:block }
+.pay-arc-track { fill:none; stroke:rgba(255,255,255,.1); stroke-width:6 }
+.pay-arc-fill  { fill:none; stroke-width:6; stroke-linecap:round }
+.pay-arc-center {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    text-align:center; line-height:1;
+    pointer-events:none;
+}
+.pay-arc-num {
+    display:block;
+    font-size:1.35rem;
+    font-weight:800;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-.02em;
+}
+.pay-arc-denom {
+    display:block;
+    font-size:.68rem;
+    font-weight:600;
+    color:var(--muted-d);
+    margin-top:1px;
+}
+.pay-status-chip {
+    display:inline-flex;
+    align-items:center;
+    gap:.25rem;
+    font-size:.7rem;
+    font-weight:700;
+    padding:.2rem .55rem;
+    border-radius:99px;
+}
+.chip-pending { background:rgba(245,158,11,.15); color:#f59e0b; border:1px solid rgba(245,158,11,.25) }
+.chip-done    { background:rgba(52,211,153,.15);  color:#34d399; border:1px solid rgba(52,211,153,.3)  }
+</style>
+
+<div class="pay-cards">
+{{range .Cards}}
+<a href="/admin/payments/{{.ID}}" class="pay-card {{if eq .Paid .Total}}all-paid-card{{end}}">
+    <span class="pay-sport-badge">{{.SportLabel}}</span>
+    <div class="pay-card-name">{{.Name}}</div>
+    <div class="pay-arc-wrap">
+        <svg viewBox="0 0 90 90">
+            <circle class="pay-arc-track" cx="45" cy="45" r="35"/>
+            <circle class="pay-arc-fill" cx="45" cy="45" r="35"
+                stroke="{{if eq .Paid .Total}}#34d399{{else}}#f59e0b{{end}}"
+                stroke-dasharray="220"
+                stroke-dashoffset="{{printf "%.1f" .ArcOffset}}"/>
+        </svg>
+        <div class="pay-arc-center">
+            <span class="pay-arc-num" style="color:{{if eq .Paid .Total}}#34d399{{else}}#f59e0b{{end}}">{{.Paid}}</span>
+            <span class="pay-arc-denom">z {{.Total}}</span>
+        </div>
+    </div>
+    {{if eq .Paid .Total}}
+    <span class="pay-status-chip chip-done">✓ Zaplaceno</span>
+    {{else}}
+    {{$missing := sub .Total .Paid}}
+    <span class="pay-status-chip chip-pending">{{$missing}} nezaplaceno</span>
+    {{end}}
+</a>
+{{end}}
+</div>

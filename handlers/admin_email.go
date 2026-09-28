@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -87,6 +88,18 @@ func sendEmail(to, subject, body string) error {
 
 // sendEmailHTML odešle HTML email přes SMTP.
 func sendEmailHTML(to, subject, bodyHTML string) error {
+	return sendEmailHTMLWithImages(to, subject, bodyHTML, nil)
+}
+
+// EmailInlineImage je obrázek vložený přímo do emailu přes CID.
+type EmailInlineImage struct {
+	ContentID string // bez <>
+	MIMEType  string // např. "image/png"
+	Data      []byte
+}
+
+// sendEmailHTMLWithImages odešle HTML email s vloženými obrázky (multipart/related).
+func sendEmailHTMLWithImages(to, subject, bodyHTML string, images []EmailInlineImage) error {
 	if !config.SMTPEnabled {
 		return fmt.Errorf("SMTP není nakonfigurováno")
 	}
@@ -94,16 +107,45 @@ func sendEmailHTML(to, subject, bodyHTML string) error {
 	if from == "" {
 		from = config.SMTPUser
 	}
-	msg := "From: " + from + "\r\n" +
-		"To: " + to + "\r\n" +
-		"Subject: " + subject + "\r\n" +
-		"MIME-Version: 1.0\r\n" +
-		"Content-Type: text/html; charset=UTF-8\r\n" +
-		"\r\n" +
-		bodyHTML
+
+	const boundary = "==tip_boundary_xyz=="
+	var sb strings.Builder
+
+	sb.WriteString("From: " + from + "\r\n")
+	sb.WriteString("To: " + to + "\r\n")
+	sb.WriteString("Subject: " + subject + "\r\n")
+	sb.WriteString("MIME-Version: 1.0\r\n")
+
+	if len(images) == 0 {
+		sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+		sb.WriteString(bodyHTML)
+	} else {
+		sb.WriteString("Content-Type: multipart/related; boundary=\"" + boundary + "\"\r\n\r\n")
+		sb.WriteString("--" + boundary + "\r\n")
+		sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+		sb.WriteString(bodyHTML + "\r\n")
+		for _, img := range images {
+			sb.WriteString("--" + boundary + "\r\n")
+			sb.WriteString("Content-Type: " + img.MIMEType + "\r\n")
+			sb.WriteString("Content-Transfer-Encoding: base64\r\n")
+			sb.WriteString("Content-ID: <" + img.ContentID + ">\r\n")
+			sb.WriteString("Content-Disposition: inline\r\n\r\n")
+			encoded := base64.StdEncoding.EncodeToString(img.Data)
+			// Rozdělíme na řádky po 76 znacích (RFC 2045)
+			for i := 0; i < len(encoded); i += 76 {
+				end := i + 76
+				if end > len(encoded) {
+					end = len(encoded)
+				}
+				sb.WriteString(encoded[i:end] + "\r\n")
+			}
+		}
+		sb.WriteString("--" + boundary + "--\r\n")
+	}
+
 	addr := fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)
 	auth := smtp.PlainAuth("", config.SMTPUser, config.SMTPPassword, config.SMTPHost)
-	return smtp.SendMail(addr, auth, from, []string{to}, []byte(msg))
+	return smtp.SendMail(addr, auth, from, []string{to}, []byte(sb.String()))
 }
 
 // EmailUser je uživatel s emailem pro výběr příjemců.
@@ -157,10 +199,9 @@ func AdminEmailForm(tmpl *template.Template) http.HandlerFunc {
 				idxByID[u.ID] = i
 			}
 			cRows, _ := db.Pool.Query(ctx,
-				`SELECT DISTINCT t.user_id, r.competition_id
+				`SELECT DISTINCT t.user_id, m.competition_id
 				   FROM tips t
 				   JOIN matches m ON m.id = t.match_id
-				   JOIN rounds r ON r.id = m.round_id
 				   WHERE t.user_id = ANY(
 				       SELECT id FROM users WHERE email IS NOT NULL AND email != ''
 				   )`)

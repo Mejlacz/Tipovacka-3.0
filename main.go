@@ -365,6 +365,15 @@ func main() {
 	r.Get("/admin/email", handlers.AdminEmailForm(tmpl))
 	r.Post("/admin/email/send", handlers.AdminEmailSend(tmpl))
 
+	// Platby
+	r.Get("/admin/payments", handlers.AdminPaymentOverview(tmpl))
+	r.Get("/admin/payments/{comp_id}", handlers.AdminPaymentDetail(tmpl))
+	r.Post("/admin/payments/{comp_id}/toggle", handlers.AdminPaymentToggle)
+	r.Post("/admin/payments/{comp_id}/send-reminder", handlers.AdminPaymentSendReminder)
+	r.Post("/admin/payments/{comp_id}/save-settings", handlers.AdminPaymentSaveSettings)
+	r.Post("/admin/payments/{comp_id}/upload-qr/{num}", handlers.AdminPaymentUploadQR)
+	r.Post("/admin/payments/{comp_id}/delete-qr/{num}", handlers.AdminPaymentDeleteQR)
+
 	// User merge
 	r.Get("/admin/users/merge", handlers.AdminUserMergeForm(tmpl))
 	r.Post("/admin/users/merge", handlers.AdminUserMerge)
