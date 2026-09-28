@@ -390,6 +390,31 @@ func AdminPaymentUploadQR(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "url": payQRURL(compID, num)})
 }
 
+// POST /admin/payments/{comp_id}/delete-qr/{num} — smaže QR kód (AJAX)
+func AdminPaymentDeleteQR(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "forbidden"})
+		return
+	}
+	compID, err := strconv.ParseInt(r.PathValue("comp_id"), 10, 64)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad_id"})
+		return
+	}
+	num, err := strconv.Atoi(r.PathValue("num"))
+	if err != nil || (num != 1 && num != 2) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "bad_num"})
+		return
+	}
+	_ = os.Remove(payQRPath(compID, num))
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
 // POST /admin/payments/{comp_id}/send-reminder — pošle email vybraným hráčům
 func AdminPaymentSendReminder(w http.ResponseWriter, r *http.Request) {
 	admin := RequireAdmin(w, r)

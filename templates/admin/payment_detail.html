@@ -292,6 +292,8 @@
 .qr-file-inp { display:none }
 .btn-qr-pick { font-size:.78rem; padding:.3rem .75rem; border-radius:6px; border:1px solid var(--border-d); background:var(--bg2); color:var(--text-d); cursor:pointer; font-family:inherit; transition:all .12s }
 .btn-qr-pick:hover { border-color:rgba(99,102,241,.5) }
+.btn-qr-del { font-size:.78rem; padding:.3rem .65rem; border-radius:6px; border:1px solid rgba(239,68,68,.35); background:none; color:#f87171; cursor:pointer; font-family:inherit; transition:all .12s }
+.btn-qr-del:hover { background:rgba(239,68,68,.12); border-color:#ef4444 }
 .qr-status { font-size:.73rem; min-height:1.1em; text-align:center }
 .settings-saved-msg { display:none; font-size:.78rem; color:#34d399; margin-left:.5rem }
 </style>
@@ -361,6 +363,7 @@
             <div class="qr-upload-row">
                 <input type="file" id="qr-file-1" class="qr-file-inp" accept="image/*" onchange="uploadQR(1)">
                 <button class="btn-qr-pick" onclick="document.getElementById('qr-file-1').click()">{{if .Detail.Settings.QR1URL}}Změnit{{else}}Nahrát{{end}}</button>
+                {{if .Detail.Settings.QR1URL}}<button class="btn-qr-del" id="qr-del-1" onclick="deleteQR(1)">🗑 Smazat</button>{{end}}
             </div>
             <div class="qr-status" id="qr-status-1"></div>
         </div>
@@ -376,6 +379,7 @@
             <div class="qr-upload-row">
                 <input type="file" id="qr-file-2" class="qr-file-inp" accept="image/*" onchange="uploadQR(2)">
                 <button class="btn-qr-pick" onclick="document.getElementById('qr-file-2').click()">{{if .Detail.Settings.QR2URL}}Změnit{{else}}Nahrát{{end}}</button>
+                {{if .Detail.Settings.QR2URL}}<button class="btn-qr-del" id="qr-del-2" onclick="deleteQR(2)">🗑 Smazat</button>{{end}}
             </div>
             <div class="qr-status" id="qr-status-2"></div>
         </div>
@@ -535,6 +539,34 @@ function uploadQR(num) {
     .catch(function() {
         status.textContent = '❌ Chyba spojení'; status.style.color = '#f87171';
     });
+}
+
+function deleteQR(num) {
+    var status = document.getElementById('qr-status-' + num);
+    var slot   = document.getElementById('qr-slot-' + num);
+    status.textContent = 'Mažu…'; status.style.color = 'var(--muted-d)';
+    var fd = new FormData(); fd.append('_csrf', _payCsrf);
+    fetch('/admin/payments/' + _compID + '/delete-qr/' + num, { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok) {
+            var img = document.getElementById('qr-img-' + num);
+            if (img) img.remove();
+            var empty = document.getElementById('qr-empty-' + num);
+            if (empty) { empty.style.display = ''; } else {
+                var e = document.createElement('div');
+                e.id = 'qr-empty-' + num; e.className = 'qr-empty-icon'; e.textContent = '🔲';
+                slot.insertBefore(e, slot.querySelector('.qr-hint'));
+            }
+            slot.classList.remove('has-img');
+            var delBtn = document.getElementById('qr-del-' + num);
+            if (delBtn) delBtn.remove();
+            status.textContent = '';
+        } else {
+            status.textContent = '❌ Chyba'; status.style.color = '#f87171';
+        }
+    })
+    .catch(function() { status.textContent = '❌ Chyba spojení'; status.style.color = '#f87171'; });
 }
 
 // Obnov aktivní záložku z sessionStorage

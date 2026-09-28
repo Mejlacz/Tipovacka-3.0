@@ -350,6 +350,7 @@ func main() {
 	r.Post("/admin/payments/{comp_id}/send-reminder", handlers.AdminPaymentSendReminder)
 	r.Post("/admin/payments/{comp_id}/save-settings", handlers.AdminPaymentSaveSettings)
 	r.Post("/admin/payments/{comp_id}/upload-qr/{num}", handlers.AdminPaymentUploadQR)
+	r.Post("/admin/payments/{comp_id}/delete-qr/{num}", handlers.AdminPaymentDeleteQR)
 	r.Get("/api/payment-reminder", handlers.AdminPaymentReminderAPI)
 
 	// Admin audit
