@@ -10,70 +10,81 @@
 </div>
 {{end}}
 
-<div class="card" style="max-width:640px;padding:1.5rem;margin-bottom:1.5rem">
-    <p style="color:var(--muted-d);font-size:.87rem;margin-bottom:1rem">
-        Vyberte soutěž a rozsah dat, které chcete <strong>zachovat</strong>. Zápasy mimo tento rozsah budou smazány.
-        Zahraná utkání (s výsledkem) se <strong>nikdy nesmaznou</strong>.
-    </p>
-    <form method="get" action="/admin/matches/bulk-delete-by-date" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
-        <div>
-            <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.25rem">Soutěž</label>
-            <select name="competition_id" required class="form-control" style="min-width:200px">
-                <option value="">— vyberte —</option>
-                {{range .Competitions}}
-                <option value="{{.ID}}" {{if eq $.CompID .ID}}selected{{end}}>{{.Name}}</option>
-                {{end}}
-            </select>
-        </div>
-        <div>
-            <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.25rem">Zachovat od</label>
-            <input type="date" name="keep_from" value="{{.KeepFrom}}" required class="form-control" style="width:155px">
-        </div>
-        <div>
-            <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.25rem">Zachovat do</label>
-            <input type="date" name="keep_to" value="{{.KeepTo}}" required class="form-control" style="width:155px">
-        </div>
-        <button type="submit" class="btn btn-secondary">🔍 Náhled</button>
+<div class="card" style="max-width:320px;padding:1.25rem;margin-bottom:1.5rem">
+    <form method="get" action="/admin/matches/bulk-delete-by-date">
+        <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.4rem">Soutěž</label>
+        <select name="competition_id" class="form-control" style="width:100%;margin-bottom:.75rem"
+                onchange="this.form.submit()">
+            <option value="">— vyberte —</option>
+            {{range .Competitions}}
+            <option value="{{.ID}}" {{if eq $.CompID .ID}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
     </form>
 </div>
 
 {{if .CompID}}
-<p style="font-size:.84rem;color:var(--muted-d);margin-bottom:.75rem">
-    Soutěž celkem: <strong>{{.TotalMatches}} zápasů</strong> (z toho nezahraných: <strong>{{.TotalUnfinished}}</strong>)
-</p>
-{{end}}
+{{if .Matches}}
+<form method="post" action="/admin/matches/bulk-delete-by-date" id="bulk-form">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    <input type="hidden" name="competition_id" value="{{.CompID}}">
 
-{{if and .CompID .KeepFrom .KeepTo}}
-    {{if .Preview}}
-    <div class="card" style="padding:1.25rem;margin-bottom:1rem">
-        <p style="margin-bottom:.75rem;font-weight:600;color:var(--danger,#c00)">
-            ⚠️ Bude smazáno {{.Count}} zápasů mimo {{.KeepFrom}} – {{.KeepTo}}:
-        </p>
-        <div style="max-height:400px;overflow-y:auto;margin-bottom:1rem">
-            <table class="table table-sm" style="font-size:.84rem">
-                <thead><tr><th>#</th><th>Domácí</th><th>Hosté</th><th>Datum</th></tr></thead>
-                <tbody>
-                {{range .Preview}}
-                <tr>
-                    <td style="color:var(--muted-d)">{{.ID}}</td>
-                    <td>{{.HomeName}}</td>
-                    <td>{{.AwayName}}</td>
-                    <td>{{.Date}}</td>
-                </tr>
-                {{end}}
-                </tbody>
-            </table>
-        </div>
-        <form method="post" action="/admin/matches/bulk-delete-by-date"
-              onsubmit="return confirm('Opravdu smazat {{.Count}} zápasů? Tato akce je nevratná.')">
-            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
-            <input type="hidden" name="competition_id" value="{{.CompID}}">
-            <input type="hidden" name="keep_from" value="{{.KeepFrom}}">
-            <input type="hidden" name="keep_to" value="{{.KeepTo}}">
-            <button type="submit" class="btn btn-danger">🗑️ Smazat {{.Count}} zápasů</button>
-        </form>
+    <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;flex-wrap:wrap">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="setAll(true)">☑ Vše</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="setAll(false)">☐ Nic</button>
+        <span style="font-size:.84rem;color:var(--muted-d)" id="sel-count"></span>
+        <button type="submit" class="btn btn-danger btn-sm" style="margin-left:auto"
+                onclick="return confirmDelete()">🗑️ Smazat vybrané</button>
     </div>
-    {{else}}
-    <div class="alert alert-success">✅ Žádné zápasy ke smazání pro vybraný rozsah a soutěž.</div>
-    {{end}}
+
+    <div class="card" style="padding:0;overflow:hidden">
+        <table class="table table-sm" style="font-size:.84rem;margin:0">
+            <thead>
+                <tr>
+                    <th style="width:36px">
+                        <input type="checkbox" id="chk-all" onchange="setAll(this.checked)">
+                    </th>
+                    <th>Kolo</th>
+                    <th>Domácí</th>
+                    <th>Hosté</th>
+                    <th>Datum</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .Matches}}
+            <tr>
+                <td><input type="checkbox" name="match_ids" value="{{.ID}}" class="match-chk" onchange="updateCount()"></td>
+                <td style="color:var(--muted-d);font-size:.8rem">{{.RoundName}}</td>
+                <td>{{.HomeName}}</td>
+                <td>{{.AwayName}}</td>
+                <td style="white-space:nowrap">{{.Date}}</td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+</form>
+
+<script>
+function setAll(val) {
+    document.querySelectorAll('.match-chk').forEach(c => c.checked = val);
+    document.getElementById('chk-all').checked = val;
+    updateCount();
+}
+function updateCount() {
+    const n = document.querySelectorAll('.match-chk:checked').length;
+    document.getElementById('sel-count').textContent = n ? n + ' vybráno' : '';
+    document.getElementById('chk-all').checked =
+        n === document.querySelectorAll('.match-chk').length;
+}
+function confirmDelete() {
+    const n = document.querySelectorAll('.match-chk:checked').length;
+    if (!n) { alert('Nic není vybráno.'); return false; }
+    return confirm('Opravdu smazat ' + n + ' zápasů? Tato akce je nevratná.');
+}
+updateCount();
+</script>
+{{else}}
+<div class="alert alert-success">✅ Žádné nezahrané zápasy v této soutěži.</div>
+{{end}}
 {{end}}
