@@ -856,6 +856,13 @@ func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
 		}
 		compRows.Close()
 
+		// Celkový počet zápasů v soutěži (pro diagnostiku)
+		var totalMatches, totalUnfinished int
+		if compID > 0 {
+			_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM matches m JOIN rounds r ON r.id=m.round_id WHERE r.competition_id=$1`, compID).Scan(&totalMatches)
+			_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM matches m JOIN rounds r ON r.id=m.round_id WHERE r.competition_id=$1 AND m.is_finished=false`, compID).Scan(&totalUnfinished)
+		}
+
 		type previewRow struct {
 			ID       int
 			HomeName string
@@ -892,13 +899,15 @@ func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		RenderTemplate(w, r, tmpl, "admin/match_bulk_delete.html", TemplateData{
-			"Flash":        middleware.GetFlash(w, r),
-			"KeepFrom":     keepFrom,
-			"KeepTo":       keepTo,
-			"CompID":       compID,
-			"Competitions": competitions,
-			"Preview":      preview,
-			"Count":        count,
+			"Flash":           middleware.GetFlash(w, r),
+			"KeepFrom":        keepFrom,
+			"KeepTo":          keepTo,
+			"CompID":          compID,
+			"Competitions":    competitions,
+			"Preview":         preview,
+			"Count":           count,
+			"TotalMatches":    totalMatches,
+			"TotalUnfinished": totalUnfinished,
 		})
 	}
 }

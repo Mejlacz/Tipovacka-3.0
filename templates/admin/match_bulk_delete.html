@@ -37,6 +37,12 @@
     </form>
 </div>
 
+{{if .CompID}}
+<p style="font-size:.84rem;color:var(--muted-d);margin-bottom:.75rem">
+    Soutěž celkem: <strong>{{.TotalMatches}} zápasů</strong> (z toho nezahraných: <strong>{{.TotalUnfinished}}</strong>)
+</p>
+{{end}}
+
 {{if and .CompID .KeepFrom .KeepTo}}
     {{if .Preview}}
     <div class="card" style="padding:1.25rem;margin-bottom:1rem">
