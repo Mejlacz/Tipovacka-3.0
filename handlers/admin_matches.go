@@ -843,7 +843,7 @@ func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
 		compID, _ := strconv.Atoi(compIDStr)
 
 		// Načti seznam soutěží
-		compRows, _ := db.Pool.Query(ctx, `SELECT id, name FROM competitions ORDER BY name`)
+		compRows, _ := db.Pool.Query(ctx, `SELECT id, name FROM competitions WHERE is_active = true ORDER BY name`)
 		type compOption struct {
 			ID   int
 			Name string
