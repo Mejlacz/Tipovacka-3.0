@@ -17,7 +17,7 @@
                 onchange="this.form.submit()">
             <option value="">— vyberte —</option>
             {{range .Competitions}}
-            <option value="{{.ID}}" {{if eq $.CompID .ID}}selected{{end}}>{{.Name}}</option>
+            <option value="{{.ID}}" {{if eq $.CompID .ID}}selected{{end}}>{{.Name}} ({{.Unfinished}} nezahraných)</option>
             {{end}}
         </select>
     </form>
