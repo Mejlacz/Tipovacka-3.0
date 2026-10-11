@@ -839,6 +839,22 @@ func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
 
 		keepFrom := r.URL.Query().Get("keep_from")
 		keepTo := r.URL.Query().Get("keep_to")
+		compIDStr := r.URL.Query().Get("competition_id")
+		compID, _ := strconv.Atoi(compIDStr)
+
+		// Načti seznam soutěží
+		compRows, _ := db.Pool.Query(ctx, `SELECT id, name FROM competitions ORDER BY name`)
+		type compOption struct {
+			ID   int
+			Name string
+		}
+		var competitions []compOption
+		for compRows.Next() {
+			var c compOption
+			_ = compRows.Scan(&c.ID, &c.Name)
+			competitions = append(competitions, c)
+		}
+		compRows.Close()
 
 		type previewRow struct {
 			ID       int
@@ -849,19 +865,21 @@ func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
 		var preview []previewRow
 		var count int
 
-		if keepFrom != "" && keepTo != "" {
+		if keepFrom != "" && keepTo != "" && compID > 0 {
 			rows, err := db.Pool.Query(ctx, `
 				SELECT m.id, COALESCE(ht.display_name, ht.name), COALESCE(at.display_name, at.name),
 				       TO_CHAR(m.match_date AT TIME ZONE 'Europe/Prague', 'DD.MM.YYYY HH24:MI')
 				FROM matches m
+				JOIN rounds r ON r.id = m.round_id
 				JOIN teams ht ON ht.id = m.home_team_id
 				JOIN teams at ON at.id = m.away_team_id
-				WHERE m.is_finished = false
+				WHERE r.competition_id = $3
+				  AND m.is_finished = false
 				  AND (m.match_date IS NULL
 				       OR DATE(m.match_date AT TIME ZONE 'Europe/Prague') < $1
 				       OR DATE(m.match_date AT TIME ZONE 'Europe/Prague') > $2)
 				ORDER BY m.match_date ASC NULLS LAST
-				LIMIT 200`, keepFrom, keepTo)
+				LIMIT 500`, keepFrom, keepTo, compID)
 			if err == nil {
 				for rows.Next() {
 					var row previewRow
@@ -874,13 +892,13 @@ func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		RenderTemplate(w, r, tmpl, "admin/match_bulk_delete.html", TemplateData{
-			"User":      admin,
-			"Flash":     middleware.GetFlash(w, r),
-			"KeepFrom":  keepFrom,
-			"KeepTo":    keepTo,
-			"Preview":   preview,
-			"Count":     count,
-			"CSRFToken": middleware.GetCSRFToken(w, r),
+			"Flash":        middleware.GetFlash(w, r),
+			"KeepFrom":     keepFrom,
+			"KeepTo":       keepTo,
+			"CompID":       compID,
+			"Competitions": competitions,
+			"Preview":      preview,
+			"Count":        count,
 		})
 	}
 }
@@ -897,8 +915,9 @@ func AdminMatchBulkDeleteByDate(w http.ResponseWriter, r *http.Request) {
 	}
 	keepFrom := r.FormValue("keep_from")
 	keepTo := r.FormValue("keep_to")
-	if keepFrom == "" || keepTo == "" {
-		middleware.SetFlash(w, r, "error", "Vyplňte obě data.")
+	compID, _ := strconv.Atoi(r.FormValue("competition_id"))
+	if keepFrom == "" || keepTo == "" || compID == 0 {
+		middleware.SetFlash(w, r, "error", "Vyplňte soutěž a obě data.")
 		http.Redirect(w, r, "/admin/matches/bulk-delete-by-date", http.StatusSeeOther)
 		return
 	}
@@ -908,16 +927,18 @@ func AdminMatchBulkDeleteByDate(w http.ResponseWriter, r *http.Request) {
 		DELETE FROM matches
 		WHERE id IN (
 		  SELECT m.id FROM matches m
-		  WHERE m.is_finished = false
+		  JOIN rounds r ON r.id = m.round_id
+		  WHERE r.competition_id = $3
+		    AND m.is_finished = false
 		    AND (m.match_date IS NULL
 		         OR DATE(m.match_date AT TIME ZONE 'Europe/Prague') < $1
 		         OR DATE(m.match_date AT TIME ZONE 'Europe/Prague') > $2)
-		)`, keepFrom, keepTo)
+		)`, keepFrom, keepTo, compID)
 	if err != nil {
 		middleware.SetFlash(w, r, "error", "Chyba: "+err.Error())
 	} else {
 		deleted := res.RowsAffected()
 		middleware.SetFlash(w, r, "ok", fmt.Sprintf("Smazáno %d zápasů (zachováno %s – %s).", deleted, keepFrom, keepTo))
 	}
-	http.Redirect(w, r, "/admin/matches/bulk-delete-by-date", http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/admin/matches/bulk-delete-by-date?competition_id=%d&keep_from=%s&keep_to=%s", compID, keepFrom, keepTo), http.StatusSeeOther)
 }
