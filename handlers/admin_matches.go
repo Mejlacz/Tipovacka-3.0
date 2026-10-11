@@ -5,6 +5,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -825,4 +826,98 @@ func AdminMatchNotifyNow(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"ok":true}`))
+}
+
+// GET /admin/matches/bulk-delete-by-date
+func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin := RequireAdmin(w, r)
+		if admin == nil {
+			return
+		}
+		ctx := context.Background()
+
+		keepFrom := r.URL.Query().Get("keep_from")
+		keepTo := r.URL.Query().Get("keep_to")
+
+		type previewRow struct {
+			ID       int
+			HomeName string
+			AwayName string
+			Date     string
+		}
+		var preview []previewRow
+		var count int
+
+		if keepFrom != "" && keepTo != "" {
+			rows, err := db.Pool.Query(ctx, `
+				SELECT m.id, COALESCE(ht.display_name, ht.name), COALESCE(at.display_name, at.name),
+				       TO_CHAR(m.match_date AT TIME ZONE 'Europe/Prague', 'DD.MM.YYYY HH24:MI')
+				FROM matches m
+				JOIN teams ht ON ht.id = m.home_team_id
+				JOIN teams at ON at.id = m.away_team_id
+				WHERE m.is_finished = false
+				  AND (m.match_date IS NULL
+				       OR DATE(m.match_date AT TIME ZONE 'Europe/Prague') < $1
+				       OR DATE(m.match_date AT TIME ZONE 'Europe/Prague') > $2)
+				ORDER BY m.match_date ASC NULLS LAST
+				LIMIT 200`, keepFrom, keepTo)
+			if err == nil {
+				for rows.Next() {
+					var row previewRow
+					_ = rows.Scan(&row.ID, &row.HomeName, &row.AwayName, &row.Date)
+					preview = append(preview, row)
+				}
+				rows.Close()
+				count = len(preview)
+			}
+		}
+
+		RenderTemplate(w, r, tmpl, "admin/match_bulk_delete.html", TemplateData{
+			"User":      admin,
+			"Flash":     middleware.GetFlash(w, r),
+			"KeepFrom":  keepFrom,
+			"KeepTo":    keepTo,
+			"Preview":   preview,
+			"Count":     count,
+			"CSRFToken": middleware.GetCSRFToken(w, r),
+		})
+	}
+}
+
+// POST /admin/matches/bulk-delete-by-date
+func AdminMatchBulkDeleteByDate(w http.ResponseWriter, r *http.Request) {
+	admin := RequireAdmin(w, r)
+	if admin == nil {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	keepFrom := r.FormValue("keep_from")
+	keepTo := r.FormValue("keep_to")
+	if keepFrom == "" || keepTo == "" {
+		middleware.SetFlash(w, r, "error", "Vyplňte obě data.")
+		http.Redirect(w, r, "/admin/matches/bulk-delete-by-date", http.StatusSeeOther)
+		return
+	}
+
+	ctx := context.Background()
+	res, err := db.Pool.Exec(ctx, `
+		DELETE FROM matches
+		WHERE id IN (
+		  SELECT m.id FROM matches m
+		  WHERE m.is_finished = false
+		    AND (m.match_date IS NULL
+		         OR DATE(m.match_date AT TIME ZONE 'Europe/Prague') < $1
+		         OR DATE(m.match_date AT TIME ZONE 'Europe/Prague') > $2)
+		)`, keepFrom, keepTo)
+	if err != nil {
+		middleware.SetFlash(w, r, "error", "Chyba: "+err.Error())
+	} else {
+		deleted := res.RowsAffected()
+		middleware.SetFlash(w, r, "ok", fmt.Sprintf("Smazáno %d zápasů (zachováno %s – %s).", deleted, keepFrom, keepTo))
+	}
+	http.Redirect(w, r, "/admin/matches/bulk-delete-by-date", http.StatusSeeOther)
 }

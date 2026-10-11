@@ -1,0 +1,62 @@
+{{define "title"}}Hromadné smazání zápasů{{end}}
+<div class="page-header">
+    <h1>🗑️ Hromadné smazání zápasů</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+<div class="card" style="max-width:560px;padding:1.5rem;margin-bottom:1.5rem">
+    <p style="color:var(--muted-d);font-size:.87rem;margin-bottom:1rem">
+        Zachová pouze nezahraná utkání v zadaném rozsahu dat. Zahraná zápasy (s výsledkem) se <strong>nesmazou</strong>.
+    </p>
+    <form method="get" action="/admin/matches/bulk-delete-by-date" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+        <div>
+            <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.25rem">Zachovat od</label>
+            <input type="date" name="keep_from" value="{{.KeepFrom}}" required class="form-control" style="width:160px">
+        </div>
+        <div>
+            <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.25rem">Zachovat do</label>
+            <input type="date" name="keep_to" value="{{.KeepTo}}" required class="form-control" style="width:160px">
+        </div>
+        <button type="submit" class="btn btn-secondary">🔍 Zobrazit náhled</button>
+    </form>
+</div>
+
+{{if and .KeepFrom .KeepTo}}
+    {{if .Preview}}
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem">
+        <p style="margin-bottom:.75rem;font-weight:600;color:var(--danger,#c00)">
+            ⚠️ Bude smazáno {{.Count}} zápasů mimo rozsah {{.KeepFrom}} – {{.KeepTo}}:
+        </p>
+        <div style="max-height:360px;overflow-y:auto;margin-bottom:1rem">
+            <table class="table table-sm" style="font-size:.84rem">
+                <thead><tr><th>#</th><th>Domácí</th><th>Hosté</th><th>Datum</th></tr></thead>
+                <tbody>
+                {{range .Preview}}
+                <tr>
+                    <td style="color:var(--muted-d)">{{.ID}}</td>
+                    <td>{{.HomeName}}</td>
+                    <td>{{.AwayName}}</td>
+                    <td>{{.Date}}</td>
+                </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
+        <form method="post" action="/admin/matches/bulk-delete-by-date"
+              onsubmit="return confirm('Opravdu smazat {{.Count}} zápasů? Tato akce je nevratná.')">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+            <input type="hidden" name="keep_from" value="{{.KeepFrom}}">
+            <input type="hidden" name="keep_to" value="{{.KeepTo}}">
+            <button type="submit" class="btn btn-danger">🗑️ Smazat {{.Count}} zápasů</button>
+        </form>
+    </div>
+    {{else}}
+    <div class="alert alert-success">✅ Žádné zápasy ke smazání pro rozsah {{.KeepFrom}} – {{.KeepTo}}.</div>
+    {{end}}
+{{end}}

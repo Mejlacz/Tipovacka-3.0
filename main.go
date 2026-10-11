@@ -326,6 +326,10 @@ func main() {
 	r.Get("/admin/add-matches", handlers.AdminAddMatchesHub(tmpl))
 	r.Post("/admin/rounds/quick-new", handlers.AdminRoundQuickNew) // redirect stub
 
+	// Admin hromadné smazání zápasů podle data
+	r.Get("/admin/matches/bulk-delete-by-date", handlers.AdminMatchBulkDeleteByDateForm(tmpl))
+	r.Post("/admin/matches/bulk-delete-by-date", handlers.AdminMatchBulkDeleteByDate)
+
 	// Admin hromadný import budoucích zápasů
 	r.Get("/admin/matches/import", handlers.AdminMatchImportForm(tmpl))
 	r.Get("/admin/matches/import/template", handlers.AdminMatchImportTemplate)
