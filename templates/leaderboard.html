@@ -51,6 +51,8 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
         <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('add-match-modal').style.display='flex'">➕ Zápas</button>
         <a href="/admin/tips/{{.SelectedCompetitionID}}/export" class="btn btn-secondary btn-sm" title="Stáhnout CSV se tipy soutěže">Export tipů</a>
         <a href="/admin/tips/{{.SelectedCompetitionID}}/import" class="btn btn-secondary btn-sm" title="Importovat tipy ze CSV">Import tipů</a>
+        <button type="button" id="bulk-delete-toggle" class="btn btn-secondary btn-sm" onclick="toggleBulkDelete()" title="Hromadné smazání zápasů">🗑 Smazat zápasy</button>
+        <button type="button" id="bulk-delete-confirm" class="btn btn-danger btn-sm" style="display:none" onclick="doBulkDelete()">🗑 Smazat vybrané (<span id="bulk-sel-count">0</span>)</button>
         {{end}}
     </div>
 </div>
@@ -161,6 +163,9 @@ main.container { margin-left: 0 !important; max-width: 100% !important; width: 1
                     {{if .HomeTeam.LogoURL}}<img src="{{strVal .HomeTeam.LogoURL}}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;background:#fff;border-radius:50%;padding:1px"> {{end}}{{call $.Abbrev $htName}}-{{call $.Abbrev $atName}}{{if .AwayTeam.LogoURL}} <img src="{{strVal .AwayTeam.LogoURL}}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;background:#fff;border-radius:50%;padding:1px">{{end}}
                 </div>
                 {{if and $.User.IsAdmin (not .IsFinished)}}
+                <div class="bulk-chk-wrap" style="display:none;justify-content:center;margin-top:2px">
+                    <input type="checkbox" class="match-bulk-chk" data-match-id="{{.ID}}" onchange="updateBulkCount()" style="cursor:pointer;width:14px;height:14px">
+                </div>
                 <div style="display:flex;justify-content:center;align-items:center;gap:3px;margin-top:2px">
                     <button class="match-notify-btn"
                             data-match-id="{{.ID}}"
@@ -731,6 +736,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 <script>
+/* ── Bulk delete matches ── */
+var _bulkDeleteActive = false;
+function toggleBulkDelete() {
+    _bulkDeleteActive = !_bulkDeleteActive;
+    document.querySelectorAll('.bulk-chk-wrap').forEach(function(el) {
+        el.style.display = _bulkDeleteActive ? 'flex' : 'none';
+    });
+    document.getElementById('bulk-delete-confirm').style.display = _bulkDeleteActive ? '' : 'none';
+    document.getElementById('bulk-delete-toggle').textContent = _bulkDeleteActive ? '✕ Zrušit výběr' : '🗑 Smazat zápasy';
+    if (!_bulkDeleteActive) {
+        document.querySelectorAll('.match-bulk-chk').forEach(function(c) { c.checked = false; });
+        updateBulkCount();
+    }
+}
+function updateBulkCount() {
+    var n = document.querySelectorAll('.match-bulk-chk:checked').length;
+    document.getElementById('bulk-sel-count').textContent = n;
+}
+function doBulkDelete() {
+    var ids = Array.from(document.querySelectorAll('.match-bulk-chk:checked')).map(function(c){ return c.dataset.matchId; });
+    if (!ids.length) { alert('Nic není vybráno.'); return; }
+    if (!confirm('Opravdu smazat ' + ids.length + ' zápasů? Tato akce je nevratná.')) return;
+    var fd = new URLSearchParams();
+    fd.append('_csrf', _csrfToken);
+    fd.append('competition_id', '{{.SelectedCompetitionID}}');
+    ids.forEach(function(id) { fd.append('match_ids', id); });
+    fetch('/admin/matches/bulk-delete-by-date', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: fd })
+        .then(function(r) { location.reload(); })
+        .catch(function() { location.reload(); });
+}
 /* ── Live refresh ── */
 (function() {
     var compId = (new URLSearchParams(location.search).get('competition_id')) || '0';
