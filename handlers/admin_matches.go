@@ -841,12 +841,10 @@ func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
 		compID, _ := strconv.Atoi(compIDStr)
 
 		compRows, _ := db.Pool.Query(ctx, `
-			SELECT c.id, c.name,
-			       COUNT(m.id) FILTER (WHERE m.is_finished = false) as unfinished
+			SELECT c.id, c.name, COUNT(m.id) as unfinished
 			FROM competitions c
-			LEFT JOIN rounds r ON r.competition_id = c.id
-			LEFT JOIN matches m ON m.round_id = r.id
-			WHERE c.is_active = true
+			JOIN rounds r ON r.competition_id = c.id
+			JOIN matches m ON m.round_id = r.id AND m.is_finished = false
 			GROUP BY c.id, c.name
 			ORDER BY c.name`)
 		type compOption struct {
