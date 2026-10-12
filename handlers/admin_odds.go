@@ -32,12 +32,16 @@ func AdminOddsRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fetched, err := fetchAndStoreOdds(apiKey)
+	fetched, unmatched, err := fetchAndStoreOdds(apiKey)
 	if err != nil {
 		log.Printf("[odds] refresh error: %v", err)
 		middleware.SetFlash(w, r, "error", "Chyba při načítání kurzů: "+err.Error())
 	} else {
-		middleware.SetFlash(w, r, "ok", fmt.Sprintf("Kurzy aktualizovány: %d zápasů.", fetched))
+		msg := fmt.Sprintf("Kurzy aktualizovány: %d zápasů.", fetched)
+		if len(unmatched) > 0 {
+			msg += "<br>Nespárované (nastav Alias): " + strings.Join(unmatched, ", ")
+		}
+		middleware.SetFlash(w, r, "ok", msg)
 	}
 	http.Redirect(w, r, r.Referer(), http.StatusSeeOther)
 }
@@ -73,13 +77,12 @@ var sportKeys = map[string]string{
 	"FL1": "soccer_france_ligue_one",
 }
 
-func fetchAndStoreOdds(apiKey string) (int, error) {
+func fetchAndStoreOdds(apiKey string) (int, []string, error) {
 	ctx := context.Background()
 
-	// Zjisti fd_code aktivních soutěží
 	rows, err := db.Pool.Query(ctx, `SELECT DISTINCT c.fd_code FROM competitions c WHERE c.is_active = true AND c.fd_code != ''`)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	var fdCodes []string
 	for rows.Next() {
@@ -90,52 +93,55 @@ func fetchAndStoreOdds(apiKey string) (int, error) {
 	rows.Close()
 
 	total := 0
+	var allUnmatched []string
 	for _, fdCode := range fdCodes {
 		sportKey, ok := sportKeys[fdCode]
 		if !ok {
 			continue
 		}
-		n, err := fetchSportOdds(ctx, apiKey, sportKey, fdCode)
+		n, unmatched, err := fetchSportOdds(ctx, apiKey, sportKey, fdCode)
 		if err != nil {
 			log.Printf("[odds] %s: %v", sportKey, err)
 			continue
 		}
 		total += n
+		allUnmatched = append(allUnmatched, unmatched...)
 	}
-	return total, nil
+	return total, allUnmatched, nil
 }
 
-func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, error) {
+func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, []string, error) {
 	url := fmt.Sprintf(
 		"https://api.the-odds-api.com/v4/sports/%s/odds/?apiKey=%s&regions=eu&markets=h2h&oddsFormat=decimal&bookmakers=bet365,unibet,pinnacle,betway",
 		sportKey, apiKey,
 	)
 	resp, err := http.Get(url)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		return 0, fmt.Errorf("API %d: %s", resp.StatusCode, string(body))
+		return 0, nil, fmt.Errorf("API %d: %s", resp.StatusCode, string(body))
 	}
 
 	var events []oddsAPIEvent
 	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	saved := 0
+	var unmatched []string
 	for _, ev := range events {
 		commenceTime, err := time.Parse(time.RFC3339, ev.CommenceTime)
 		if err != nil {
 			continue
 		}
 
-		// Najdi zápas v DB podle času ±3h
 		matchID := findMatchByTeamsAndTime(ctx, fdCode, ev.HomeTeam, ev.AwayTeam, commenceTime)
 		log.Printf("[odds] event %s vs %s @ %s → matchID=%d", ev.HomeTeam, ev.AwayTeam, commenceTime.Format("02.01 15:04"), matchID)
 		if matchID == 0 {
+			unmatched = append(unmatched, ev.HomeTeam+" vs "+ev.AwayTeam)
 			continue
 		}
 
@@ -173,7 +179,7 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 		}
 	nextEvent:
 	}
-	return saved, nil
+	return saved, unmatched, nil
 }
 
 func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam string, t time.Time) int {
