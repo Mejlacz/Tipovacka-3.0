@@ -128,7 +128,7 @@ func fetchAndStoreOdds(apiKey string) (int, []string, error) {
 
 func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, []string, error) {
 	url := fmt.Sprintf(
-		"https://api.the-odds-api.com/v4/sports/%s/odds/?apiKey=%s&regions=eu&markets=h2h&oddsFormat=decimal&bookmakers=bet365,unibet,pinnacle,betway",
+		"https://api.the-odds-api.com/v4/sports/%s/odds/?apiKey=%s&regions=eu&markets=h2h&oddsFormat=decimal",
 		sportKey, apiKey,
 	)
 	resp, err := http.Get(url)
@@ -437,7 +437,7 @@ func AdminOddsMapSubmit(w http.ResponseWriter, r *http.Request) {
 func fetchApiTeamNames(apiKey, sportKey string, dbTeams []oddsDbTeam) []oddsApiTeam {
 
 	url := fmt.Sprintf(
-		"https://api.the-odds-api.com/v4/sports/%s/odds/?apiKey=%s&regions=eu&markets=h2h&oddsFormat=decimal&bookmakers=bet365,unibet,pinnacle,betway",
+		"https://api.the-odds-api.com/v4/sports/%s/odds/?apiKey=%s&regions=eu&markets=h2h&oddsFormat=decimal",
 		sportKey, apiKey,
 	)
 	resp, err := http.Get(url)
