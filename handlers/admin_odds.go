@@ -388,6 +388,91 @@ func AdminOddsList(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
+// GET /admin/odds/raw — surová data z Odds API bez párování
+func AdminOddsRaw(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetCurrentUser(r)
+		if user == nil || !user.IsOwner {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		apiKey := os.Getenv("ODDS_API_KEY")
+		if apiKey == "" {
+			http.Error(w, "ODDS_API_KEY není nastaven", 500)
+			return
+		}
+
+		type rawRow struct {
+			Sport     string
+			HomeTeam  string
+			AwayTeam  string
+			StartUTC  string
+			HomeOdds  string
+			DrawOdds  string
+			AwayOdds  string
+			Bookmaker string
+		}
+
+		var rows []rawRow
+		for fdCode, sportKey := range sportKeys {
+			url := fmt.Sprintf(
+				"https://api.the-odds-api.com/v4/sports/%s/odds/?apiKey=%s&regions=eu&markets=h2h&oddsFormat=decimal",
+				sportKey, apiKey,
+			)
+			resp, err := http.Get(url)
+			if err != nil || resp.StatusCode != 200 {
+				if resp != nil { resp.Body.Close() }
+				continue
+			}
+			var events []oddsAPIEvent
+			json.NewDecoder(resp.Body).Decode(&events)
+			resp.Body.Close()
+
+			for _, ev := range events {
+				t, _ := time.Parse(time.RFC3339, ev.CommenceTime)
+				row := rawRow{
+					Sport:    fdCode,
+					HomeTeam: ev.HomeTeam,
+					AwayTeam: ev.AwayTeam,
+					StartUTC: t.UTC().Format("02.01.2006 15:04"),
+				}
+				for _, bm := range ev.Bookmakers {
+					for _, mkt := range bm.Markets {
+						if mkt.Key != "h2h" { continue }
+						var home, draw, away float64
+						for _, o := range mkt.Outcomes {
+							switch o.Name {
+							case ev.HomeTeam: home = o.Price
+							case ev.AwayTeam: away = o.Price
+							case "Draw": draw = o.Price
+							}
+						}
+						if home > 0 && away > 0 {
+							row.HomeOdds = fmt.Sprintf("%.2f", home)
+							row.DrawOdds = fmt.Sprintf("%.2f", draw)
+							row.AwayOdds = fmt.Sprintf("%.2f", away)
+							row.Bookmaker = bm.Title
+							goto nextRaw
+						}
+					}
+				}
+			nextRaw:
+				rows = append(rows, row)
+			}
+		}
+
+		sort.Slice(rows, func(i, j int) bool {
+			if rows[i].Sport != rows[j].Sport { return rows[i].Sport < rows[j].Sport }
+			return rows[i].StartUTC < rows[j].StartUTC
+		})
+
+		RenderTemplate(w, r, tmpl, "admin/odds_raw.html", TemplateData{
+			"User": user,
+			"Rows": rows,
+		})
+	}
+}
+
 // GET /admin/odds/preview — živý náhled všech eventů z Odds API + stav párování
 func AdminOddsPreview(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

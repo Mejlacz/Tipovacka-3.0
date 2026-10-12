@@ -1,0 +1,49 @@
+{{define "title"}}Raw Odds API{{end}}
+<div class="page-header">
+    <h1>📡 Raw data z Odds API</h1>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+        <a href="/admin/odds/list" class="btn btn-secondary btn-sm">💾 Uložené kurzy</a>
+        <a href="/admin/odds/map" class="btn btn-secondary btn-sm">🗺 Párování týmů</a>
+    </div>
+</div>
+
+<p style="font-size:.85rem;color:var(--muted-d);margin-bottom:1rem">
+    Všechny eventy přímo z The Odds API — bez jakéhokoli párování s DB. Jména týmů jsou tak, jak je posílá API (anglicky).
+</p>
+
+{{if not .Rows}}
+<div class="alert alert-error">Žádné eventy z API. Zkontroluj ODDS_API_KEY nebo fd_code soutěží.</div>
+{{else}}
+<p style="font-size:.82rem;color:var(--muted-d);margin-bottom:.75rem">Celkem: <b>{{len .Rows}}</b> zápasů</p>
+<div class="card" style="padding:0;overflow:hidden">
+<table class="table table-sm" style="margin:0;font-size:.84rem">
+    <thead>
+        <tr>
+            <th>Soutěž (fd_code)</th>
+            <th>Domácí (API)</th>
+            <th>Hosté (API)</th>
+            <th>Začátek UTC</th>
+            <th style="text-align:center">1</th>
+            <th style="text-align:center">X</th>
+            <th style="text-align:center">2</th>
+            <th>Bookmaker</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Rows}}
+    <tr>
+        <td style="font-size:.78rem;color:var(--muted-d)">{{.Sport}}</td>
+        <td style="font-weight:600">{{.HomeTeam}}</td>
+        <td style="font-weight:600">{{.AwayTeam}}</td>
+        <td style="white-space:nowrap;font-size:.8rem;color:var(--muted-d)">{{.StartUTC}}</td>
+        <td style="text-align:center;font-weight:700">{{if .HomeOdds}}{{.HomeOdds}}{{else}}<span style="color:var(--muted-d)">—</span>{{end}}</td>
+        <td style="text-align:center;color:var(--muted-d)">{{if .DrawOdds}}{{.DrawOdds}}{{else}}—{{end}}</td>
+        <td style="text-align:center;font-weight:700">{{if .AwayOdds}}{{.AwayOdds}}{{else}}<span style="color:var(--muted-d)">—</span>{{end}}</td>
+        <td style="font-size:.78rem;color:var(--muted-d)">{{.Bookmaker}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{end}}

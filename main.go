@@ -349,6 +349,7 @@ func main() {
 	r.Get("/admin/api/competitions", handlers.AdminAPICompetitions)
 	r.Post("/admin/odds/refresh", handlers.AdminOddsRefresh)
 	r.Get("/admin/odds/list", handlers.AdminOddsList(tmpl))
+	r.Get("/admin/odds/raw", handlers.AdminOddsRaw(tmpl))
 	r.Get("/admin/odds/preview", handlers.AdminOddsPreview(tmpl))
 	r.Get("/admin/odds/map", handlers.AdminOddsMapForm(tmpl))
 	r.Post("/admin/odds/map", handlers.AdminOddsMapSubmit)
