@@ -70,6 +70,14 @@ func migrateSchema() {
 		`CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx ON chat_messages(created_at DESC)`,
 		`ALTER TABLE matches ALTER COLUMN round_id DROP NOT NULL`,
 		`ALTER TABLE competition_payments ADD COLUMN IF NOT EXISTS excluded BOOL NOT NULL DEFAULT false`,
+		`CREATE TABLE IF NOT EXISTS match_odds (
+			match_id   BIGINT PRIMARY KEY REFERENCES matches(id) ON DELETE CASCADE,
+			bookmaker  TEXT NOT NULL DEFAULT '',
+			home_odds  NUMERIC(6,2) NOT NULL DEFAULT 0,
+			draw_odds  NUMERIC(6,2) NOT NULL DEFAULT 0,
+			away_odds  NUMERIC(6,2) NOT NULL DEFAULT 0,
+			fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Pool.Exec(context.Background(), s); err != nil {
@@ -339,6 +347,7 @@ func main() {
 
 	// Admin API import
 	r.Get("/admin/api/competitions", handlers.AdminAPICompetitions)
+	r.Post("/admin/odds/refresh", handlers.AdminOddsRefresh)
 	r.Get("/admin/api/hockey-leagues", handlers.AdminAPIHockeyLeagues)
 	r.Get("/admin/api/hockey-seasons", handlers.AdminAPIHockeySeasons)
 	r.Get("/admin/api/rounds", handlers.AdminAPIRounds)

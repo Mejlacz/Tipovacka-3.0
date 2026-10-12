@@ -110,6 +110,11 @@
             {{end}}
         </div>
         {{end}}
+        {{if $.User.IsOwner}}{{$odds := index $.MatchOdds .Match.ID}}{{if $odds}}
+        <div style="font-size:.72rem;color:var(--muted-d);margin-top:.15rem;text-align:center" title="{{index $odds 3}}">
+            1: <b>{{index $odds 0}}</b> · X: <b>{{index $odds 1}}</b> · 2: <b>{{index $odds 2}}</b>
+        </div>
+        {{end}}{{end}}
 
         {{/* Finished match — result + tip side by side */}}
         {{if .Match.IsFinished}}
