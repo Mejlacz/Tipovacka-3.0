@@ -115,7 +115,7 @@
             1: <b>{{index $odds 0}}</b> · X: <b>{{index $odds 1}}</b> · 2: <b>{{index $odds 2}}</b>
         </div>
         {{else}}
-        <div style="font-size:.68rem;color:var(--muted-d);opacity:.4;text-align:center" title="matchID={{.Match.ID}}">— kurzy nenačteny —</div>
+        <div style="font-size:.68rem;color:var(--muted-d);opacity:.4;text-align:center">— kurzy nenačteny — <span style="opacity:.6">[id:{{.Match.ID}}]</span></div>
         {{end}}{{end}}
 
         {{/* Finished match — result + tip side by side */}}
