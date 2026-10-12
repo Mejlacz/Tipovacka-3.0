@@ -177,23 +177,74 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 }
 
 func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam string, t time.Time) int {
-	var matchID int
-	err := db.Pool.QueryRow(ctx, `
-		SELECT m.id FROM matches m
+	rows, err := db.Pool.Query(ctx, `
+		SELECT m.id, ht.name, ht.display_name, at.name, at.display_name
+		FROM matches m
 		JOIN competitions c ON c.id = m.competition_id
+		JOIN teams ht ON ht.id = m.home_team_id
+		JOIN teams at ON at.id = m.away_team_id
 		WHERE c.fd_code = $1
-		  AND m.match_date BETWEEN $2 AND $3
-		ORDER BY ABS(EXTRACT(EPOCH FROM (m.match_date - $4)))
-		LIMIT 1`,
+		  AND m.match_date BETWEEN $2 AND $3`,
 		fdCode,
 		t.Add(-3*time.Hour),
 		t.Add(3*time.Hour),
-		t,
-	).Scan(&matchID)
+	)
 	if err != nil {
-		log.Printf("[odds] findMatch %s vs %s @ %s: %v", homeTeam, awayTeam, t.Format("02.01 15:04"), err)
+		log.Printf("[odds] findMatch query error: %v", err)
+		return 0
 	}
-	return matchID
+	defer rows.Close()
+
+	homeLow := strings.ToLower(homeTeam)
+	awayLow := strings.ToLower(awayTeam)
+
+	bestID := 0
+	bestScore := -1
+	for rows.Next() {
+		var id int
+		var hn, hd, an, ad string
+		_ = rows.Scan(&id, &hn, &hd, &an, &ad)
+		score := teamScore(homeLow, hn, hd) + teamScore(awayLow, an, ad)
+		if score > bestScore {
+			bestScore = score
+			bestID = id
+		}
+	}
+	if bestScore == 0 {
+		log.Printf("[odds] no team match for %s vs %s @ %s", homeTeam, awayTeam, t.Format("02.01 15:04"))
+	}
+	return bestID
+}
+
+// teamScore vrátí skóre podobnosti mezi API jménem a jmény týmu v DB.
+func teamScore(apiLow, dbName, dbDisplay string) int {
+	dbLow := strings.ToLower(dbName)
+	dbDispLow := strings.ToLower(dbDisplay)
+	// Přesná shoda
+	if apiLow == dbLow || apiLow == dbDispLow {
+		return 10
+	}
+	// Substring obousměrně
+	if strings.Contains(dbLow, apiLow) || strings.Contains(apiLow, dbLow) {
+		return 5
+	}
+	if strings.Contains(dbDispLow, apiLow) || strings.Contains(apiLow, dbDispLow) {
+		return 5
+	}
+	// Shoda prvního slova (např. "Barcelona" vs "FC Barcelona")
+	apiWord := strings.Fields(apiLow)
+	dbWords := strings.Fields(dbLow)
+	for _, aw := range apiWord {
+		if len(aw) < 3 {
+			continue
+		}
+		for _, dw := range dbWords {
+			if aw == dw {
+				return 3
+			}
+		}
+	}
+	return 0
 }
 
 // LoadMatchOdds načte kurzy pro dané match_id — vrátí mapu matchID → [home, draw, away, bookmaker]
