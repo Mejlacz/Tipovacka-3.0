@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -36,12 +37,14 @@ func AdminOddsRefresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[odds] refresh error: %v", err)
 		middleware.SetFlash(w, r, "error", "Chyba při načítání kurzů: "+err.Error())
-	} else {
-		msg := fmt.Sprintf("Kurzy aktualizovány: %d zápasů.", fetched)
-		if len(unmatched) > 0 {
-			msg += "<br>Nespárované (nastav Alias): " + strings.Join(unmatched, ", ")
-		}
-		middleware.SetFlash(w, r, "ok", msg)
+		http.Redirect(w, r, r.Referer(), http.StatusSeeOther)
+		return
+	}
+	middleware.SetFlash(w, r, "ok", fmt.Sprintf("Kurzy aktualizovány: %d zápasů.", fetched))
+	if len(unmatched) > 0 {
+		q := strings.Join(unmatched, "|")
+		http.Redirect(w, r, "/admin/odds/map?teams="+strings.ReplaceAll(q, " ", "+"), http.StatusSeeOther)
+		return
 	}
 	http.Redirect(w, r, r.Referer(), http.StatusSeeOther)
 }
@@ -293,4 +296,77 @@ func LoadMatchOdds(ctx context.Context, matchIDs []int) map[int][4]string {
 		}
 	}
 	return result
+}
+
+// GET /admin/odds/map — formulář pro mapování nespárovaných týmů na aliasy
+func AdminOddsMapForm(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetCurrentUser(r)
+		if user == nil || !user.IsOwner {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		teamsParam := r.URL.Query().Get("teams")
+		var apiNames []string
+		for _, t := range strings.Split(teamsParam, "|") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				apiNames = append(apiNames, t)
+			}
+		}
+
+		ctx := context.Background()
+		type teamRow struct {
+			ID   int
+			Name string
+		}
+		var allTeams []teamRow
+		trows, _ := db.Pool.Query(ctx, `SELECT id, COALESCE(display_name, name) FROM teams ORDER BY COALESCE(display_name, name)`)
+		defer trows.Close()
+		for trows.Next() {
+			var tr teamRow
+			_ = trows.Scan(&tr.ID, &tr.Name)
+			allTeams = append(allTeams, tr)
+		}
+
+		RenderTemplate(w, r, tmpl, "admin/odds_map.html", TemplateData{
+			"User":      user,
+			"ApiNames":  apiNames,
+			"AllTeams":  allTeams,
+			"CSRFToken": middleware.GetCSRFToken(w, r),
+			"Flash":     middleware.GetFlash(w, r),
+		})
+	}
+}
+
+// POST /admin/odds/map — uloží aliasy
+func AdminOddsMapSubmit(w http.ResponseWriter, r *http.Request) {
+	user := GetCurrentUser(r)
+	if user == nil || !user.IsOwner {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	ctx := context.Background()
+	saved := 0
+	for key, vals := range r.Form {
+		if !strings.HasPrefix(key, "alias_") || len(vals) == 0 {
+			continue
+		}
+		teamID, err := strconv.Atoi(strings.TrimPrefix(key, "alias_"))
+		if err != nil || teamID == 0 {
+			continue
+		}
+		alias := strings.TrimSpace(vals[0])
+		if alias == "" {
+			continue
+		}
+		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET alias=$1 WHERE id=$2`, alias, teamID)
+		saved++
+	}
+	middleware.SetFlash(w, r, "ok", fmt.Sprintf("Uloženo %d aliasů. Spusť refresh kurzů znovu.", saved))
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }

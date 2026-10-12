@@ -1,0 +1,65 @@
+{{define "title"}}Mapování týmů — kurzy{{end}}
+<div class="page-header">
+    <h1>📊 Mapování týmů (The Odds API)</h1>
+    <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+</div>
+
+{{if .Flash}}
+<div class="alert {{if eq (index .Flash "type") "ok"}}alert-success{{else}}alert-error{{end}}" style="margin-bottom:1rem">
+    {{index .Flash "msg" | safeHTML}}
+</div>
+{{end}}
+
+<p style="color:var(--muted-d);font-size:.88rem;margin-bottom:1.25rem">
+    Přiřaď každé anglické jméno z Odds API ke správnému týmu v databázi. Uloží se jako <b>Alias</b> týmu a příště se zápasy spárují automaticky.
+</p>
+
+<form method="post" action="/admin/odds/map">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    {{/* Pro každý API název: skryté pole apiname_TEAMID=APIname, odeslané jen pokud vybrán tým */}}
+
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:1.5rem">
+        <table class="table table-sm" style="margin:0;font-size:.88rem">
+            <thead>
+                <tr>
+                    <th>Jméno z Odds API</th>
+                    <th>Tým v databázi</th>
+                </tr>
+            </thead>
+            <tbody>
+            {{range .ApiNames}}
+            {{$api := .}}
+            <tr>
+                <td style="font-weight:600;white-space:nowrap">{{$api}}</td>
+                <td>
+                    <select class="form-control team-sel" style="max-width:340px"
+                            data-api="{{$api}}" onchange="updateHidden(this)">
+                        <option value="">— přeskočit —</option>
+                        {{range $.AllTeams}}
+                        <option value="{{.ID}}">{{.Name}}</option>
+                        {{end}}
+                    </select>
+                    <input type="hidden" name="skip" value="1" class="alias-hidden" data-api="{{$api}}">
+                </td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    <button type="submit" class="btn btn-primary">💾 Uložit aliasy a zpět</button>
+</form>
+
+<script>
+function updateHidden(sel) {
+    var api = sel.dataset.api;
+    var hidden = document.querySelector('.alias-hidden[data-api="' + api + '"]');
+    if (sel.value) {
+        hidden.name = 'alias_' + sel.value;
+        hidden.value = api;
+    } else {
+        hidden.name = 'skip';
+        hidden.value = '1';
+    }
+}
+</script>
