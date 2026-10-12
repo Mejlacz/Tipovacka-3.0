@@ -1,6 +1,6 @@
 {{define "title"}}Aliasy týmů — Odds API{{end}}
 <div class="page-header">
-    <h1>📊 Aliasy týmů pro Odds API</h1>
+    <h1>📊 Párování týmů s Odds API</h1>
     <div style="display:flex;gap:.5rem">
         <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
         <form method="post" action="/admin/odds/refresh" style="display:inline"
@@ -17,50 +17,57 @@
 </div>
 {{end}}
 
+{{/* Soutěž filtr */}}
+<div class="card" style="max-width:340px;padding:1rem;margin-bottom:1.25rem">
+    <form method="get" action="/admin/odds/map">
+        <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.4rem">Soutěž</label>
+        <select name="competition_id" class="form-control" onchange="this.form.submit()">
+            {{range .Comps}}
+            <option value="{{.ID}}" {{if eq $.CompID .ID}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
+    </form>
+</div>
+
 {{if .Unmatched}}
 <div class="alert alert-error" style="margin-bottom:1.25rem">
     <b>Nespárované týmy z posledního refreshe:</b><br>
-    {{range .Unmatched}}<span style="display:inline-block;background:rgba(239,68,68,.15);border-radius:4px;padding:2px 8px;margin:2px;font-size:.85rem">{{.}}</span>{{end}}<br>
-    <span style="font-size:.82rem;color:var(--muted-d)">Nastav alias níže a spusť refresh znovu.</span>
+    {{range .Unmatched}}<code style="display:inline-block;background:rgba(239,68,68,.12);border-radius:4px;padding:1px 7px;margin:2px;font-size:.84rem">{{.}}</code>{{end}}<br>
+    <span style="font-size:.81rem;color:var(--muted-d)">Nastav alias v tabulce níže (přesně toto jméno) a spusť refresh znovu.</span>
 </div>
 {{end}}
 
-<p style="color:var(--muted-d);font-size:.85rem;margin-bottom:1rem">
-    <b>Alias</b> = anglické jméno týmu jak ho vrací The Odds API (např. <code>Napoli</code>, <code>Slavia Prague</code>).
-    Prázdný alias = automatické párování podle jména.
+{{if .Teams}}
+<p style="font-size:.83rem;color:var(--muted-d);margin-bottom:.75rem">
+    <b>Alias</b> = přesné anglické jméno z The Odds API. Zelená ✓ = tým má již namatchované kurzy.
 </p>
 
-<form method="post" action="/admin/odds/map">
+<form method="post" action="/admin/odds/map?competition_id={{.CompID}}">
     <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
-
-    <div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center">
-        <input type="search" id="team-search" placeholder="Filtrovat týmy…" class="form-control"
-               style="max-width:260px;font-size:.85rem" oninput="filterTeams(this.value)">
-        <label style="font-size:.83rem;color:var(--muted-d);display:flex;align-items:center;gap:.35rem;cursor:pointer">
-            <input type="checkbox" id="only-aliased" onchange="filterTeams(document.getElementById('team-search').value)">
-            Jen s aliasem
-        </label>
-        <span style="margin-left:auto;font-size:.82rem;color:var(--muted-d)" id="team-count"></span>
-    </div>
+    <input type="hidden" name="competition_id" value="{{.CompID}}">
 
     <div class="card" style="padding:0;overflow:hidden;margin-bottom:1.25rem">
-        <table class="table table-sm" style="margin:0;font-size:.86rem" id="teams-table">
+        <table class="table table-sm" style="margin:0;font-size:.88rem">
             <thead>
                 <tr>
-                    <th style="width:40%">Tým v DB</th>
+                    <th>Tým v DB</th>
                     <th>Alias (Odds API jméno)</th>
+                    <th style="width:80px;text-align:center">Kurzy</th>
                 </tr>
             </thead>
             <tbody>
             {{range .Teams}}
-            <tr class="team-row{{if .Alias}} has-alias{{end}}" data-name="{{.Name}}">
-                <td>{{.Name}}{{if .Alias}} <span style="font-size:.75rem;color:var(--success);margin-left:.3rem">✓</span>{{end}}</td>
+            <tr>
+                <td style="font-weight:500">{{.Name}}</td>
                 <td>
                     <input type="text" name="alias_{{.ID}}" value="{{.Alias}}"
-                           placeholder="(žádný)"
-                           class="form-control alias-input"
-                           style="max-width:280px;font-size:.84rem"
-                           onchange="markChanged(this)">
+                           placeholder="(žádný — zadej anglické jméno)"
+                           class="form-control"
+                           style="font-size:.84rem">
+                </td>
+                <td style="text-align:center">
+                    {{if .HasOdds}}<span style="color:var(--success);font-size:.9rem" title="Kurzy načteny">✓</span>
+                    {{else}}<span style="color:var(--muted-d);font-size:.8rem">–</span>{{end}}
                 </td>
             </tr>
             {{end}}
@@ -68,32 +75,6 @@
         </table>
     </div>
 
-    <button type="submit" class="btn btn-primary">💾 Uložit vše</button>
+    <button type="submit" class="btn btn-primary">💾 Uložit aliasy</button>
 </form>
-
-<script>
-function filterTeams(q) {
-    q = q.toLowerCase();
-    var onlyAliased = document.getElementById('only-aliased').checked;
-    var rows = document.querySelectorAll('.team-row');
-    var visible = 0;
-    rows.forEach(function(r) {
-        var match = r.dataset.name.toLowerCase().includes(q);
-        var aliasOk = !onlyAliased || r.classList.contains('has-alias');
-        r.style.display = (match && aliasOk) ? '' : 'none';
-        if (match && aliasOk) visible++;
-    });
-    document.getElementById('team-count').textContent = visible + ' týmů';
-}
-function markChanged(inp) {
-    var row = inp.closest('tr');
-    if (inp.value.trim()) {
-        row.classList.add('has-alias');
-    } else {
-        row.classList.remove('has-alias');
-    }
-}
-// Init count
-document.getElementById('team-count').textContent =
-    document.querySelectorAll('.team-row').length + ' týmů';
-</script>
+{{end}}

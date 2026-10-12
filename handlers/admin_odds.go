@@ -318,26 +318,56 @@ func AdminOddsMapForm(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		ctx := context.Background()
+
+		// Načti soutěže s fd_code
+		type compRow struct {
+			ID   int
+			Name string
+		}
+		var comps []compRow
+		crows, _ := db.Pool.Query(ctx, `SELECT id, name FROM competitions WHERE fd_code != '' AND fd_code IS NOT NULL ORDER BY name`)
+		defer crows.Close()
+		for crows.Next() {
+			var c compRow
+			_ = crows.Scan(&c.ID, &c.Name)
+			comps = append(comps, c)
+		}
+
+		// Vybraná soutěž
+		compID, _ := strconv.Atoi(r.URL.Query().Get("competition_id"))
+		if compID == 0 && len(comps) > 0 {
+			compID = comps[0].ID
+		}
+
 		type teamRow struct {
-			ID    int
-			Name  string
-			Alias string
+			ID         int
+			Name       string
+			Alias      string
+			HasOdds    bool
 		}
 		var teams []teamRow
-		trows, _ := db.Pool.Query(ctx, `
-			SELECT id, COALESCE(display_name, name), COALESCE(alias, '')
-			FROM teams
-			ORDER BY COALESCE(alias,'') DESC, COALESCE(display_name, name)`)
-		defer trows.Close()
-		for trows.Next() {
-			var tr teamRow
-			_ = trows.Scan(&tr.ID, &tr.Name, &tr.Alias)
-			teams = append(teams, tr)
+		if compID > 0 {
+			trows, _ := db.Pool.Query(ctx, `
+				SELECT DISTINCT t.id, COALESCE(t.display_name, t.name), COALESCE(t.alias, ''),
+				       EXISTS(SELECT 1 FROM match_odds mo JOIN matches m2 ON m2.id=mo.match_id
+				              WHERE m2.competition_id=$1 AND (m2.home_team_id=t.id OR m2.away_team_id=t.id))
+				FROM teams t
+				JOIN matches m ON (m.home_team_id=t.id OR m.away_team_id=t.id)
+				WHERE m.competition_id=$1
+				ORDER BY COALESCE(t.display_name, t.name)`, compID)
+			defer trows.Close()
+			for trows.Next() {
+				var tr teamRow
+				_ = trows.Scan(&tr.ID, &tr.Name, &tr.Alias, &tr.HasOdds)
+				teams = append(teams, tr)
+			}
 		}
 
 		RenderTemplate(w, r, tmpl, "admin/odds_map.html", TemplateData{
 			"User":      user,
 			"Teams":     teams,
+			"Comps":     comps,
+			"CompID":    compID,
 			"Unmatched": unmatched,
 			"CSRFToken": middleware.GetCSRFToken(w, r),
 			"Flash":     middleware.GetFlash(w, r),
