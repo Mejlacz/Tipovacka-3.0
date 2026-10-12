@@ -11,12 +11,25 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sort"
 	"strings"
 	"time"
 
 	"tipovacka/db"
 	"tipovacka/middleware"
 )
+
+type oddsDbTeam struct {
+	ID    int
+	Name  string
+	Alias string
+}
+
+type oddsApiTeam struct {
+	ApiName string
+	DbID    int
+	DbName  string
+}
 
 // POST /admin/odds/refresh — načte kurzy z The Odds API a uloží do match_odds
 func AdminOddsRefresh(w http.ResponseWriter, r *http.Request) {
@@ -321,51 +334,62 @@ func AdminOddsMapForm(tmpl *template.Template) http.HandlerFunc {
 
 		// Načti soutěže s fd_code
 		type compRow struct {
-			ID   int
-			Name string
+			ID     int
+			Name   string
+			FdCode string
 		}
 		var comps []compRow
-		crows, _ := db.Pool.Query(ctx, `SELECT id, name FROM competitions WHERE fd_code != '' AND fd_code IS NOT NULL ORDER BY name`)
+		crows, _ := db.Pool.Query(ctx, `SELECT id, name, fd_code FROM competitions WHERE fd_code != '' AND fd_code IS NOT NULL ORDER BY name`)
 		defer crows.Close()
 		for crows.Next() {
 			var c compRow
-			_ = crows.Scan(&c.ID, &c.Name)
+			_ = crows.Scan(&c.ID, &c.Name, &c.FdCode)
 			comps = append(comps, c)
 		}
 
 		// Vybraná soutěž
 		compID, _ := strconv.Atoi(r.URL.Query().Get("competition_id"))
+		var selectedComp compRow
+		for _, c := range comps {
+			if c.ID == compID {
+				selectedComp = c
+				break
+			}
+		}
 		if compID == 0 && len(comps) > 0 {
-			compID = comps[0].ID
+			selectedComp = comps[0]
+			compID = selectedComp.ID
 		}
 
-		type teamRow struct {
-			ID         int
-			Name       string
-			Alias      string
-			HasOdds    bool
-		}
-		var teams []teamRow
+		var dbTeams []oddsDbTeam
 		if compID > 0 {
 			trows, _ := db.Pool.Query(ctx, `
-				SELECT DISTINCT t.id, COALESCE(t.display_name, t.name), COALESCE(t.alias, ''),
-				       EXISTS(SELECT 1 FROM match_odds mo JOIN matches m2 ON m2.id=mo.match_id
-				              WHERE m2.competition_id=$1 AND (m2.home_team_id=t.id OR m2.away_team_id=t.id))
+				SELECT DISTINCT t.id, COALESCE(t.display_name, t.name), COALESCE(t.alias, '')
 				FROM teams t
 				JOIN matches m ON (m.home_team_id=t.id OR m.away_team_id=t.id)
 				WHERE m.competition_id=$1
 				ORDER BY COALESCE(t.display_name, t.name)`, compID)
 			defer trows.Close()
 			for trows.Next() {
-				var tr teamRow
-				_ = trows.Scan(&tr.ID, &tr.Name, &tr.Alias, &tr.HasOdds)
-				teams = append(teams, tr)
+				var tr oddsDbTeam
+				_ = trows.Scan(&tr.ID, &tr.Name, &tr.Alias)
+				dbTeams = append(dbTeams, tr)
+			}
+		}
+
+		var apiTeams []oddsApiTeam
+		apiKey := os.Getenv("ODDS_API_KEY")
+		if apiKey != "" && selectedComp.FdCode != "" {
+			sportKey := sportKeys[selectedComp.FdCode]
+			if sportKey != "" {
+				apiTeams = fetchApiTeamNames(apiKey, sportKey, dbTeams)
 			}
 		}
 
 		RenderTemplate(w, r, tmpl, "admin/odds_map.html", TemplateData{
 			"User":      user,
-			"Teams":     teams,
+			"DbTeams":   dbTeams,
+			"ApiTeams":  apiTeams,
 			"Comps":     comps,
 			"CompID":    compID,
 			"Unmatched": unmatched,
@@ -389,18 +413,71 @@ func AdminOddsMapSubmit(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	saved := 0
 	for key, vals := range r.Form {
-		if !strings.HasPrefix(key, "alias_") || len(vals) == 0 {
+		if !strings.HasPrefix(key, "map_") || len(vals) == 0 {
 			continue
 		}
-		teamID, err := strconv.Atoi(strings.TrimPrefix(key, "alias_"))
+		apiName := strings.TrimPrefix(key, "map_")
+		dbIDStr := strings.TrimSpace(vals[0])
+		if dbIDStr == "" {
+			continue
+		}
+		teamID, err := strconv.Atoi(dbIDStr)
 		if err != nil || teamID == 0 {
 			continue
 		}
-		alias := strings.TrimSpace(vals[0])
-		// Prázdný alias = smazat
-		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET alias=NULLIF($1,'') WHERE id=$2`, alias, teamID)
+		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET alias=$1 WHERE id=$2`, apiName, teamID)
 		saved++
 	}
+	compIDStr := r.FormValue("competition_id")
 	middleware.SetFlash(w, r, "ok", fmt.Sprintf("Uloženo %d aliasů.", saved))
-	http.Redirect(w, r, "/admin/odds/map", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/odds/map?competition_id="+compIDStr, http.StatusSeeOther)
+}
+
+// fetchApiTeamNames načte unikátní jména týmů z Odds API a doplní aktuální DB mapování
+func fetchApiTeamNames(apiKey, sportKey string, dbTeams []oddsDbTeam) []oddsApiTeam {
+
+	url := fmt.Sprintf(
+		"https://api.the-odds-api.com/v4/sports/%s/odds/?apiKey=%s&regions=eu&markets=h2h&oddsFormat=decimal&bookmakers=bet365,unibet,pinnacle,betway",
+		sportKey, apiKey,
+	)
+	resp, err := http.Get(url)
+	if err != nil || resp.StatusCode != 200 {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var events []oddsAPIEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil
+	}
+
+	// Sbírej unikátní jména
+	seen := map[string]bool{}
+	var result []oddsApiTeam
+	for _, ev := range events {
+		for _, name := range []string{ev.HomeTeam, ev.AwayTeam} {
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			row := oddsApiTeam{ApiName: name}
+			nameLow := strings.ToLower(name)
+			for _, dt := range dbTeams {
+				if strings.ToLower(dt.Alias) == nameLow {
+					row.DbID = dt.ID
+					row.DbName = dt.Name
+					break
+				}
+			}
+			result = append(result, row)
+		}
+	}
+	// Seřaď: nejdřív nemapované, pak abecedně
+	sort.Slice(result, func(i, j int) bool {
+		if (result[i].DbID == 0) != (result[j].DbID == 0) {
+			return result[i].DbID == 0
+		}
+		return result[i].ApiName < result[j].ApiName
+	})
+	return result
 }

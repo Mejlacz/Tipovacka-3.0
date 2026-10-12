@@ -1,4 +1,4 @@
-{{define "title"}}Aliasy týmů — Odds API{{end}}
+{{define "title"}}Párování týmů — Odds API{{end}}
 <div class="page-header">
     <h1>📊 Párování týmů s Odds API</h1>
     <div style="display:flex;gap:.5rem">
@@ -17,7 +17,6 @@
 </div>
 {{end}}
 
-{{/* Soutěž filtr */}}
 <div class="card" style="max-width:340px;padding:1rem;margin-bottom:1.25rem">
     <form method="get" action="/admin/odds/map">
         <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.4rem">Soutěž</label>
@@ -29,19 +28,7 @@
     </form>
 </div>
 
-{{if .Unmatched}}
-<div class="alert alert-error" style="margin-bottom:1.25rem">
-    <b>Nespárované týmy z posledního refreshe:</b><br>
-    {{range .Unmatched}}<code style="display:inline-block;background:rgba(239,68,68,.12);border-radius:4px;padding:1px 7px;margin:2px;font-size:.84rem">{{.}}</code>{{end}}<br>
-    <span style="font-size:.81rem;color:var(--muted-d)">Nastav alias v tabulce níže (přesně toto jméno) a spusť refresh znovu.</span>
-</div>
-{{end}}
-
-{{if .Teams}}
-<p style="font-size:.83rem;color:var(--muted-d);margin-bottom:.75rem">
-    <b>Alias</b> = přesné anglické jméno z The Odds API. Zelená ✓ = tým má již namatchované kurzy.
-</p>
-
+{{if .ApiTeams}}
 <form method="post" action="/admin/odds/map?competition_id={{.CompID}}">
     <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
     <input type="hidden" name="competition_id" value="{{.CompID}}">
@@ -50,24 +37,25 @@
         <table class="table table-sm" style="margin:0;font-size:.88rem">
             <thead>
                 <tr>
-                    <th>Tým v DB</th>
-                    <th>Alias (Odds API jméno)</th>
-                    <th style="width:80px;text-align:center">Kurzy</th>
+                    <th>Tým z Odds API</th>
+                    <th>Tým v soutěži (DB)</th>
                 </tr>
             </thead>
             <tbody>
-            {{range .Teams}}
-            <tr>
-                <td style="font-weight:500">{{.Name}}</td>
-                <td>
-                    <input type="text" name="alias_{{.ID}}" value="{{.Alias}}"
-                           placeholder="(žádný — zadej anglické jméno)"
-                           class="form-control"
-                           style="font-size:.84rem">
+            {{range .ApiTeams}}
+            <tr class="{{if .DbID}}mapped-row{{else}}unmapped-row{{end}}">
+                <td style="font-weight:{{if .DbID}}400{{else}}600{{end}};white-space:nowrap">
+                    {{if not .DbID}}<span style="color:var(--warning,#f59e0b)">⚠</span> {{end}}{{.ApiName}}
                 </td>
-                <td style="text-align:center">
-                    {{if .HasOdds}}<span style="color:var(--success);font-size:.9rem" title="Kurzy načteny">✓</span>
-                    {{else}}<span style="color:var(--muted-d);font-size:.8rem">–</span>{{end}}
+                <td>
+                    <select name="map_{{.ApiName}}" class="form-control db-team-sel"
+                            style="font-size:.84rem" onchange="updateUsed()">
+                        <option value="">— nepárovat —</option>
+                        {{range $.DbTeams}}
+                        <option value="{{.ID}}" {{if eq $.Noop 0}}{{end}}
+                                data-alias="{{.Alias}}">{{.Name}}{{if .Alias}} ({{.Alias}}){{end}}</option>
+                        {{end}}
+                    </select>
                 </td>
             </tr>
             {{end}}
@@ -75,6 +63,43 @@
         </table>
     </div>
 
-    <button type="submit" class="btn btn-primary">💾 Uložit aliasy</button>
+    <button type="submit" class="btn btn-primary">💾 Uložit párování</button>
 </form>
+
+<script>
+// Předvyplň selecty podle aktuálních aliasů
+(function() {
+    var sels = document.querySelectorAll('.db-team-sel');
+    sels.forEach(function(sel) {
+        // Zjisti API jméno z name atributu (map_XYZ → XYZ)
+        var apiName = sel.name.replace(/^map_/, '').toLowerCase();
+        var opts = sel.querySelectorAll('option[data-alias]');
+        opts.forEach(function(opt) {
+            if (opt.dataset.alias.toLowerCase() === apiName) {
+                opt.selected = true;
+            }
+        });
+    });
+    updateUsed();
+})();
+
+function updateUsed() {
+    // Zjisti která DB ID jsou aktuálně vybrána
+    var used = {};
+    document.querySelectorAll('.db-team-sel').forEach(function(sel) {
+        if (sel.value) used[sel.value] = sel;
+    });
+    // Všechny selecty — šedě options které jsou použité jinde
+    document.querySelectorAll('.db-team-sel').forEach(function(sel) {
+        sel.querySelectorAll('option').forEach(function(opt) {
+            if (!opt.value) return;
+            var usedElsewhere = used[opt.value] && used[opt.value] !== sel;
+            opt.disabled = usedElsewhere;
+            opt.style.color = usedElsewhere ? 'var(--muted-d)' : '';
+        });
+    });
+}
+</script>
+{{else if .CompID}}
+<div class="alert alert-error">Nepodařilo se načíst týmy z Odds API. Zkontroluj ODDS_API_KEY nebo fd_code soutěže.</div>
 {{end}}
