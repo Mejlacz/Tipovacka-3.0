@@ -333,34 +333,36 @@ func AdminOddsList(tmpl *template.Template) http.HandlerFunc {
 		ctx := context.Background()
 
 		type oddsRow struct {
-			MatchID   int64
-			HomeTeam  string
-			AwayTeam  string
-			MatchDate string
-			CompName  string
-			HomeOdds  string
-			DrawOdds  string
-			AwayOdds  string
-			Bookmaker string
-			FetchedAt string
+			MatchID    int64
+			HomeTeam   string
+			AwayTeam   string
+			MatchDate  string
+			CompName   string
+			HomeOdds   string
+			DrawOdds   string
+			AwayOdds   string
+			Bookmaker  string
+			FetchedAt  string
+			MatchFound bool
 		}
 
 		rows, err := db.Pool.Query(ctx, `
 			SELECT mo.match_id,
-			       COALESCE(ht.display_name, ht.name),
-			       COALESCE(at.display_name, at.name),
-			       TO_CHAR(m.match_date AT TIME ZONE 'Europe/Prague', 'DD.MM.YYYY HH24:MI'),
-			       c.name,
+			       COALESCE(ht.display_name, ht.name, '???'),
+			       COALESCE(at.display_name, at.name, '???'),
+			       COALESCE(TO_CHAR(m.match_date AT TIME ZONE 'Europe/Prague', 'DD.MM.YYYY HH24:MI'), '— zápas nenalezen —'),
+			       COALESCE(c.name, '— soutěž nenalezena —'),
 			       mo.home_odds, mo.draw_odds, mo.away_odds,
 			       mo.bookmaker,
-			       TO_CHAR(mo.fetched_at AT TIME ZONE 'Europe/Prague', 'DD.MM HH24:MI')
+			       TO_CHAR(mo.fetched_at AT TIME ZONE 'Europe/Prague', 'DD.MM HH24:MI'),
+			       m.id IS NOT NULL
 			FROM match_odds mo
-			JOIN matches m ON m.id = mo.match_id
-			JOIN teams ht ON ht.id = m.home_team_id
-			JOIN teams at ON at.id = m.away_team_id
-			JOIN competitions c ON c.id = m.competition_id
-			ORDER BY m.match_date DESC
-			LIMIT 100`)
+			LEFT JOIN matches m ON m.id = mo.match_id
+			LEFT JOIN teams ht ON ht.id = m.home_team_id
+			LEFT JOIN teams at ON at.id = m.away_team_id
+			LEFT JOIN competitions c ON c.id = m.competition_id
+			ORDER BY mo.fetched_at DESC
+			LIMIT 200`)
 		if err != nil {
 			http.Error(w, "db error: "+err.Error(), 500)
 			return
@@ -371,7 +373,7 @@ func AdminOddsList(tmpl *template.Template) http.HandlerFunc {
 		for rows.Next() {
 			var row oddsRow
 			var h, d, a float64
-			_ = rows.Scan(&row.MatchID, &row.HomeTeam, &row.AwayTeam, &row.MatchDate, &row.CompName, &h, &d, &a, &row.Bookmaker, &row.FetchedAt)
+			_ = rows.Scan(&row.MatchID, &row.HomeTeam, &row.AwayTeam, &row.MatchDate, &row.CompName, &h, &d, &a, &row.Bookmaker, &row.FetchedAt, &row.MatchFound)
 			row.HomeOdds = fmt.Sprintf("%.2f", h)
 			row.DrawOdds = fmt.Sprintf("%.2f", d)
 			row.AwayOdds = fmt.Sprintf("%.2f", a)
@@ -379,8 +381,9 @@ func AdminOddsList(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		RenderTemplate(w, r, tmpl, "admin/odds_list.html", TemplateData{
-			"User":    user,
-			"OddsRows": data,
+			"User":      user,
+			"OddsRows":  data,
+			"CSRFToken": middleware.GetCSRFToken(w, r),
 		})
 	}
 }
