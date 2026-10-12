@@ -132,8 +132,9 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 			continue
 		}
 
-		// Najdi zápas v DB podle čas ±90 min a jmen týmů (fuzzy)
+		// Najdi zápas v DB podle času ±3h
 		matchID := findMatchByTeamsAndTime(ctx, fdCode, ev.HomeTeam, ev.AwayTeam, commenceTime)
+		log.Printf("[odds] event %s vs %s @ %s → matchID=%d", ev.HomeTeam, ev.AwayTeam, commenceTime.Format("02.01 15:04"), matchID)
 		if matchID == 0 {
 			continue
 		}
@@ -176,14 +177,11 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 }
 
 func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam string, t time.Time) int {
-	// Hledej zápas ±3 hodiny od commence_time ve správné soutěži
 	var matchID int
 	err := db.Pool.QueryRow(ctx, `
 		SELECT m.id FROM matches m
-		JOIN rounds r ON r.id = m.round_id
-		JOIN competitions c ON c.id = r.competition_id
+		JOIN competitions c ON c.id = m.competition_id
 		WHERE c.fd_code = $1
-		  AND m.is_finished = false
 		  AND m.match_date BETWEEN $2 AND $3
 		ORDER BY ABS(EXTRACT(EPOCH FROM (m.match_date - $4)))
 		LIMIT 1`,
@@ -192,32 +190,10 @@ func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam str
 		t.Add(3*time.Hour),
 		t,
 	).Scan(&matchID)
-	if err == nil && matchID > 0 {
-		return matchID
+	if err != nil {
+		log.Printf("[odds] findMatch %s vs %s @ %s: %v", homeTeam, awayTeam, t.Format("02.01 15:04"), err)
 	}
-
-	// Fallback: hledej podle jmen týmů (alias nebo display_name obsahuje část jména)
-	rows, _ := db.Pool.Query(ctx, `
-		SELECT m.id FROM matches m
-		JOIN rounds r ON r.id = m.round_id
-		JOIN competitions c ON c.id = r.competition_id
-		JOIN teams ht ON ht.id = m.home_team_id
-		JOIN teams at ON at.id = m.away_team_id
-		WHERE c.fd_code = $1 AND m.is_finished = false
-		  AND m.match_date > NOW() - INTERVAL '1 day'
-		  AND m.match_date < NOW() + INTERVAL '14 days'`, fdCode)
-	defer rows.Close()
-	homeLow := strings.ToLower(homeTeam)
-	awayLow := strings.ToLower(awayTeam)
-	for rows.Next() {
-		var id int
-		_ = rows.Scan(&id)
-		// jednoduchý check — vrátí první shodu (není perfektní, ale funguje)
-		_ = homeLow
-		_ = awayLow
-		return id
-	}
-	return 0
+	return matchID
 }
 
 // LoadMatchOdds načte kurzy pro dané match_id — vrátí mapu matchID → [home, draw, away, bookmaker]
