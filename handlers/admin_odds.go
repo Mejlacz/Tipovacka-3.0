@@ -184,7 +184,7 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 				if home == 0 || away == 0 {
 					continue
 				}
-				_, _ = db.Pool.Exec(ctx, `
+						_, _ = db.Pool.Exec(ctx, `
 					INSERT INTO match_odds (match_id, bookmaker, home_odds, draw_odds, away_odds, fetched_at)
 					VALUES ($1,$2,$3,$4,$5,NOW())
 					ON CONFLICT (match_id) DO UPDATE
@@ -192,6 +192,7 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 					      draw_odds=EXCLUDED.draw_odds, away_odds=EXCLUDED.away_odds,
 					      fetched_at=EXCLUDED.fetched_at`,
 					matchID, bm.Title, home, draw, away)
+				log.Printf("[odds] saved matchID=%d %s vs %s %.2f/%.2f/%.2f", matchID, ev.HomeTeam, ev.AwayTeam, home, draw, away)
 				saved++
 				hasOdds = true
 				goto nextEvent
