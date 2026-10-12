@@ -322,6 +322,69 @@ func LoadMatchOdds(ctx context.Context, matchIDs []int) map[int][4]string {
 	return result
 }
 
+// GET /admin/odds/list — přehled uložených kurzů z match_odds
+func AdminOddsList(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := GetCurrentUser(r)
+		if user == nil || !user.IsOwner {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		ctx := context.Background()
+
+		type oddsRow struct {
+			MatchID   int64
+			HomeTeam  string
+			AwayTeam  string
+			MatchDate string
+			CompName  string
+			HomeOdds  string
+			DrawOdds  string
+			AwayOdds  string
+			Bookmaker string
+			FetchedAt string
+		}
+
+		rows, err := db.Pool.Query(ctx, `
+			SELECT mo.match_id,
+			       COALESCE(ht.display_name, ht.name),
+			       COALESCE(at.display_name, at.name),
+			       TO_CHAR(m.match_date AT TIME ZONE 'Europe/Prague', 'DD.MM.YYYY HH24:MI'),
+			       c.name,
+			       mo.home_odds, mo.draw_odds, mo.away_odds,
+			       mo.bookmaker,
+			       TO_CHAR(mo.fetched_at AT TIME ZONE 'Europe/Prague', 'DD.MM HH24:MI')
+			FROM match_odds mo
+			JOIN matches m ON m.id = mo.match_id
+			JOIN teams ht ON ht.id = m.home_team_id
+			JOIN teams at ON at.id = m.away_team_id
+			JOIN competitions c ON c.id = m.competition_id
+			ORDER BY m.match_date DESC
+			LIMIT 100`)
+		if err != nil {
+			http.Error(w, "db error: "+err.Error(), 500)
+			return
+		}
+		defer rows.Close()
+
+		var data []oddsRow
+		for rows.Next() {
+			var row oddsRow
+			var h, d, a float64
+			_ = rows.Scan(&row.MatchID, &row.HomeTeam, &row.AwayTeam, &row.MatchDate, &row.CompName, &h, &d, &a, &row.Bookmaker, &row.FetchedAt)
+			row.HomeOdds = fmt.Sprintf("%.2f", h)
+			row.DrawOdds = fmt.Sprintf("%.2f", d)
+			row.AwayOdds = fmt.Sprintf("%.2f", a)
+			data = append(data, row)
+		}
+
+		RenderTemplate(w, r, tmpl, "admin/odds_list.html", TemplateData{
+			"User":    user,
+			"OddsRows": data,
+		})
+	}
+}
+
 // GET /admin/odds/map — přehled aliasů týmů pro Odds API
 func AdminOddsMapForm(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

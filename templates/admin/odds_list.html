@@ -1,0 +1,49 @@
+{{define "title"}}Uložené kurzy — Odds API{{end}}
+<div class="page-header">
+    <h1>📊 Uložené kurzy (match_odds)</h1>
+    <div style="display:flex;gap:.5rem">
+        <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+        <a href="/admin/odds/map" class="btn btn-secondary btn-sm">🗺 Párování týmů</a>
+    </div>
+</div>
+
+<p style="font-size:.85rem;color:var(--muted-d);margin-bottom:1rem">
+    Kurzy uložené v databázi (posledních 100). Porovnej Match ID se stránkou Tipovat, kde se ID zobrazuje pod každým zápasem jako <code>[id:XXXXX]</code>.
+</p>
+
+{{if not .OddsRows}}
+<div class="alert alert-error">Žádné kurzy v databázi. Spusť Refresh kurzů.</div>
+{{else}}
+<div class="card" style="padding:0;overflow:hidden">
+<table class="table table-sm" style="margin:0;font-size:.84rem">
+    <thead>
+        <tr>
+            <th>Soutěž</th>
+            <th>Zápas</th>
+            <th>Datum (Praha)</th>
+            <th style="text-align:center">1</th>
+            <th style="text-align:center">X</th>
+            <th style="text-align:center">2</th>
+            <th>Bookmaker</th>
+            <th>Načteno</th>
+            <th style="font-size:.75rem;color:var(--muted-d)">Match ID</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .OddsRows}}
+    <tr>
+        <td style="color:var(--muted-d);font-size:.78rem">{{.CompName}}</td>
+        <td style="font-weight:600">{{.HomeTeam}} – {{.AwayTeam}}</td>
+        <td style="white-space:nowrap">{{.MatchDate}}</td>
+        <td style="text-align:center;font-weight:700">{{.HomeOdds}}</td>
+        <td style="text-align:center;color:var(--muted-d)">{{.DrawOdds}}</td>
+        <td style="text-align:center;font-weight:700">{{.AwayOdds}}</td>
+        <td style="font-size:.78rem;color:var(--muted-d)">{{.Bookmaker}}</td>
+        <td style="font-size:.78rem;color:var(--muted-d);white-space:nowrap">{{.FetchedAt}}</td>
+        <td style="font-size:.72rem;color:var(--muted-d);font-family:monospace">{{.MatchID}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{end}}
