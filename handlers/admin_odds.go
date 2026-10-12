@@ -208,8 +208,13 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 }
 
 func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam string, t time.Time) int {
+	homeLow := strings.ToLower(homeTeam)
+
+	// Primárně: najdi domácí tým přes alias nebo jméno v dané soutěži,
+	// pak ověř datum (±3h). Domácí tým je v dané soutěži unikátní pro dané datum.
 	rows, err := db.Pool.Query(ctx, `
-		SELECT m.id, ht.name, ht.display_name, COALESCE(ht.alias,''), at.name, at.display_name, COALESCE(at.alias,'')
+		SELECT m.id, ht.name, COALESCE(ht.display_name,''), COALESCE(ht.alias,''),
+		              at.name, COALESCE(at.display_name,''), COALESCE(at.alias,'')
 		FROM matches m
 		JOIN competitions c ON c.id = m.competition_id
 		JOIN teams ht ON ht.id = m.home_team_id
@@ -217,8 +222,8 @@ func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam str
 		WHERE c.fd_code = $1
 		  AND m.match_date BETWEEN $2 AND $3`,
 		fdCode,
-		t.Add(-3*time.Hour),
-		t.Add(3*time.Hour),
+		t.Add(-4*time.Hour),
+		t.Add(4*time.Hour),
 	)
 	if err != nil {
 		log.Printf("[odds] findMatch query error: %v", err)
@@ -226,23 +231,26 @@ func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam str
 	}
 	defer rows.Close()
 
-	homeLow := strings.ToLower(homeTeam)
 	awayLow := strings.ToLower(awayTeam)
-
 	bestID := 0
 	bestScore := -1
 	for rows.Next() {
 		var id int
 		var hn, hd, ha, an, ad, aa string
 		_ = rows.Scan(&id, &hn, &hd, &ha, &an, &ad, &aa)
-		score := teamScore(homeLow, hn, hd, ha) + teamScore(awayLow, an, ad, aa)
+		// Domácí tým musí skórovat alespoň 10 — pak přidáme skóre hostů
+		hs := teamScore(homeLow, hn, hd, ha)
+		if hs < 10 {
+			continue
+		}
+		score := hs + teamScore(awayLow, an, ad, aa)
 		if score > bestScore {
 			bestScore = score
 			bestID = id
 		}
 	}
-	if bestScore <= 0 {
-		log.Printf("[odds] no team match for %s vs %s @ %s (best score=%d)", homeTeam, awayTeam, t.Format("02.01 15:04"), bestScore)
+	if bestID == 0 {
+		log.Printf("[odds] no home-team match for %s vs %s @ %s", homeTeam, awayTeam, t.Format("02.01 15:04"))
 		return 0
 	}
 	log.Printf("[odds] matched %s vs %s → matchID=%d (score=%d)", homeTeam, awayTeam, bestID, bestScore)
