@@ -1,0 +1,65 @@
+{{define "title"}}Náhled Odds API{{end}}
+<div class="page-header">
+    <h1>📊 Živý náhled Odds API</h1>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <a href="/admin" class="btn btn-secondary btn-sm">← Admin</a>
+        <a href="/admin/odds/list" class="btn btn-secondary btn-sm">💾 Uložené kurzy</a>
+        <a href="/admin/odds/map" class="btn btn-secondary btn-sm">🗺 Párování týmů</a>
+        <form method="post" action="/admin/odds/refresh" style="display:inline"
+              onsubmit="return confirm('Načíst kurzy z The Odds API?')">
+            <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+            <button type="submit" class="btn btn-primary btn-sm">💾 Uložit do DB</button>
+        </form>
+    </div>
+</div>
+
+<p style="font-size:.85rem;color:var(--muted-d);margin-bottom:1rem">
+    Aktuální data přímo z Odds API. Zelené = napárováno a má kurzy. Oranžové = napárováno ale žádné h2h kurzy. Červené = nenalezen odpovídající zápas v DB (chybí nebo je datum mimo ±3h).
+</p>
+
+{{if not .Rows}}
+<div class="alert alert-error">Žádné eventy z API. Zkontroluj ODDS_API_KEY nebo fd_code soutěží.</div>
+{{else}}
+<div class="card" style="padding:0;overflow:hidden">
+<table class="table table-sm" style="margin:0;font-size:.84rem">
+    <thead>
+        <tr>
+            <th>Stav</th>
+            <th>Zápas (API jméno)</th>
+            <th>Začátek UTC</th>
+            <th style="text-align:center">1</th>
+            <th style="text-align:center">X</th>
+            <th style="text-align:center">2</th>
+            <th>Bookmaker</th>
+            <th style="font-size:.75rem">Match ID (DB)</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Rows}}
+    <tr style="
+        {{if eq .Status "ok"}}background:rgba(52,211,153,.05){{end}}
+        {{if eq .Status "no_odds"}}background:rgba(245,158,11,.07){{end}}
+        {{if eq .Status "no_match"}}background:rgba(239,68,68,.08){{end}}
+    ">
+        <td style="white-space:nowrap;font-size:.8rem">
+            {{if eq .Status "ok"}}<span style="color:#34d399">✅ napárováno</span>{{end}}
+            {{if eq .Status "no_odds"}}<span style="color:#f59e0b">⚠ bez kurzů</span>{{end}}
+            {{if eq .Status "no_match"}}<span style="color:#f87171">❌ nenalezen</span>{{end}}
+        </td>
+        <td style="font-weight:{{if eq .Status "ok"}}600{{else}}400{{end}}">
+            {{.HomeTeam}} – {{.AwayTeam}}
+        </td>
+        <td style="white-space:nowrap;font-size:.8rem;color:var(--muted-d)">{{.StartUTC}}</td>
+        <td style="text-align:center;font-weight:700">{{.HomeOdds}}</td>
+        <td style="text-align:center;color:var(--muted-d)">{{.DrawOdds}}</td>
+        <td style="text-align:center;font-weight:700">{{.AwayOdds}}</td>
+        <td style="font-size:.78rem;color:var(--muted-d)">{{.Bookmaker}}</td>
+        <td style="font-size:.72rem;color:var(--muted-d);font-family:monospace">
+            {{if .MatchID}}{{.MatchID}}{{else}}—{{end}}
+        </td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{end}}
