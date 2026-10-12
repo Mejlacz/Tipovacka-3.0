@@ -473,6 +473,43 @@ func AdminOddsRaw(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
+type dbCandidate struct {
+	MatchID   int
+	HomeTeam  string
+	AwayTeam  string
+	MatchDate string
+	Score     int
+}
+
+func findMatchCandidates(ctx context.Context, fdCode, homeTeam, awayTeam string, t time.Time) []dbCandidate {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT m.id, ht.name, ht.display_name, COALESCE(ht.alias,''), at.name, at.display_name, COALESCE(at.alias,''),
+		       TO_CHAR(m.match_date AT TIME ZONE 'Europe/Prague', 'DD.MM HH24:MI')
+		FROM matches m
+		JOIN competitions c ON c.id = m.competition_id
+		JOIN teams ht ON ht.id = m.home_team_id
+		JOIN teams at ON at.id = m.away_team_id
+		WHERE c.fd_code = $1
+		  AND m.match_date BETWEEN $2 AND $3`,
+		fdCode, t.Add(-3*time.Hour), t.Add(3*time.Hour),
+	)
+	if err != nil { return nil }
+	defer rows.Close()
+
+	homeLow := strings.ToLower(homeTeam)
+	awayLow := strings.ToLower(awayTeam)
+	var result []dbCandidate
+	for rows.Next() {
+		var id int
+		var hn, hd, ha, an, ad, aa, dt string
+		_ = rows.Scan(&id, &hn, &hd, &ha, &an, &ad, &aa, &dt)
+		score := teamScore(homeLow, hn, hd, ha) + teamScore(awayLow, an, ad, aa)
+		result = append(result, dbCandidate{id, hn + " / " + hd, an + " / " + ad, dt, score})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
+	return result
+}
+
 // GET /admin/odds/preview — živý náhled všech eventů z Odds API + stav párování
 func AdminOddsPreview(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -489,15 +526,16 @@ func AdminOddsPreview(tmpl *template.Template) http.HandlerFunc {
 		ctx := context.Background()
 
 		type previewRow struct {
-			HomeTeam  string
-			AwayTeam  string
-			StartUTC  string
-			HomeOdds  string
-			DrawOdds  string
-			AwayOdds  string
-			Bookmaker string
-			MatchID   int64
-			Status    string // "ok" | "no_match" | "no_odds"
+			HomeTeam   string
+			AwayTeam   string
+			StartUTC   string
+			HomeOdds   string
+			DrawOdds   string
+			AwayOdds   string
+			Bookmaker  string
+			MatchID    int64
+			Status     string
+			Candidates []dbCandidate
 		}
 
 		var rows []previewRow
@@ -519,17 +557,16 @@ func AdminOddsPreview(tmpl *template.Template) http.HandlerFunc {
 				t, err := time.Parse(time.RFC3339, ev.CommenceTime)
 				if err != nil { continue }
 				row := previewRow{
-					HomeTeam: ev.HomeTeam,
-					AwayTeam: ev.AwayTeam,
-					StartUTC: t.UTC().Format("02.01.2006 15:04"),
+					HomeTeam:   ev.HomeTeam,
+					AwayTeam:   ev.AwayTeam,
+					StartUTC:   t.UTC().Format("02.01.2006 15:04"),
+					Candidates: findMatchCandidates(ctx, fdCode, ev.HomeTeam, ev.AwayTeam, t),
 				}
 				mid := findMatchByTeamsAndTime(ctx, fdCode, ev.HomeTeam, ev.AwayTeam, t)
 				if mid == 0 {
 					row.Status = "no_match"
-					_ = fdCode
 				} else {
 					row.MatchID = int64(mid)
-					// najdi kurzy
 					for _, bm := range ev.Bookmakers {
 						for _, mkt := range bm.Markets {
 							if mkt.Key != "h2h" { continue }
@@ -558,7 +595,6 @@ func AdminOddsPreview(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
-		// Seřaď: nejdřív ok, pak no_odds, pak no_match; uvnitř skupiny podle data
 		sort.Slice(rows, func(i, j int) bool {
 			order := map[string]int{"ok": 0, "no_odds": 1, "no_match": 2}
 			if order[rows[i].Status] != order[rows[j].Status] {
