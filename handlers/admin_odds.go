@@ -178,7 +178,7 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 
 func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam string, t time.Time) int {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT m.id, ht.name, ht.display_name, at.name, at.display_name
+		SELECT m.id, ht.name, ht.display_name, COALESCE(ht.alias,''), at.name, at.display_name, COALESCE(at.alias,'')
 		FROM matches m
 		JOIN competitions c ON c.id = m.competition_id
 		JOIN teams ht ON ht.id = m.home_team_id
@@ -202,9 +202,9 @@ func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam str
 	bestScore := -1
 	for rows.Next() {
 		var id int
-		var hn, hd, an, ad string
-		_ = rows.Scan(&id, &hn, &hd, &an, &ad)
-		score := teamScore(homeLow, hn, hd) + teamScore(awayLow, an, ad)
+		var hn, hd, ha, an, ad, aa string
+		_ = rows.Scan(&id, &hn, &hd, &ha, &an, &ad, &aa)
+		score := teamScore(homeLow, hn, hd, ha) + teamScore(awayLow, an, ad, aa)
 		if score > bestScore {
 			bestScore = score
 			bestID = id
@@ -216,29 +216,37 @@ func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam str
 	return bestID
 }
 
-// teamScore vrátí skóre podobnosti mezi API jménem a jmény týmu v DB.
-func teamScore(apiLow, dbName, dbDisplay string) int {
+// teamScore vrátí skóre podobnosti mezi API jménem a jmény/aliasem týmu v DB.
+// Alias (anglické jméno z Odds API) má nejvyšší prioritu.
+func teamScore(apiLow, dbName, dbDisplay, dbAlias string) int {
+	// Přesná shoda aliasu — nejvyšší priorita
+	if dbAlias != "" && strings.ToLower(dbAlias) == apiLow {
+		return 20
+	}
 	dbLow := strings.ToLower(dbName)
 	dbDispLow := strings.ToLower(dbDisplay)
-	// Přesná shoda
 	if apiLow == dbLow || apiLow == dbDispLow {
 		return 10
 	}
-	// Substring obousměrně
 	if strings.Contains(dbLow, apiLow) || strings.Contains(apiLow, dbLow) {
 		return 5
 	}
 	if strings.Contains(dbDispLow, apiLow) || strings.Contains(apiLow, dbDispLow) {
 		return 5
 	}
-	// Shoda prvního slova (např. "Barcelona" vs "FC Barcelona")
-	apiWord := strings.Fields(apiLow)
-	dbWords := strings.Fields(dbLow)
-	for _, aw := range apiWord {
+	// Alias substring
+	if dbAlias != "" {
+		aliasLow := strings.ToLower(dbAlias)
+		if strings.Contains(aliasLow, apiLow) || strings.Contains(apiLow, aliasLow) {
+			return 8
+		}
+	}
+	// Shoda slova (např. "Barcelona" vs "FC Barcelona")
+	for _, aw := range strings.Fields(apiLow) {
 		if len(aw) < 3 {
 			continue
 		}
-		for _, dw := range dbWords {
+		for _, dw := range strings.Fields(dbLow) {
 			if aw == dw {
 				return 3
 			}
