@@ -298,7 +298,7 @@ func LoadMatchOdds(ctx context.Context, matchIDs []int) map[int][4]string {
 	return result
 }
 
-// GET /admin/odds/map — formulář pro mapování nespárovaných týmů na aliasy
+// GET /admin/odds/map — přehled aliasů týmů pro Odds API
 func AdminOddsMapForm(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := GetCurrentUser(r)
@@ -306,33 +306,39 @@ func AdminOddsMapForm(tmpl *template.Template) http.HandlerFunc {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+
+		// Nespárované z query param (z redirectu po refresh)
 		teamsParam := r.URL.Query().Get("teams")
-		var apiNames []string
+		var unmatched []string
 		for _, t := range strings.Split(teamsParam, "|") {
 			t = strings.TrimSpace(t)
 			if t != "" {
-				apiNames = append(apiNames, t)
+				unmatched = append(unmatched, t)
 			}
 		}
 
 		ctx := context.Background()
 		type teamRow struct {
-			ID   int
-			Name string
+			ID    int
+			Name  string
+			Alias string
 		}
-		var allTeams []teamRow
-		trows, _ := db.Pool.Query(ctx, `SELECT id, COALESCE(display_name, name) FROM teams ORDER BY COALESCE(display_name, name)`)
+		var teams []teamRow
+		trows, _ := db.Pool.Query(ctx, `
+			SELECT id, COALESCE(display_name, name), COALESCE(alias, '')
+			FROM teams
+			ORDER BY COALESCE(alias,'') DESC, COALESCE(display_name, name)`)
 		defer trows.Close()
 		for trows.Next() {
 			var tr teamRow
-			_ = trows.Scan(&tr.ID, &tr.Name)
-			allTeams = append(allTeams, tr)
+			_ = trows.Scan(&tr.ID, &tr.Name, &tr.Alias)
+			teams = append(teams, tr)
 		}
 
 		RenderTemplate(w, r, tmpl, "admin/odds_map.html", TemplateData{
 			"User":      user,
-			"ApiNames":  apiNames,
-			"AllTeams":  allTeams,
+			"Teams":     teams,
+			"Unmatched": unmatched,
 			"CSRFToken": middleware.GetCSRFToken(w, r),
 			"Flash":     middleware.GetFlash(w, r),
 		})
@@ -361,12 +367,10 @@ func AdminOddsMapSubmit(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		alias := strings.TrimSpace(vals[0])
-		if alias == "" {
-			continue
-		}
-		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET alias=$1 WHERE id=$2`, alias, teamID)
+		// Prázdný alias = smazat
+		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET alias=NULLIF($1,'') WHERE id=$2`, alias, teamID)
 		saved++
 	}
-	middleware.SetFlash(w, r, "ok", fmt.Sprintf("Uloženo %d aliasů. Spusť refresh kurzů znovu.", saved))
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	middleware.SetFlash(w, r, "ok", fmt.Sprintf("Uloženo %d aliasů.", saved))
+	http.Redirect(w, r, "/admin/odds/map", http.StatusSeeOther)
 }
