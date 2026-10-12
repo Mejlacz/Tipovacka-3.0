@@ -76,6 +76,7 @@ func AdminDashboard(tmpl *template.Template) http.HandlerFunc {
 			"CompData":          compDataList,
 			"Flash":             flash,
 			"ShowDeadlineAlert": UserCanSeeDeadline(admin.ID, admin.IsOwner),
+			"CSRFToken":         middleware.GetCSRFToken(w, r),
 		})
 	}
 }

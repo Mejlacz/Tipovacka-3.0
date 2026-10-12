@@ -49,6 +49,7 @@
     <a href="/admin/io"          class="btn btn-secondary">📦 Import / Export</a>
     {{if .User.IsOwner}}<a href="/admin/groups" class="btn btn-secondary">👥 Skupiny</a>{{end}}
     {{if .User.IsOwner}}<a href="/admin/history" class="btn btn-secondary">Historie</a>{{end}}
+    {{if .User.IsOwner}}<form method="post" action="/admin/odds/refresh" style="display:inline" onsubmit="return confirm('Načíst kurzy z The Odds API?')"><input type="hidden" name="_csrf" value="{{.CSRFToken}}"><button type="submit" class="btn btn-secondary">📊 Kurzy</button></form>{{end}}
     <a href="/admin/manual"           class="btn btn-secondary">Manuál</a>
     <a href="/admin/code-map"         class="btn btn-secondary">🗺️ Mapa kódu</a>
     <a href="/admin/error-map"        class="btn btn-secondary">🔍 Mapa chyb</a>
