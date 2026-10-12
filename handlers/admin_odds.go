@@ -241,9 +241,11 @@ func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam str
 			bestID = id
 		}
 	}
-	if bestScore == 0 {
-		log.Printf("[odds] no team match for %s vs %s @ %s", homeTeam, awayTeam, t.Format("02.01 15:04"))
+	if bestScore <= 0 {
+		log.Printf("[odds] no team match for %s vs %s @ %s (best score=%d)", homeTeam, awayTeam, t.Format("02.01 15:04"), bestScore)
+		return 0
 	}
+	log.Printf("[odds] matched %s vs %s → matchID=%d (score=%d)", homeTeam, awayTeam, bestID, bestScore)
 	return bestID
 }
 
