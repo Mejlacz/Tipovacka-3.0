@@ -155,11 +155,14 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 		}
 
 		matchID := findMatchByTeamsAndTime(ctx, fdCode, ev.HomeTeam, ev.AwayTeam, commenceTime)
-		log.Printf("[odds] event %s vs %s @ %s → matchID=%d", ev.HomeTeam, ev.AwayTeam, commenceTime.Format("02.01 15:04"), matchID)
+		log.Printf("[odds] event %s vs %s @ %s UTC → matchID=%d", ev.HomeTeam, ev.AwayTeam, commenceTime.Format("02.01 15:04"), matchID)
 		if matchID == 0 {
-			unmatched = append(unmatched, ev.HomeTeam+" vs "+ev.AwayTeam)
+			unmatched = append(unmatched, fmt.Sprintf("%s vs %s (UTC %s)", ev.HomeTeam, ev.AwayTeam, commenceTime.Format("02.01 15:04")))
 			continue
 		}
+
+		// Zkus najít kurzy — loguj pokud žádný bookmaker nemá h2h
+		hasOdds := false
 
 		// Vyber nejlepší bookmaker (první dostupný)
 		for _, bm := range ev.Bookmakers {
@@ -190,10 +193,15 @@ func fetchSportOdds(ctx context.Context, apiKey, sportKey, fdCode string) (int, 
 					      fetched_at=EXCLUDED.fetched_at`,
 					matchID, bm.Title, home, draw, away)
 				saved++
+				hasOdds = true
 				goto nextEvent
 			}
 		}
 	nextEvent:
+		if !hasOdds {
+			log.Printf("[odds] matchID=%d (%s vs %s): no bookmaker has h2h odds (bookmakers: %d)", matchID, ev.HomeTeam, ev.AwayTeam, len(ev.Bookmakers))
+			unmatched = append(unmatched, fmt.Sprintf("%s vs %s (matched, no h2h odds)", ev.HomeTeam, ev.AwayTeam))
+		}
 	}
 	return saved, unmatched, nil
 }
