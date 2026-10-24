@@ -253,10 +253,11 @@ type SiteConfig struct {
 // ─── UserGroup ────────────────────────────────────────────────────────────────
 
 type UserGroup struct {
-	ID              int
-	Name            string
-	CanSeeHidden    bool
-	CanSeeDeadline  bool
+	ID             int
+	Name           string
+	CanSeeHidden   bool
+	CanSeeDeadline bool
+	CanSeeOdds     bool
 }
 
 // ─── GroupMembership ─────────────────────────────────────────────────────────

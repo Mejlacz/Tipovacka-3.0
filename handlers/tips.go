@@ -310,18 +310,19 @@ func CompetitionDetail(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		matchOdds := map[int][4]string{}
-		if u.IsOwner && len(matchIDs) > 0 {
+		if UserCanSeeOdds(u.ID, u.IsOwner) && len(matchIDs) > 0 {
 			matchOdds = LoadMatchOdds(ctx, matchIDs)
 		}
 
 		RenderTemplate(w, r, tmpl, "competition.html", TemplateData{
-			"User":         u,
-			"Comp":         comp,
+			"User":        u,
+			"Comp":        comp,
 			"MatchContext": tippableIface,
-			"AllLocked":    allLocked,
-			"AllTipped":    allTipped,
-			"ExtraOpen":    extraOpen,
-			"MatchOdds":    matchOdds,
+			"AllLocked":   allLocked,
+			"AllTipped":   allTipped,
+			"ExtraOpen":   extraOpen,
+			"MatchOdds":   matchOdds,
+			"ShowOdds":    len(matchOdds) > 0,
 		})
 	}
 }

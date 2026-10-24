@@ -35,11 +35,11 @@ func AdminGroupsList(tmpl *template.Template) http.HandlerFunc {
 
 		// Load groups
 		gRows, _ := db.Pool.Query(ctx,
-			`SELECT id, name, can_see_hidden, COALESCE(can_see_deadline, false) FROM user_groups ORDER BY name`)
+			`SELECT id, name, can_see_hidden, COALESCE(can_see_deadline, false), COALESCE(can_see_odds, false) FROM user_groups ORDER BY name`)
 		var groups []*models.UserGroup
 		for gRows.Next() {
 			g := &models.UserGroup{}
-			_ = gRows.Scan(&g.ID, &g.Name, &g.CanSeeHidden, &g.CanSeeDeadline)
+			_ = gRows.Scan(&g.ID, &g.Name, &g.CanSeeHidden, &g.CanSeeDeadline, &g.CanSeeOdds)
 			groups = append(groups, g)
 		}
 		gRows.Close()
@@ -174,6 +174,33 @@ func AdminGroupsToggleDeadline(w http.ResponseWriter, r *http.Request) {
 	_, _ = db.Pool.Exec(ctx,
 		`UPDATE user_groups SET can_see_deadline = NOT COALESCE(can_see_deadline, false) WHERE id=$1`, groupID)
 	http.Redirect(w, r, "/admin/groups", http.StatusSeeOther)
+}
+
+// POST /admin/groups/{group_id}/toggle-odds
+func AdminGroupsToggleOdds(w http.ResponseWriter, r *http.Request) {
+	owner := requireOwner(w, r)
+	if owner == nil {
+		return
+	}
+	groupID, _ := strconv.Atoi(r.PathValue("group_id"))
+	ctx := context.Background()
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE user_groups SET can_see_odds = NOT COALESCE(can_see_odds, false) WHERE id=$1`, groupID)
+	http.Redirect(w, r, "/admin/groups", http.StatusSeeOther)
+}
+
+// UserCanSeeOdds vrátí true pokud je uživatel Owner nebo člen skupiny s can_see_odds.
+func UserCanSeeOdds(userID int, isOwner bool) bool {
+	if isOwner {
+		return true
+	}
+	ctx := context.Background()
+	var count int
+	_ = db.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM group_memberships gm
+		   JOIN user_groups ug ON ug.id = gm.group_id
+		  WHERE gm.user_id = $1 AND COALESCE(ug.can_see_odds, false) = true`, userID).Scan(&count)
+	return count > 0
 }
 
 // UserCanSeeDeadline vrátí true pokud je uživatel Owner nebo člen skupiny s can_see_deadline.

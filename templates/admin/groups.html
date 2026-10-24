@@ -73,6 +73,14 @@
             </button>
         </form>
 
+        {{/* Přepnout oprávnění — vidí kurzy */}}
+        <form method="post" action="/admin/groups/{{.ID}}/toggle-odds" style="margin:0">
+            <button type="submit" class="btn" style="font-size:0.8rem;padding:0.25rem 0.6rem;{{if .CanSeeOdds}}background:rgba(52,211,153,.18);color:#34d399;border:1px solid rgba(52,211,153,.3){{end}}"
+                    title="Skupina vidí kurzy na stránce Tipovat">
+                {{if .CanSeeOdds}}📊 Kurzy ON{{else}}📊 Kurzy OFF{{end}}
+            </button>
+        </form>
+
         {{/* Smazat skupinu */}}
         <button type="button" class="btn grp-del-btn"
                 data-gid="{{.ID}}" data-name="{{.Name}}"
