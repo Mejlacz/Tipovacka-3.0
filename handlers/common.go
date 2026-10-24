@@ -98,6 +98,25 @@ func InitUserSchema() {
 		userCols.Email, userCols.IsAdmin, userCols.IsOwner, userCols.IsBlocked, userCols.IsHidden, userCols.IsApproved, userCols.IsInactive, userCols.Lang, userCols.CreatedAt, userCols.LastLogin, userCols.FirstName, userCols.LastName, userCols.NotifyAccess, userCols.BackgroundURL, userCols.UISettings)
 }
 
+// activeUsersWhere vrátí WHERE podmínku filtrující neschválené, blokované a neaktivní uživatele.
+// Používej pro dropdowny výběru uživatelů.
+func activeUsersWhere() string {
+	var conds []string
+	if userCols.IsBlocked {
+		conds = append(conds, "COALESCE(is_blocked,false)=false")
+	}
+	if userCols.IsApproved {
+		conds = append(conds, "COALESCE(is_approved,true)=true")
+	}
+	if userCols.IsInactive {
+		conds = append(conds, "COALESCE(is_inactive,false)=false")
+	}
+	if len(conds) == 0 {
+		return ""
+	}
+	return " WHERE " + strings.Join(conds, " AND ")
+}
+
 // buildUserSelect vrátí SELECT sloupců + jejich scan cíle pro daného uživatele.
 // Vždy obsahuje: id, username, password_hash.
 // Volitelně přidává existující sloupce.

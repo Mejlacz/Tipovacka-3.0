@@ -72,29 +72,17 @@ func AdminGroupsList(tmpl *template.Template) http.HandlerFunc {
 			memberIDs[g.ID] = ids
 		}
 
-		// All non-blocked users (for the add-member dropdown)
+		// Active users for the add-member dropdown (not blocked, approved, not inactive)
 		cols, _ := buildUserSelect()
 		var allUsers []*models.User
-		if userCols.IsBlocked {
-			uRows, _ := db.Pool.Query(ctx,
-				"SELECT "+cols+" FROM users WHERE is_blocked=FALSE ORDER BY username")
-			for uRows.Next() {
-				u := &models.User{}
-				if scanUser(u, uRows) == nil {
-					allUsers = append(allUsers, u)
-				}
+		uRows, _ := db.Pool.Query(ctx, "SELECT "+cols+" FROM users"+activeUsersWhere()+" ORDER BY username")
+		for uRows.Next() {
+			u := &models.User{}
+			if scanUser(u, uRows) == nil {
+				allUsers = append(allUsers, u)
 			}
-			uRows.Close()
-		} else {
-			uRows, _ := db.Pool.Query(ctx, "SELECT "+cols+" FROM users ORDER BY username")
-			for uRows.Next() {
-				u := &models.User{}
-				if scanUser(u, uRows) == nil {
-					allUsers = append(allUsers, u)
-				}
-			}
-			uRows.Close()
 		}
+		uRows.Close()
 
 		flash := middleware.GetFlash(w, r)
 

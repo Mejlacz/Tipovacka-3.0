@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"tipovacka/db"
@@ -357,22 +358,22 @@ func StatsDetail(tmpl *template.Template) http.HandlerFunc {
 		// Compare users — others who tipped in this competition
 		var compareUsers []*models.User
 		{
-			blockedFilter := ""
-			if userCols.IsBlocked {
-				blockedFilter = " AND u.is_blocked=FALSE"
-			}
-			if userCols.IsInactive {
-				blockedFilter += " AND COALESCE(u.is_inactive,false)=false"
-			}
+			userFilter := activeUsersWhere()
+			hiddenCond := ""
 			if userCols.IsHidden && !canSeeHidden(user) {
-				blockedFilter += " AND COALESCE(u.is_hidden,false)=false"
+				hiddenCond = " AND COALESCE(u.is_hidden,false)=false"
 			}
+			where := " WHERE m.competition_id = $1 AND u.id != $2"
+			if userFilter != "" {
+				// activeUsersWhere returns "WHERE ...", convert to AND clauses
+				where += " AND " + strings.TrimPrefix(userFilter, " WHERE ")
+			}
+			where += hiddenCond
 			cuRows, _ := db.Pool.Query(ctx,
 				`SELECT DISTINCT u.id, u.username
 				   FROM users u
 				   JOIN tips t ON t.user_id = u.id
-				   JOIN matches m ON m.id = t.match_id
-				  WHERE m.competition_id = $1 AND u.id != $2`+blockedFilter+`
+				   JOIN matches m ON m.id = t.match_id`+where+`
 				  ORDER BY u.username`, compID, user.ID)
 			for cuRows.Next() {
 				u := &models.User{}
@@ -567,22 +568,21 @@ func StatsExtended(tmpl *template.Template) http.HandlerFunc {
 		// Users pro select
 		var compareUsers []*models.User
 		{
-			blockedFilter := ""
-			if userCols.IsBlocked {
-				blockedFilter = " AND u.is_blocked=FALSE"
-			}
-			if userCols.IsInactive {
-				blockedFilter += " AND COALESCE(u.is_inactive,false)=false"
-			}
+			userFilter := activeUsersWhere()
+			hiddenCond := ""
 			if userCols.IsHidden && !canSeeHidden(currentUser) {
-				blockedFilter += " AND COALESCE(u.is_hidden,false)=false"
+				hiddenCond = " AND COALESCE(u.is_hidden,false)=false"
 			}
+			where := " WHERE m.competition_id = $1"
+			if userFilter != "" {
+				where += " AND " + strings.TrimPrefix(userFilter, " WHERE ")
+			}
+			where += hiddenCond
 			cuRows, _ := db.Pool.Query(ctx,
 				`SELECT DISTINCT u.id, u.username
 				   FROM users u
 				   JOIN tips t ON t.user_id = u.id
-				   JOIN matches m ON m.id = t.match_id
-				  WHERE m.competition_id = $1`+blockedFilter+`
+				   JOIN matches m ON m.id = t.match_id`+where+`
 				  ORDER BY u.username`, compID)
 			for cuRows.Next() {
 				u := &models.User{}
