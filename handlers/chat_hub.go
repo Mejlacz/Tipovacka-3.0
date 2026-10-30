@@ -259,9 +259,9 @@ func (h *ChatHub) broadcastOnline() {
 	}
 }
 
-// pollNewMessages každé 2s kontroluje DB pro zprávy z ostatních Fly.io mašin.
+// pollNewMessages každých 15s kontroluje DB pro zprávy z ostatních Fly.io mašin.
 func (h *ChatHub) pollNewMessages(ctx context.Context) {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
