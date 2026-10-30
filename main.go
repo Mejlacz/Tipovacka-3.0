@@ -118,9 +118,6 @@ func main() {
 	ctx := context.Background()
 	go scheduler.Start(ctx, db.Pool)
 
-	// Spusť chat hub
-	go handlers.GlobalChatHub.Run(ctx)
-
 	// Set up router
 	r := chi.NewRouter()
 
@@ -216,10 +213,6 @@ func main() {
 
 	// ── Achievements ──────────────────────────────────────────────────────────
 	r.Get("/achievements", handlers.AchievementsPage(tmpl))
-
-	// ── Chat ──────────────────────────────────────────────────────────────────
-	r.Get("/chat", handlers.ChatPage(tmpl))
-	r.Get("/chat/ws", handlers.ChatWS)
 
 	// ── Feedback ──────────────────────────────────────────────────────────────
 	r.Get("/feedback", handlers.FeedbackPage(tmpl))
