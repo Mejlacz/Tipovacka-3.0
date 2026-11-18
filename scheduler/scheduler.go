@@ -20,7 +20,7 @@ import (
 func Start(ctx context.Context, pool *pgxpool.Pool) {
 	go runNeonBackupLoop(ctx, pool)
 	go runEmailNotifyLoop(ctx, pool)
-	go runAutoResultsLoop(ctx, pool)
+
 	go runAutoInactiveLoop(ctx, pool)
 	log.Println("[scheduler] spuštěn")
 }
