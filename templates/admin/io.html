@@ -676,8 +676,8 @@ function openTeamResolveModal(unknowns, allTeams, selected, statusEl){
         card.appendChild(h);
 
         // Radio: přiřadit k existujícímu
-        var r1id = 'tr-map-' + btoa(u.name).replace(/=/g,'');
-        var r2id = 'tr-new-' + btoa(u.name).replace(/=/g,'');
+        var r1id = 'tr-map-' + btoa(unescape(encodeURIComponent(u.name))).replace(/[^A-Za-z0-9]/g,'');
+        var r2id = 'tr-new-' + btoa(unescape(encodeURIComponent(u.name))).replace(/[^A-Za-z0-9]/g,'');
 
         card.innerHTML += '<label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;cursor:pointer;margin-bottom:.5rem">' +
             '<input type="radio" name="tr-action-' + esc(u.name) + '" value="map" id="' + r1id + '" checked />' +
