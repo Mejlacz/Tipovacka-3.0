@@ -733,7 +733,12 @@ func AdminOddsMapSubmit(w http.ResponseWriter, r *http.Request) {
 		if err != nil || teamID == 0 {
 			continue
 		}
-		_, _ = db.Pool.Exec(ctx, `UPDATE teams SET alias=$1 WHERE id=$2`, apiName, teamID)
+		_, _ = db.Pool.Exec(ctx, `
+			UPDATE teams SET alias = CASE
+				WHEN COALESCE(alias,'') = '' THEN $1
+				WHEN ',' || alias || ',' LIKE '%,' || $1 || ',%' THEN alias
+				ELSE alias || ',' || $1
+			END WHERE id=$2`, apiName, teamID)
 		saved++
 	}
 	compIDStr := r.FormValue("competition_id")

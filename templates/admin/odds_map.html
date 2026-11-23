@@ -68,32 +68,65 @@
 </form>
 
 <script>
-// Předvyplň selecty podle aktuálních aliasů
+function fuzzyTeamScore(query, candidate) {
+    var strip = function(s){ return s.toLowerCase().replace(/[.\-_]/g,' ').replace(/\b(fc|sk|ac|cf|sc|fk|bk|hc|afc|1\.)\b/g,'').replace(/\s+/g,' ').trim(); };
+    var q = strip(query), c = strip(candidate);
+    if(q === c) return 100;
+    if(q && c && (q.indexOf(c) >= 0 || c.indexOf(q) >= 0)) return 70;
+    var qw = q.split(' ').filter(function(w){ return w.length > 2; });
+    var cw = c.split(' ').filter(function(w){ return w.length > 2; });
+    var hits = 0;
+    qw.forEach(function(w){ if(cw.indexOf(w) >= 0) hits++; });
+    return hits > 0 ? 20 + hits * 15 : 0;
+}
+
 (function() {
     var sels = document.querySelectorAll('.db-team-sel');
     sels.forEach(function(sel) {
-        // Zjisti API jméno z name atributu (map_XYZ → XYZ)
-        var apiName = sel.name.replace(/^map_/, '').toLowerCase();
+        var apiName = sel.name.replace(/^map_/, '');
+        var apiLow  = apiName.toLowerCase();
+        var matched = false;
+
+        // 1. Alias match (comma-separated)
         var opts = sel.querySelectorAll('option[data-alias]');
         opts.forEach(function(opt) {
-            if (opt.dataset.alias.toLowerCase() === apiName) {
+            if(matched) return;
+            var aliases = opt.dataset.alias.split(',').map(function(a){ return a.trim().toLowerCase(); });
+            if(aliases.indexOf(apiLow) >= 0) {
                 opt.selected = true;
+                matched = true;
             }
         });
+
+        // 2. Fuzzy match
+        if(!matched) {
+            var bestOpt = null, bestScore = 0;
+            sel.querySelectorAll('option[value]').forEach(function(opt) {
+                if(!opt.value) return;
+                var label = opt.textContent.replace(/\s*\(.*\)$/, '').trim();
+                var score = fuzzyTeamScore(apiName, label);
+                if(score > bestScore) { bestScore = score; bestOpt = opt; }
+            });
+            if(bestScore >= 50 && bestOpt) {
+                bestOpt.selected = true;
+                // Vizuální indikace návrhu
+                sel.style.borderColor = 'rgba(99,102,241,.5)';
+                sel.title = '🤖 návrh (' + bestScore + '% shoda)';
+                matched = true;
+            }
+        }
     });
     updateUsed();
 })();
 
 function updateUsed() {
-    // Zjisti která DB ID jsou aktuálně vybrána
     var used = {};
     document.querySelectorAll('.db-team-sel').forEach(function(sel) {
-        if (sel.value) used[sel.value] = sel;
+        if(sel.value) used[sel.value] = sel;
     });
-    // Všechny selecty — šedě options které jsou použité jinde
     document.querySelectorAll('.db-team-sel').forEach(function(sel) {
         sel.querySelectorAll('option').forEach(function(opt) {
-            if (!opt.value) return;
+            if(!opt.value) return;
             var usedElsewhere = used[opt.value] && used[opt.value] !== sel;
             opt.disabled = usedElsewhere;
             opt.style.color = usedElsewhere ? 'var(--muted-d)' : '';
