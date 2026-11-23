@@ -261,8 +261,12 @@ func findMatchByTeamsAndTime(ctx context.Context, fdCode, homeTeam, awayTeam str
 // Alias (anglické jméno z Odds API) má nejvyšší prioritu.
 func teamScore(apiLow, dbName, dbDisplay, dbAlias string) int {
 	// Přesná shoda aliasu — nejvyšší priorita
-	if dbAlias != "" && strings.ToLower(dbAlias) == apiLow {
-		return 20
+	if dbAlias != "" {
+		for _, a := range strings.Split(dbAlias, ",") {
+			if strings.TrimSpace(strings.ToLower(a)) == apiLow {
+				return 20
+			}
+		}
 	}
 	dbLow := strings.ToLower(dbName)
 	dbDispLow := strings.ToLower(dbDisplay)
@@ -277,9 +281,11 @@ func teamScore(apiLow, dbName, dbDisplay, dbAlias string) int {
 	}
 	// Alias substring
 	if dbAlias != "" {
-		aliasLow := strings.ToLower(dbAlias)
-		if strings.Contains(aliasLow, apiLow) || strings.Contains(apiLow, aliasLow) {
-			return 8
+		for _, a := range strings.Split(dbAlias, ",") {
+			al := strings.TrimSpace(strings.ToLower(a))
+			if al != "" && (strings.Contains(al, apiLow) || strings.Contains(apiLow, al)) {
+				return 8
+			}
 		}
 	}
 	// Shoda slova (např. "Barcelona" vs "FC Barcelona")
@@ -776,9 +782,14 @@ func fetchApiTeamNames(apiKey, sportKey string, dbTeams []oddsDbTeam) []oddsApiT
 			row := oddsApiTeam{ApiName: name}
 			nameLow := strings.ToLower(name)
 			for _, dt := range dbTeams {
-				if strings.ToLower(dt.Alias) == nameLow {
-					row.DbID = dt.ID
-					row.DbName = dt.Name
+				for _, a := range strings.Split(dt.Alias, ",") {
+					if strings.TrimSpace(strings.ToLower(a)) == nameLow {
+						row.DbID = dt.ID
+						row.DbName = dt.Name
+						break
+					}
+				}
+				if row.DbID != 0 {
 					break
 				}
 			}
