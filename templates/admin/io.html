@@ -609,6 +609,36 @@ function submitImportForm(count, statusEl){
     if(form) form.submit();
 }
 
+// ── Team fuzzy matching ───────────────────────────────────────────────────────
+
+function teamFuzzyScore(query, candidate){
+    var q = query.toLowerCase().replace(/[.\-_]/g,' ').replace(/\s+/g,' ').trim();
+    var c = candidate.toLowerCase().replace(/[.\-_]/g,' ').replace(/\s+/g,' ').trim();
+    if(q === c) return 100;
+    // strip common suffixes (FC, SK, AC, CF, SC, FK, 1., etc.)
+    var strip = function(s){ return s.replace(/\b(fc|sk|ac|cf|sc|fk|1\.|bk|hc|if|afc|asc)\b/g,'').replace(/\s+/g,' ').trim(); };
+    var qs = strip(q), cs = strip(c);
+    if(qs === cs) return 90;
+    if(qs && cs && (qs.indexOf(cs) >= 0 || cs.indexOf(qs) >= 0)) return 70;
+    // word overlap
+    var qw = qs.split(' ').filter(function(w){ return w.length > 2; });
+    var cw = cs.split(' ').filter(function(w){ return w.length > 2; });
+    var hits = 0;
+    qw.forEach(function(w){ if(cw.indexOf(w) >= 0) hits++; });
+    if(hits > 0) return 20 + hits * 15;
+    return 0;
+}
+
+function bestTeamMatch(name, allTeams){
+    var best = null, bestScore = 0;
+    allTeams.forEach(function(t){
+    var label = (t.display_name || t.name);
+        var score = Math.max(teamFuzzyScore(name, t.name), teamFuzzyScore(name, label));
+        if(score > bestScore){ bestScore = score; best = t; }
+    });
+    return bestScore >= 50 ? { team: best, score: bestScore } : null;
+}
+
 // ── Team resolve modal ────────────────────────────────────────────────────────
 
 var _resolveAllTeams = [];   // [{id, name, display_name}]
@@ -707,8 +737,16 @@ function openTeamResolveModal(unknowns, allTeams, selected, statusEl){
 
         list.appendChild(card);
 
-        // Předvyplnit uložený mapping
+        // Fuzzy návrh pokud není uložený mapping
         var saved = savedMappings[u.name];
+        if(!saved){
+            var fuzzy = bestTeamMatch(u.name, allTeams);
+            if(fuzzy){
+                var selEl2 = card.querySelector('#tr-sel-' + r1id);
+                if(selEl2){ selEl2.value = String(fuzzy.team.id); }
+                h.innerHTML = '❓ ' + esc(u.name) + ' <span style="font-size:.72rem;background:rgba(99,102,241,.18);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:4px;padding:.05rem .4rem;font-weight:600;vertical-align:middle" title="Automatický návrh">🤖 návrh: ' + esc(fuzzy.team.display_name || fuzzy.team.name) + '</span>';
+            }
+        }
         if(saved){
             var mapWrap = card.querySelector('#tr-map-wrap-' + r1id);
             var nwWrap  = card.querySelector('#tr-new-wrap-' + r2id);
