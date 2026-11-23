@@ -732,8 +732,49 @@ function openTeamResolveModal(unknowns, allTeams, selected, statusEl){
                 mapWrap.style.display = isMap ? 'flex' : 'none';
                 mapWrap.style.flexDirection = 'column';
                 nwWrap.style.display  = isMap ? 'none' : 'block';
+                // Reset uložení při změně
+                saveBtn.textContent = '💾 Uložit';
+                saveBtn.style.background = '';
+                card.style.borderColor = 'var(--border-d)';
             });
         });
+
+        // Tlačítko Uložit pro tento tým
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.textContent = '💾 Uložit';
+        saveBtn.style.cssText = 'margin-top:.6rem;padding:.3rem .8rem;font-size:.82rem;border-radius:6px;border:1px solid var(--border-d);background:var(--bg2);color:inherit;cursor:pointer';
+        saveBtn.addEventListener('click', function(){
+            var chosen = (card.querySelector('input[name="tr-action-' + esc(u.name) + '"]:checked') || {}).value;
+            var lsKey = 'tipovacka_team_map_' + _currentSport;
+            var stored = {};
+            try { stored = JSON.parse(localStorage.getItem(lsKey) || '{}'); } catch(e){}
+            if(chosen === 'map'){
+                var selEl = card.querySelector('#tr-sel-' + r1id);
+                var tid = selEl ? parseInt(selEl.value, 10) : 0;
+                if(!tid || isNaN(tid)){
+                    saveBtn.textContent = '⚠ Vyber tým!';
+                    saveBtn.style.background = 'rgba(239,68,68,.2)';
+                    return;
+                }
+                stored[u.name] = { action: 'map', team_id: tid };
+                // Aktualizuj badge
+                var label = selEl.options[selEl.selectedIndex] ? selEl.options[selEl.selectedIndex].textContent : '';
+                h.innerHTML = '✅ ' + esc(u.name) + ' <span style="font-size:.72rem;background:rgba(34,197,94,.18);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:4px;padding:.05rem .4rem;font-weight:600;vertical-align:middle">✓ uloženo → ' + esc(label) + '</span>';
+            } else {
+                var dnEl = card.querySelector('#tr-dn-' + r2id);
+                var dn = dnEl ? dnEl.value.trim() : '';
+                stored[u.name] = { action: 'create', display_name: dn };
+                h.innerHTML = '✅ ' + esc(u.name) + ' <span style="font-size:.72rem;background:rgba(34,197,94,.18);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:4px;padding:.05rem .4rem;font-weight:600;vertical-align:middle">✓ uloženo (nový tým)</span>';
+            }
+            try { localStorage.setItem(lsKey, JSON.stringify(stored)); } catch(e){}
+            saveBtn.textContent = '✅ Uloženo';
+            saveBtn.style.background = 'rgba(34,197,94,.18)';
+            saveBtn.style.color = '#22c55e';
+            saveBtn.style.borderColor = 'rgba(34,197,94,.3)';
+            card.style.borderColor = 'rgba(34,197,94,.4)';
+        });
+        card.appendChild(saveBtn);
 
         list.appendChild(card);
 
@@ -804,46 +845,43 @@ window.teamResolveCancel = function(){
 window.teamResolveConfirm = function(){
     var overlay = qs('#team-resolve-overlay');
     var cards   = overlay.querySelectorAll('[data-team-name]');
-    var mappings = {};
-    var valid = true;
+    var unsaved = [];
 
+    // Zkontroluj, zda jsou všechny týmy uloženy
     cards.forEach(function(card){
         var teamName = card.dataset.teamName;
-        var radios   = card.querySelectorAll('input[type=radio]');
-        var chosen   = null;
-        radios.forEach(function(r){ if(r.checked) chosen = r.value; });
-
-        if(chosen === 'map'){
-            var r1id  = 'tr-map-' + btoa(teamName).replace(/=/g,'');
-            var selEl = card.querySelector('#tr-sel-' + r1id);
-            var tid   = selEl ? parseInt(selEl.value, 10) : 0;
-            if(!tid || isNaN(tid)){
-                alert('Vyber existující tým pro: ' + teamName);
-                valid = false;
-                return;
-            }
-            mappings[teamName] = { action: 'map', team_id: tid };
-        } else {
-            // create
-            var r2id = 'tr-new-' + btoa(teamName).replace(/=/g,'');
-            var dnEl = card.querySelector('#tr-dn-' + r2id);
-            var dn   = dnEl ? dnEl.value.trim() : '';
-            mappings[teamName] = { action: 'create', display_name: dn };
-        }
-    });
-
-    if(!valid) return;
-
-    overlay.style.display = 'none';
-
-    // Ulož mappings do localStorage pro příští import
-    try {
         var lsKey = 'tipovacka_team_map_' + _currentSport;
         var stored = {};
         try { stored = JSON.parse(localStorage.getItem(lsKey) || '{}'); } catch(e){}
-        Object.keys(mappings).forEach(function(k){ stored[k] = mappings[k]; });
-        localStorage.setItem(lsKey, JSON.stringify(stored));
-    } catch(e){}
+        if(!stored[teamName]) unsaved.push(teamName);
+    });
+
+    if(unsaved.length > 0){
+        // Upozorni na neuložené — scroll na první
+        var firstCard = overlay.querySelector('[data-team-name="' + unsaved[0].replace(/"/g,'\\"') + '"]');
+        if(firstCard) firstCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if(_resolveStatusEl) _resolveStatusEl.textContent = '⚠ ' + unsaved.length + ' týmů ještě nebylo uloženo (klikni 💾 Uložit).';
+        // Zvýrazni neuložené karty
+        cards.forEach(function(card){
+            var lsKey2 = 'tipovacka_team_map_' + _currentSport;
+            var stored2 = {};
+            try { stored2 = JSON.parse(localStorage.getItem(lsKey2) || '{}'); } catch(e){}
+            if(!stored2[card.dataset.teamName]){
+                card.style.borderColor = 'rgba(239,68,68,.5)';
+                card.style.background  = 'rgba(239,68,68,.06)';
+            }
+        });
+        return;
+    }
+
+    overlay.style.display = 'none';
+
+    // Sestav mappings z localStorage
+    var lsKey = 'tipovacka_team_map_' + _currentSport;
+    var stored = {};
+    try { stored = JSON.parse(localStorage.getItem(lsKey) || '{}'); } catch(e){}
+    var mappings = {};
+    cards.forEach(function(card){ var n = card.dataset.teamName; if(stored[n]) mappings[n] = stored[n]; });
 
     // Nastav team_mappings a odešli form
     var tmEl = qs('#api-team-mappings');
