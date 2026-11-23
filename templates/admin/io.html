@@ -620,6 +620,16 @@ function openTeamResolveModal(unknowns, allTeams, selected, statusEl){
     _resolveSelected  = selected;
     _resolveStatusEl  = statusEl;
 
+    // Načti uložené mappings z localStorage
+    var savedMappings = {};
+    try {
+        var lsKey = 'tipovacka_team_map_' + _currentSport;
+        savedMappings = JSON.parse(localStorage.getItem(lsKey) || '{}');
+    } catch(e){}
+    // Validuj: team_id musí existovat v allTeams
+    var allTeamIds = {};
+    allTeams.forEach(function(t){ allTeamIds[t.id] = true; });
+
     var list = qs('#team-resolve-list');
     if(!list) return;
     list.innerHTML = '';
@@ -696,6 +706,39 @@ function openTeamResolveModal(unknowns, allTeams, selected, statusEl){
         });
 
         list.appendChild(card);
+
+        // Předvyplnit uložený mapping
+        var saved = savedMappings[u.name];
+        if(saved){
+            var mapWrap = card.querySelector('#tr-map-wrap-' + r1id);
+            var nwWrap  = card.querySelector('#tr-new-wrap-' + r2id);
+            if(saved.action === 'map' && saved.team_id && allTeamIds[saved.team_id]){
+                // Přiřadit k existujícímu — předvyber radio + select
+                var mapRadio = card.querySelector('#' + r1id);
+                if(mapRadio){ mapRadio.checked = true; }
+                var selEl = card.querySelector('#tr-sel-' + r1id);
+                if(selEl){
+                    selEl.value = String(saved.team_id);
+                    // Pokud option s daným id neexistuje (filtr), přegeneruj bez filtru
+                    if(selEl.value !== String(saved.team_id)){
+                        buildTeamOptions(selEl, allTeams, '');
+                        selEl.value = String(saved.team_id);
+                    }
+                }
+                if(mapWrap){ mapWrap.style.display = 'flex'; mapWrap.style.flexDirection = 'column'; }
+                if(nwWrap){ nwWrap.style.display = 'none'; }
+                // Zelený badge "✓ zapamatováno"
+                h.innerHTML = '❓ ' + esc(u.name) + ' <span style="font-size:.72rem;background:rgba(34,197,94,.18);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:4px;padding:.05rem .4rem;font-weight:600;vertical-align:middle">✓ zapamatováno</span>';
+            } else if(saved.action === 'create'){
+                var newRadio = card.querySelector('#' + r2id);
+                if(newRadio){ newRadio.checked = true; }
+                if(mapWrap){ mapWrap.style.display = 'none'; }
+                if(nwWrap){ nwWrap.style.display = 'block'; }
+                var dnEl = card.querySelector('#tr-dn-' + r2id);
+                if(dnEl && saved.display_name) dnEl.value = saved.display_name;
+                h.innerHTML = '❓ ' + esc(u.name) + ' <span style="font-size:.72rem;background:rgba(34,197,94,.18);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:4px;padding:.05rem .4rem;font-weight:600;vertical-align:middle">✓ zapamatováno</span>';
+            }
+        }
     });
 
     qs('#team-resolve-overlay').style.display = '';
@@ -754,6 +797,15 @@ window.teamResolveConfirm = function(){
     if(!valid) return;
 
     overlay.style.display = 'none';
+
+    // Ulož mappings do localStorage pro příští import
+    try {
+        var lsKey = 'tipovacka_team_map_' + _currentSport;
+        var stored = {};
+        try { stored = JSON.parse(localStorage.getItem(lsKey) || '{}'); } catch(e){}
+        Object.keys(mappings).forEach(function(k){ stored[k] = mappings[k]; });
+        localStorage.setItem(lsKey, JSON.stringify(stored));
+    } catch(e){}
 
     // Nastav team_mappings a odešli form
     var tmEl = qs('#api-team-mappings');
@@ -1012,6 +1064,10 @@ var _previewMatches = [];
 
 window.toggleAllMatches = function(checked){
     document.querySelectorAll('.api-match-cb').forEach(function(cb){ cb.checked = checked; });
+    document.querySelectorAll('.api-day-cb').forEach(function(cb){
+        cb.checked = checked;
+        cb.indeterminate = false;
+    });
 };
 
 var _statusMap = {
@@ -1058,11 +1114,33 @@ function getSelectedMatches(){
     return selected;
 }
 
+var _czDays = ['Ne','Po','Út','St','Čt','Pá','So'];
+function formatDayHeader(dateStr){
+    // dateStr = "2026-05-15"
+    if(!dateStr) return dateStr;
+    var parts = dateStr.split('-');
+    if(parts.length < 3) return dateStr;
+    var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, parseInt(parts[2],10));
+    return _czDays[d.getDay()] + ' ' + parseInt(parts[2],10) + '.' + parseInt(parts[1],10) + '.' + parts[0];
+}
+
+function updateDayCb(dateVal){
+    var dayCb = document.querySelector('.api-day-cb[data-date="' + dateVal + '"]');
+    if(!dayCb) return;
+    var all = document.querySelectorAll('.api-match-cb[data-date="' + dateVal + '"]');
+    var checkedCount = 0;
+    all.forEach(function(cb){ if(cb.checked) checkedCount++; });
+    if(checkedCount === 0){ dayCb.checked = false; dayCb.indeterminate = false; }
+    else if(checkedCount === all.length){ dayCb.checked = true; dayCb.indeterminate = false; }
+    else { dayCb.checked = false; dayCb.indeterminate = true; }
+}
+
 function renderPreviewTable(matches){
     var tbody = qs('#api-preview-tbody');
     var cbAll = qs('#api-cb-all');
     if(!tbody) return;
     tbody.innerHTML = '';
+    var lastDate = null;
     matches.forEach(function(m, i){
         var score = (m.score_h !== null && m.score_a !== null)
             ? m.score_h + ' : ' + m.score_a : '—';
@@ -1071,10 +1149,27 @@ function renderPreviewTable(matches){
         var parts = raw.split('T');
         var dateVal = parts[0] || '';
         var timeVal = parts[1] ? parts[1].substring(0, 5) : '';
+
+        // Day header row
+        if(dateVal && dateVal !== lastDate){
+            lastDate = dateVal;
+            var htr = document.createElement('tr');
+            htr.innerHTML =
+                '<td style="padding:.25rem .5rem;background:var(--bg3)" colspan="6">' +
+                    '<label style="display:flex;align-items:center;gap:.45rem;cursor:pointer;font-size:.78rem;color:var(--muted-d);font-weight:600">' +
+                        '<input type="checkbox" class="api-day-cb" data-date="' + esc(dateVal) + '" checked ' +
+                            'onchange="(function(cb){document.querySelectorAll(\'.api-match-cb[data-date=\\\'' + esc(dateVal) + '\\\']\').forEach(function(m){m.checked=cb.checked});updateDayCb(\'' + esc(dateVal) + '\')})(this)" />' +
+                        esc(formatDayHeader(dateVal)) +
+                    '</label>' +
+                '</td>';
+            tbody.appendChild(htr);
+        }
+
         var tr = document.createElement('tr');
         tr.innerHTML =
             '<td style="padding:.2rem .4rem;text-align:center">' +
-                '<input type="checkbox" class="api-match-cb" data-idx="' + i + '" checked />' +
+                '<input type="checkbox" class="api-match-cb" data-idx="' + i + '" data-date="' + esc(dateVal) + '" checked ' +
+                    'onchange="updateDayCb(\'' + esc(dateVal) + '\')" />' +
             '</td>' +
             '<td style="padding:.25rem .5rem">' + esc(m.home) + '</td>' +
             '<td style="padding:.25rem .5rem">' + esc(m.away) + '</td>' +
