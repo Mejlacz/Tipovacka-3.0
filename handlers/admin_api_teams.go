@@ -110,9 +110,12 @@ func lookupExistingTeam(ctx context.Context, name, sport string) int {
 		`SELECT id FROM teams WHERE name=$1 AND sport=$2`, name, sport).Scan(&id); err == nil {
 		return id
 	}
-	// 2. Alias (case-insensitive)
+	// 2. Alias (case-insensitive, comma-separated)
 	if err := db.Pool.QueryRow(ctx,
-		`SELECT id FROM teams WHERE LOWER(alias)=LOWER($1) AND sport=$2`, name, sport).Scan(&id); err == nil {
+		`SELECT id FROM teams
+		 WHERE COALESCE(alias,'') != ''
+		   AND LOWER($1) = ANY(string_to_array(LOWER(alias), ','))
+		   AND sport=$2`, name, sport).Scan(&id); err == nil {
 		return id
 	}
 	// 3. Display name (case-insensitive)
