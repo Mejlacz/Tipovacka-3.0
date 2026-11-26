@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"tipovacka/config"
@@ -17,8 +18,17 @@ func Init() {
 	if config.DatabaseURL == "" {
 		log.Fatal("[DB] DATABASE_URL není nastavena")
 	}
-	var err error
-	Pool, err = pgxpool.New(context.Background(), config.DatabaseURL)
+	cfg, err := pgxpool.ParseConfig(config.DatabaseURL)
+	if err != nil {
+		log.Fatalf("[DB] Nelze parsovat DATABASE_URL: %v", err)
+	}
+	// CockroachDB Serverless — omez RU spotřebu poolu
+	cfg.MaxConns = 4
+	cfg.MinConns = 1
+	cfg.HealthCheckPeriod = 60 * time.Minute // default 5 min → každý check = RU
+	cfg.MaxConnIdleTime = 10 * time.Minute   // uvolni neaktivní spojení
+
+	Pool, err = pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
 		log.Fatalf("[DB] Nelze vytvořit pool: %v", err)
 	}
