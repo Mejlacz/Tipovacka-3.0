@@ -3,6 +3,8 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"strings"
 
@@ -84,7 +86,9 @@ func GetCSRFToken(w http.ResponseWriter, r *http.Request) string {
 			return t
 		}
 	}
-	tok := config.SecretKey[:32] // jednoduché řešení — v produkci použij crypto/rand
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	tok := hex.EncodeToString(b)
 	sess.Values["csrf_token"] = tok
 	_ = sess.Save(r, w)
 	return tok

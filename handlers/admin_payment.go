@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"html/template"
 	"io"
 	"net/http"
@@ -664,19 +665,19 @@ func paymentReminderEmailHTML(username, compName string, s PaymentSettings) (str
 	if hasDetails {
 		rows := ""
 		if s.BankAccount != "" {
-			rows += `<tr><td style="color:#64748b;padding-right:12px;white-space:nowrap">Číslo účtu:</td><td><strong>` + s.BankAccount + `</strong></td></tr>`
+			rows += `<tr><td style="color:#64748b;padding-right:12px;white-space:nowrap">Číslo účtu:</td><td><strong>` + html.EscapeString(s.BankAccount) + `</strong></td></tr>`
 		}
 		if s.BankName != "" {
-			rows += `<tr><td style="color:#64748b;padding-right:12px">Banka:</td><td>` + s.BankName + `</td></tr>`
+			rows += `<tr><td style="color:#64748b;padding-right:12px">Banka:</td><td>` + html.EscapeString(s.BankName) + `</td></tr>`
 		}
 		if s.VariableSymbol != "" {
-			rows += `<tr><td style="color:#64748b;padding-right:12px;white-space:nowrap">Variabilní symbol:</td><td><strong>` + s.VariableSymbol + `</strong></td></tr>`
+			rows += `<tr><td style="color:#64748b;padding-right:12px;white-space:nowrap">Variabilní symbol:</td><td><strong>` + html.EscapeString(s.VariableSymbol) + `</strong></td></tr>`
 		}
 		if s.Amount != "" {
-			rows += `<tr><td style="color:#64748b;padding-right:12px">Částka:</td><td><strong>` + s.Amount + ` Kč</strong></td></tr>`
+			rows += `<tr><td style="color:#64748b;padding-right:12px">Částka:</td><td><strong>` + html.EscapeString(s.Amount) + ` Kč</strong></td></tr>`
 		}
 		if s.Note != "" {
-			note := strings.ReplaceAll(s.Note, "NICK", username)
+			note := strings.ReplaceAll(html.EscapeString(s.Note), "NICK", html.EscapeString(username))
 			rows += `<tr><td style="color:#64748b;padding-right:12px;vertical-align:top">Poznámka:</td><td>` + note + `</td></tr>`
 		}
 		payBlock = `<div style="background:#f1f5f9;border-left:3px solid #1e40af;padding:12px 16px;border-radius:4px;margin:16px 0">

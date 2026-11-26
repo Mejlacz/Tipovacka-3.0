@@ -509,11 +509,12 @@ func AdminAPIImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Zkontroluj duplicitu
+		// Zkontroluj duplicitu (stejné týmy ve stejný den)
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			compID, homeID, awayID).Scan(&existingID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3
+			  AND ($4::date IS NULL OR match_date::date = $4::date)`,
+			compID, homeID, awayID, matchDate).Scan(&existingID)
 
 		if existingID > 0 {
 			if isFinished {
@@ -633,11 +634,12 @@ func importFromSelectedMatches(ctx context.Context, items []selMatchItem, compID
 			}
 		}
 
-		// Zkontroluj duplicitu
+		// Zkontroluj duplicitu (stejné týmy ve stejný den)
 		var existingID int
 		_ = db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			compID, homeID, awayID).Scan(&existingID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3
+			  AND ($4::date IS NULL OR match_date::date = $4::date)`,
+			compID, homeID, awayID, matchDate).Scan(&existingID)
 		if existingID > 0 {
 			skipped++
 			continue
@@ -759,10 +761,18 @@ func AdminAPIUpdateResults(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		var utcDate *time.Time
+		if m.UtcDate != "" {
+			if t, err2 := time.Parse(time.RFC3339, m.UtcDate); err2 == nil {
+				tp := t.In(pragueLocation)
+				utcDate = &tp
+			}
+		}
 		var matchID int
 		err := db.Pool.QueryRow(ctx,
-			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3`,
-			compID, homeID, awayID).Scan(&matchID)
+			`SELECT id FROM matches WHERE competition_id=$1 AND home_team_id=$2 AND away_team_id=$3
+			  AND ($4::date IS NULL OR match_date::date = $4::date)`,
+			compID, homeID, awayID, utcDate).Scan(&matchID)
 		if err != nil {
 			notFound++
 			continue

@@ -786,10 +786,13 @@ func AdminQuickAddMatchAjax(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var newMatchID int
-	_ = db.Pool.QueryRow(ctx,
+	if err := db.Pool.QueryRow(ctx,
 		`INSERT INTO matches (competition_id, home_team_id, away_team_id, match_date, is_finished)
 		 VALUES ($1,$2,$3,$4,false) RETURNING id`,
-		compID, homeTeamID, awayTeamID, matchDate).Scan(&newMatchID)
+		compID, homeTeamID, awayTeamID, matchDate).Scan(&newMatchID); err != nil {
+		jsonError(w, "db_error", http.StatusInternalServerError)
+		return
+	}
 
 	newVal := `{"competition_id":` + strconv.Itoa(compID) + `,"home":` + strconv.Itoa(homeTeamID) + `,"away":` + strconv.Itoa(awayTeamID) + `}`
 	LogAction(&admin.ID, admin.Username, "match_add_quick", "match", &newMatchID,
@@ -843,8 +846,7 @@ func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
 		compRows, _ := db.Pool.Query(ctx, `
 			SELECT c.id, c.name, COUNT(m.id) as unfinished
 			FROM competitions c
-			JOIN rounds r ON r.competition_id = c.id
-			JOIN matches m ON m.round_id = r.id AND m.is_finished = false
+			JOIN matches m ON m.competition_id = c.id AND m.is_finished = false
 			GROUP BY c.id, c.name
 			ORDER BY c.name`)
 		type compOption struct {
@@ -872,12 +874,12 @@ func AdminMatchBulkDeleteByDateForm(tmpl *template.Template) http.HandlerFunc {
 			rows, _ := db.Pool.Query(ctx, `
 				SELECT m.id, COALESCE(ht.display_name, ht.name), COALESCE(at.display_name, at.name),
 				       COALESCE(TO_CHAR(m.match_date AT TIME ZONE 'Europe/Prague', 'DD.MM.YYYY HH24:MI'), '—'),
-				       r.name
+				       c.name
 				FROM matches m
-				JOIN rounds r ON r.id = m.round_id
+				JOIN competitions c ON c.id = m.competition_id
 				JOIN teams ht ON ht.id = m.home_team_id
 				JOIN teams at ON at.id = m.away_team_id
-				WHERE r.competition_id = $1 AND m.is_finished = false
+				WHERE m.competition_id = $1 AND m.is_finished = false
 				ORDER BY m.match_date ASC NULLS LAST`, compID)
 			for rows.Next() {
 				var row matchRow
